@@ -1,6 +1,6 @@
 # Ticket Management System
 
-A comprehensive Zendesk-like ticket management system with role-based access control, real-time updates, and analytics.
+A comprehensive ticket management system with role-based access control, real-time updates, and analytics.
 
 ## Features
 
