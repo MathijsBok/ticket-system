@@ -2,7 +2,7 @@
 
 ## Overview
 
-A complete Zendesk-like ticket management system built with modern technologies.
+A complete ticket management system built with modern technologies.
 
 ## What Was Built
 
