@@ -73,6 +73,14 @@ const UserDashboard: React.FC = () => {
     });
   }, [tickets, sortField, sortDirection]);
 
+  const unsolvedTickets = useMemo(() => {
+    return sortedTickets.filter((ticket: any) => ticket.status !== 'SOLVED');
+  }, [sortedTickets]);
+
+  const solvedTickets = useMemo(() => {
+    return sortedTickets.filter((ticket: any) => ticket.status === 'SOLVED');
+  }, [sortedTickets]);
+
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
       NEW: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
@@ -162,98 +170,207 @@ const UserDashboard: React.FC = () => {
         )}
 
         {sortedTickets && sortedTickets.length > 0 && (
-          <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-              <thead className="bg-gray-50 dark:bg-gray-900">
-                <tr>
-                  <th
-                    onClick={() => handleSort('ticketNumber')}
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                  >
-                    <div className="flex items-center">
-                      Ticket #
-                      <SortIcon field="ticketNumber" />
-                    </div>
-                  </th>
-                  <th
-                    onClick={() => handleSort('subject')}
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                  >
-                    <div className="flex items-center">
-                      Subject
-                      <SortIcon field="subject" />
-                    </div>
-                  </th>
-                  <th
-                    onClick={() => handleSort('status')}
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                  >
-                    <div className="flex items-center">
-                      Status
-                      <SortIcon field="status" />
-                    </div>
-                  </th>
-                  <th
-                    onClick={() => handleSort('priority')}
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                  >
-                    <div className="flex items-center">
-                      Priority
-                      <SortIcon field="priority" />
-                    </div>
-                  </th>
-                  <th
-                    onClick={() => handleSort('createdAt')}
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                  >
-                    <div className="flex items-center">
-                      Created
-                      <SortIcon field="createdAt" />
-                    </div>
-                  </th>
-                  <th
-                    onClick={() => handleSort('comments')}
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                  >
-                    <div className="flex items-center">
-                      Replies
-                      <SortIcon field="comments" />
-                    </div>
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                {sortedTickets.map((ticket: any) => (
-                  <tr
-                    key={ticket.id}
-                    onClick={() => navigate(`/tickets/${ticket.id}`)}
-                    className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer"
-                  >
-                    <td className="px-6 py-2 whitespace-nowrap text-sm font-medium text-primary">
-                      #{ticket.ticketNumber}
-                    </td>
-                    <td className="px-6 py-2 text-sm text-gray-900 dark:text-white">
-                      {ticket.subject}
-                    </td>
-                    <td className="px-6 py-2 whitespace-nowrap">
-                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(ticket.status)}`}>
-                        {ticket.status.replace('_', ' ')}
-                      </span>
-                    </td>
-                    <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-white capitalize">
-                      {ticket.priority.toLowerCase()}
-                    </td>
-                    <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                      {format(new Date(ticket.createdAt), 'MMM d, yyyy')}
-                    </td>
-                    <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                      {ticket._count.comments}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <>
+            {/* Open Tickets Section */}
+            {unsolvedTickets.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">Open Tickets</h2>
+                  <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-sm font-semibold rounded-full">
+                    {unsolvedTickets.length}
+                  </span>
+                </div>
+                <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                    <thead className="bg-gray-50 dark:bg-gray-900">
+                      <tr>
+                        <th
+                          onClick={() => handleSort('ticketNumber')}
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                        >
+                          <div className="flex items-center">
+                            Ticket #
+                            <SortIcon field="ticketNumber" />
+                          </div>
+                        </th>
+                        <th
+                          onClick={() => handleSort('subject')}
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                        >
+                          <div className="flex items-center">
+                            Subject
+                            <SortIcon field="subject" />
+                          </div>
+                        </th>
+                        <th
+                          onClick={() => handleSort('status')}
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                        >
+                          <div className="flex items-center">
+                            Status
+                            <SortIcon field="status" />
+                          </div>
+                        </th>
+                        <th
+                          onClick={() => handleSort('priority')}
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                        >
+                          <div className="flex items-center">
+                            Priority
+                            <SortIcon field="priority" />
+                          </div>
+                        </th>
+                        <th
+                          onClick={() => handleSort('createdAt')}
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                        >
+                          <div className="flex items-center">
+                            Created
+                            <SortIcon field="createdAt" />
+                          </div>
+                        </th>
+                        <th
+                          onClick={() => handleSort('comments')}
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                        >
+                          <div className="flex items-center">
+                            Replies
+                            <SortIcon field="comments" />
+                          </div>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                      {unsolvedTickets.map((ticket: any) => (
+                        <tr
+                          key={ticket.id}
+                          onClick={() => navigate(`/tickets/${ticket.id}`)}
+                          className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer"
+                        >
+                          <td className="px-6 py-2 whitespace-nowrap text-sm font-medium text-primary">
+                            #{ticket.ticketNumber}
+                          </td>
+                          <td className="px-6 py-2 text-sm text-gray-900 dark:text-white">
+                            {ticket.subject}
+                          </td>
+                          <td className="px-6 py-2 whitespace-nowrap">
+                            <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(ticket.status)}`}>
+                              {ticket.status.replace('_', ' ')}
+                            </span>
+                          </td>
+                          <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-white capitalize">
+                            {ticket.priority.toLowerCase()}
+                          </td>
+                          <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                            {format(new Date(ticket.createdAt), 'MMM d, yyyy')}
+                          </td>
+                          <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                            {ticket._count.comments}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Solved Tickets Section */}
+            {solvedTickets.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">Solved Tickets</h2>
+                  <span className="px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-sm font-semibold rounded-full">
+                    {solvedTickets.length}
+                  </span>
+                </div>
+                <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                    <thead className="bg-gray-50 dark:bg-gray-900">
+                      <tr>
+                        <th
+                          onClick={() => handleSort('ticketNumber')}
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                        >
+                          <div className="flex items-center">
+                            Ticket #
+                            <SortIcon field="ticketNumber" />
+                          </div>
+                        </th>
+                        <th
+                          onClick={() => handleSort('subject')}
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                        >
+                          <div className="flex items-center">
+                            Subject
+                            <SortIcon field="subject" />
+                          </div>
+                        </th>
+                        <th
+                          onClick={() => handleSort('priority')}
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                        >
+                          <div className="flex items-center">
+                            Priority
+                            <SortIcon field="priority" />
+                          </div>
+                        </th>
+                        <th
+                          onClick={() => handleSort('createdAt')}
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                        >
+                          <div className="flex items-center">
+                            Created
+                            <SortIcon field="createdAt" />
+                          </div>
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                          Solved
+                        </th>
+                        <th
+                          onClick={() => handleSort('comments')}
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                        >
+                          <div className="flex items-center">
+                            Replies
+                            <SortIcon field="comments" />
+                          </div>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                      {solvedTickets.map((ticket: any) => (
+                        <tr
+                          key={ticket.id}
+                          onClick={() => navigate(`/tickets/${ticket.id}`)}
+                          className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer"
+                        >
+                          <td className="px-6 py-2 whitespace-nowrap text-sm font-medium text-primary">
+                            #{ticket.ticketNumber}
+                          </td>
+                          <td className="px-6 py-2 text-sm text-gray-900 dark:text-white">
+                            {ticket.subject}
+                          </td>
+                          <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-white capitalize">
+                            {ticket.priority.toLowerCase()}
+                          </td>
+                          <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                            {format(new Date(ticket.createdAt), 'MMM d, yyyy')}
+                          </td>
+                          <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                            {ticket.solvedAt ? format(new Date(ticket.solvedAt), 'MMM d, yyyy') : '-'}
+                          </td>
+                          <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                            {ticket._count.comments}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </Layout>

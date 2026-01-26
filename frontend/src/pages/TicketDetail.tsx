@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useUser } from '@clerk/clerk-react';
 import toast from 'react-hot-toast';
@@ -200,6 +200,16 @@ const TicketDetail: React.FC = () => {
   const effectiveRole = userRole === 'ADMIN' ? currentView : userRole;
   const isAgent = effectiveRole === 'AGENT' || effectiveRole === 'ADMIN';
 
+  // Check if ticket is solved for more than 48 hours
+  const isTicketClosedForReplies = () => {
+    if (ticket.status !== 'SOLVED' || !ticket.solvedAt) return false;
+    const solvedDate = new Date(ticket.solvedAt);
+    const hoursSinceSolved = (Date.now() - solvedDate.getTime()) / (1000 * 60 * 60);
+    return hoursSinceSolved > 48;
+  };
+
+  const ticketClosed = isTicketClosedForReplies();
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -275,6 +285,21 @@ const TicketDetail: React.FC = () => {
           </div>
 
           <h2 className="text-xl text-gray-700 dark:text-gray-300">{ticket.subject}</h2>
+
+          {/* Closed ticket warning */}
+          {ticketClosed && !isAgent && (
+            <div className="mt-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-3">
+              <div className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-orange-600 dark:text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                <span className="text-sm font-medium text-orange-800 dark:text-orange-300">
+                  This ticket is closed (solved for more than 48 hours)
+                </span>
+              </div>
+            </div>
+          )}
+
           <div className="mt-4 flex gap-6 text-sm text-gray-600 dark:text-gray-400">
             <div>
               <span className="font-medium">Created:</span> {format(new Date(ticket.createdAt), 'MMM d, yyyy HH:mm')}
@@ -372,41 +397,77 @@ const TicketDetail: React.FC = () => {
         {/* Reply form */}
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Add Reply</h3>
-          <form onSubmit={handleReply} className="space-y-4">
-            <textarea
-              value={replyBody}
-              onChange={(e) => setReplyBody(e.target.value)}
-              rows={5}
-              className={`w-full px-3 py-2 border rounded-md shadow-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent ${
-                isInternal
-                  ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700'
-                  : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600'
-              }`}
-              placeholder={isInternal ? "Type your internal note here..." : "Type your reply here..."}
-              required
-            />
 
-            <div className="flex justify-between items-center">
-              {isAgent && (
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={isInternal}
-                    onChange={(e) => setIsInternal(e.target.checked)}
-                    className="rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-primary"
-                  />
-                  <span className="text-sm text-gray-700 dark:text-gray-300">Internal note (not visible to customer)</span>
-                </label>
-              )}
-              <button
-                type="submit"
-                disabled={replyMutation.isPending}
-                className="ml-auto inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {replyMutation.isPending ? 'Sending...' : (isInternal ? 'Send Internal Note' : 'Send Reply')}
-              </button>
+          {/* Show closed message for non-agents when ticket is closed */}
+          {ticketClosed && !isAgent ? (
+            <div className="space-y-4">
+              <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <svg className="w-5 h-5 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  <div>
+                    <h4 className="text-sm font-semibold text-orange-800 dark:text-orange-300 mb-1">
+                      This ticket is closed
+                    </h4>
+                    <p className="text-sm text-orange-700 dark:text-orange-400">
+                      This ticket has been solved for more than 48 hours and is now closed. You cannot add replies to closed tickets.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="text-center">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  Need further assistance? Create a new ticket.
+                </p>
+                <Link
+                  to="/tickets/new"
+                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors"
+                >
+                  <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Create New Ticket
+                </Link>
+              </div>
             </div>
-          </form>
+          ) : (
+            <form onSubmit={handleReply} className="space-y-4">
+              <textarea
+                value={replyBody}
+                onChange={(e) => setReplyBody(e.target.value)}
+                rows={5}
+                className={`w-full px-3 py-2 border rounded-md shadow-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent ${
+                  isInternal
+                    ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700'
+                    : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600'
+                }`}
+                placeholder={isInternal ? "Type your internal note here..." : "Type your reply here..."}
+                required
+              />
+
+              <div className="flex justify-between items-center">
+                {isAgent && (
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={isInternal}
+                      onChange={(e) => setIsInternal(e.target.checked)}
+                      className="rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-primary"
+                    />
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Internal note (not visible to customer)</span>
+                  </label>
+                )}
+                <button
+                  type="submit"
+                  disabled={replyMutation.isPending}
+                  className="ml-auto inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {replyMutation.isPending ? 'Sending...' : (isInternal ? 'Send Internal Note' : 'Send Reply')}
+                </button>
+              </div>
+            </form>
+          )}
         </div>
 
         {/* Activity Log */}
