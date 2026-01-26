@@ -1,23 +1,40 @@
-import React, { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import { useClerk } from '@clerk/clerk-react';
 import { ticketApi, sessionApi } from '../lib/api';
 import Layout from '../components/Layout';
 import { format } from 'date-fns';
 import { useNotification } from '../contexts/NotificationContext';
 import { useTicketNotifications } from '../hooks/useTicketNotifications';
+import toast from 'react-hot-toast';
 
 const AgentDashboard: React.FC = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const clerk = useClerk();
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [selectedTickets, setSelectedTickets] = useState<string[]>([]);
+  const [bulkStatus, setBulkStatus] = useState<string>('');
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
 
   const { permission, requestPermission, isSupported } = useNotification();
   const { newTicketCount, isPolling } = useTicketNotifications({
     enabled: notificationsEnabled,
     pollingInterval: 30000 // Poll every 30 seconds
   });
+
+  // Function to end the current session
+  const endCurrentSession = useCallback(async (sessionId: string) => {
+    try {
+      await sessionApi.end(sessionId);
+      console.log('Session ended:', sessionId);
+    } catch (error) {
+      console.error('Failed to end session:', error);
+    }
+  }, []);
 
   // Start session on mount
   useEffect(() => {
@@ -36,14 +53,64 @@ const AgentDashboard: React.FC = () => {
     startSession();
   }, []);
 
+  // Handle browser/tab close with beforeunload
+  useEffect(() => {
+    if (!activeSessionId) return;
+
+    const handleBeforeUnload = async () => {
+      // Use fetch with keepalive flag for reliable delivery during page unload
+      try {
+        const token = await window.Clerk?.session?.getToken();
+        if (token) {
+          fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/sessions/end/${activeSessionId}`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            keepalive: true // Ensures request completes even if page is closing
+          });
+        }
+      } catch (error) {
+        console.error('Failed to end session on unload:', error);
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [activeSessionId]);
+
+  // Handle Clerk sign-out
+  useEffect(() => {
+    if (!activeSessionId) return;
+
+    const handleSignOut = async () => {
+      if (activeSessionId) {
+        await endCurrentSession(activeSessionId);
+        setActiveSessionId(null);
+      }
+    };
+
+    // Listen for sign-out events
+    const originalSignOut = clerk.signOut;
+    clerk.signOut = async (options?: any) => {
+      await handleSignOut();
+      return originalSignOut.call(clerk, options);
+    };
+
+    return () => {
+      clerk.signOut = originalSignOut;
+    };
+  }, [activeSessionId, clerk, endCurrentSession]);
+
   // End session on unmount
   useEffect(() => {
     return () => {
       if (activeSessionId) {
-        sessionApi.end(activeSessionId).catch(console.error);
+        endCurrentSession(activeSessionId);
       }
     };
-  }, [activeSessionId]);
+  }, [activeSessionId, endCurrentSession]);
 
   const { data: tickets, isLoading } = useQuery({
     queryKey: ['agentTickets', statusFilter],
@@ -62,6 +129,73 @@ const AgentDashboard: React.FC = () => {
       return response.data;
     }
   });
+
+  const bulkUpdateMutation = useMutation({
+    mutationFn: async (data: { ticketIds: string[]; status?: string }) => {
+      return await ticketApi.bulkUpdate(data);
+    },
+    onSuccess: () => {
+      toast.success('Tickets updated successfully');
+      setSelectedTickets([]);
+      setBulkStatus('');
+      queryClient.invalidateQueries({ queryKey: ['agentTickets'] });
+      queryClient.invalidateQueries({ queryKey: ['ticketStats'] });
+    },
+    onError: () => {
+      toast.error('Failed to update tickets');
+    }
+  });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ticketIds: string[]) => {
+      return await ticketApi.bulkDelete(ticketIds);
+    },
+    onSuccess: () => {
+      toast.success('Tickets deleted successfully');
+      setSelectedTickets([]);
+      queryClient.invalidateQueries({ queryKey: ['agentTickets'] });
+      queryClient.invalidateQueries({ queryKey: ['ticketStats'] });
+    },
+    onError: () => {
+      toast.error('Failed to delete tickets');
+    }
+  });
+
+  const handleSelectAll = () => {
+    if (selectedTickets.length === tickets?.length) {
+      setSelectedTickets([]);
+    } else {
+      setSelectedTickets(tickets?.map((t: any) => t.id) || []);
+    }
+  };
+
+  const handleSelectTicket = (ticketId: string, event: React.MouseEvent) => {
+    event.stopPropagation();
+    setSelectedTickets(prev =>
+      prev.includes(ticketId)
+        ? prev.filter(id => id !== ticketId)
+        : [...prev, ticketId]
+    );
+  };
+
+  const handleBulkStatusChange = () => {
+    if (!bulkStatus || selectedTickets.length === 0) return;
+    bulkUpdateMutation.mutate({ ticketIds: selectedTickets, status: bulkStatus });
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedTickets.length === 0) return;
+    if (window.confirm(`Are you sure you want to delete ${selectedTickets.length} ticket(s)?`)) {
+      bulkDeleteMutation.mutate(selectedTickets);
+    }
+  };
+
+  const handleMarkAsSpam = () => {
+    if (selectedTickets.length === 0) return;
+    if (window.confirm(`Mark ${selectedTickets.length} ticket(s) as spam and close them?`)) {
+      bulkUpdateMutation.mutate({ ticketIds: selectedTickets, status: 'CLOSED' });
+    }
+  };
 
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
@@ -170,31 +304,31 @@ const AgentDashboard: React.FC = () => {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <button
               onClick={() => setStatusFilter('NEW')}
-              className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+              className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
             >
               <div className="text-sm font-medium text-gray-600 dark:text-gray-400">New</div>
-              <div className="mt-2 text-3xl font-bold text-blue-600 dark:text-blue-400">{stats.byStatus.new || 0}</div>
+              <div className="mt-1 text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.byStatus.new || 0}</div>
             </button>
             <button
               onClick={() => setStatusFilter('OPEN')}
-              className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+              className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
             >
               <div className="text-sm font-medium text-gray-600 dark:text-gray-400">Open</div>
-              <div className="mt-2 text-3xl font-bold text-green-600 dark:text-green-400">{stats.byStatus.open || 0}</div>
+              <div className="mt-1 text-2xl font-bold text-green-600 dark:text-green-400">{stats.byStatus.open || 0}</div>
             </button>
             <button
               onClick={() => setStatusFilter('PENDING')}
-              className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+              className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
             >
               <div className="text-sm font-medium text-gray-600 dark:text-gray-400">Pending</div>
-              <div className="mt-2 text-3xl font-bold text-yellow-600 dark:text-yellow-400">{stats.byStatus.pending || 0}</div>
+              <div className="mt-1 text-2xl font-bold text-yellow-600 dark:text-yellow-400">{stats.byStatus.pending || 0}</div>
             </button>
             <button
               onClick={() => setStatusFilter('ON_HOLD')}
-              className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+              className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
             >
               <div className="text-sm font-medium text-gray-600 dark:text-gray-400">On Hold</div>
-              <div className="mt-2 text-3xl font-bold text-orange-600 dark:text-orange-400">{stats.byStatus.on_hold || 0}</div>
+              <div className="mt-1 text-2xl font-bold text-orange-600 dark:text-orange-400">{stats.byStatus.on_hold || 0}</div>
             </button>
           </div>
         )}
@@ -221,6 +355,135 @@ const AgentDashboard: React.FC = () => {
           ))}
         </div>
 
+        {/* Bulk Actions Toolbar - Fixed at bottom */}
+        {selectedTickets.length > 0 && (
+          <div className="fixed bottom-0 left-0 right-0 z-50 bg-blue-500 dark:bg-blue-600 border-t-2 border-blue-600 dark:border-blue-500 shadow-lg p-4">
+            <div className="max-w-7xl mx-auto flex items-center gap-4 flex-wrap">
+              <span className="text-sm font-medium text-white">
+                {selectedTickets.length} ticket(s) selected
+              </span>
+
+              <div className="flex items-center gap-2 relative">
+                <div className="relative">
+                  <button
+                    onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+                    className="px-3 py-2 border border-blue-500 dark:border-blue-800 rounded-md shadow-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-white flex items-center gap-2 min-w-[160px] justify-between"
+                  >
+                    <span>{bulkStatus ? bulkStatus.replace('_', ' ') : 'Change Status...'}</span>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+
+                  {showStatusDropdown && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-10"
+                        onClick={() => setShowStatusDropdown(false)}
+                      />
+                      <div className="absolute bottom-full left-0 mb-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg z-20">
+                        <button
+                          onClick={() => {
+                            setBulkStatus('');
+                            setShowStatusDropdown(false);
+                          }}
+                          className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 first:rounded-t-md"
+                        >
+                          Change Status...
+                        </button>
+                        <button
+                          onClick={() => {
+                            setBulkStatus('NEW');
+                            setShowStatusDropdown(false);
+                          }}
+                          className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                        >
+                          New
+                        </button>
+                        <button
+                          onClick={() => {
+                            setBulkStatus('OPEN');
+                            setShowStatusDropdown(false);
+                          }}
+                          className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                        >
+                          Open
+                        </button>
+                        <button
+                          onClick={() => {
+                            setBulkStatus('PENDING');
+                            setShowStatusDropdown(false);
+                          }}
+                          className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                        >
+                          Pending
+                        </button>
+                        <button
+                          onClick={() => {
+                            setBulkStatus('ON_HOLD');
+                            setShowStatusDropdown(false);
+                          }}
+                          className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                        >
+                          On Hold
+                        </button>
+                        <button
+                          onClick={() => {
+                            setBulkStatus('SOLVED');
+                            setShowStatusDropdown(false);
+                          }}
+                          className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                        >
+                          Solved
+                        </button>
+                        <button
+                          onClick={() => {
+                            setBulkStatus('CLOSED');
+                            setShowStatusDropdown(false);
+                          }}
+                          className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 last:rounded-b-md"
+                        >
+                          Closed
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+                <button
+                  onClick={handleBulkStatusChange}
+                  disabled={!bulkStatus || bulkUpdateMutation.isPending}
+                  className="px-4 py-2 bg-white text-blue-600 rounded-md hover:bg-gray-100 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Apply
+                </button>
+              </div>
+
+              <button
+                onClick={handleMarkAsSpam}
+                disabled={bulkUpdateMutation.isPending}
+                className="px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Mark as Spam
+              </button>
+
+              <button
+                onClick={handleBulkDelete}
+                disabled={bulkDeleteMutation.isPending}
+                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Delete
+              </button>
+
+              <button
+                onClick={() => setSelectedTickets([])}
+                className="ml-auto px-4 py-2 text-white hover:text-gray-200 text-sm font-medium transition-colors"
+              >
+                Clear Selection
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Loading state */}
         {isLoading && (
           <div className="text-center py-12">
@@ -235,6 +498,14 @@ const AgentDashboard: React.FC = () => {
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
               <thead className="bg-gray-50 dark:bg-gray-900">
                 <tr>
+                  <th className="px-6 py-3 text-left">
+                    <input
+                      type="checkbox"
+                      checked={selectedTickets.length === tickets.length}
+                      onChange={handleSelectAll}
+                      className="rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-primary"
+                    />
+                  </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Ticket #
                   </th>
@@ -262,30 +533,59 @@ const AgentDashboard: React.FC = () => {
                 {tickets.map((ticket: any) => (
                   <tr
                     key={ticket.id}
-                    onClick={() => navigate(`/tickets/${ticket.id}`)}
-                    className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer"
+                    className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                   >
-                    <td className="px-6 py-2 whitespace-nowrap text-sm font-medium text-primary">
+                    <td className="px-6 py-2 whitespace-nowrap">
+                      <input
+                        type="checkbox"
+                        checked={selectedTickets.includes(ticket.id)}
+                        onChange={(e) => handleSelectTicket(ticket.id, e as any)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-primary"
+                      />
+                    </td>
+                    <td
+                      onClick={() => navigate(`/tickets/${ticket.id}`)}
+                      className="px-6 py-2 whitespace-nowrap text-sm font-medium text-primary cursor-pointer"
+                    >
                       #{ticket.ticketNumber}
                     </td>
-                    <td className="px-6 py-2 text-sm text-gray-900 dark:text-white">
+                    <td
+                      onClick={() => navigate(`/tickets/${ticket.id}`)}
+                      className="px-6 py-2 text-sm text-gray-900 dark:text-white cursor-pointer"
+                    >
                       {ticket.subject}
                     </td>
-                    <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                    <td
+                      onClick={() => navigate(`/tickets/${ticket.id}`)}
+                      className="px-6 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 cursor-pointer"
+                    >
                       {ticket.requester.email}
                     </td>
-                    <td className="px-6 py-2 whitespace-nowrap">
+                    <td
+                      onClick={() => navigate(`/tickets/${ticket.id}`)}
+                      className="px-6 py-2 whitespace-nowrap cursor-pointer"
+                    >
                       <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(ticket.status)}`}>
                         {ticket.status.replace('_', ' ')}
                       </span>
                     </td>
-                    <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-white capitalize">
+                    <td
+                      onClick={() => navigate(`/tickets/${ticket.id}`)}
+                      className="px-6 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-white capitalize cursor-pointer"
+                    >
                       {ticket.priority.toLowerCase()}
                     </td>
-                    <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                    <td
+                      onClick={() => navigate(`/tickets/${ticket.id}`)}
+                      className="px-6 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 cursor-pointer"
+                    >
                       {ticket.assignee ? ticket.assignee.email : 'Unassigned'}
                     </td>
-                    <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                    <td
+                      onClick={() => navigate(`/tickets/${ticket.id}`)}
+                      className="px-6 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 cursor-pointer"
+                    >
                       {format(new Date(ticket.updatedAt), 'MMM d, HH:mm')}
                     </td>
                   </tr>

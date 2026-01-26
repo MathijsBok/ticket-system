@@ -67,9 +67,18 @@ router.post('/',
         updateData.firstResponseAt = new Date();
       }
 
-      // Change status from NEW to OPEN if agent responds
-      if ((userRole === 'AGENT' || userRole === 'ADMIN') && ticket.status === 'NEW') {
-        updateData.status = 'OPEN';
+      // Change status based on who is replying
+      if (userRole === 'AGENT' || userRole === 'ADMIN') {
+        // When agent sends a non-internal reply, set status to PENDING (waiting for customer)
+        if (!isInternalNote) {
+          updateData.status = 'PENDING';
+        }
+        // Internal notes don't change the status
+      } else if (userRole === 'USER') {
+        // When customer replies to a PENDING ticket, reopen it
+        if (ticket.status === 'PENDING') {
+          updateData.status = 'OPEN';
+        }
       }
 
       await prisma.ticket.update({

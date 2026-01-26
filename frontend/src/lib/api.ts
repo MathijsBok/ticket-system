@@ -44,6 +44,12 @@ export const ticketApi = {
   }) =>
     api.patch(`/tickets/${id}`, data),
 
+  bulkUpdate: (data: { ticketIds: string[]; status?: string }) =>
+    api.patch('/tickets/bulk/update', data),
+
+  bulkDelete: (ticketIds: string[]) =>
+    api.delete('/tickets/bulk/delete', { data: { ticketIds } }),
+
   getStats: () =>
     api.get('/tickets/stats/overview')
 };
@@ -134,7 +140,10 @@ export const sessionApi = {
     api.post(`/sessions/end/${sessionId}`),
 
   getCurrent: () =>
-    api.get('/sessions/current')
+    api.get('/sessions/current'),
+
+  cleanupOld: () =>
+    api.post('/sessions/cleanup-old')
 };
 
 // Time Tracking API

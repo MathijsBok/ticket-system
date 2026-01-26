@@ -87,6 +87,11 @@ router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
         },
         attachments: true,
         activities: {
+          include: {
+            user: {
+              select: { id: true, email: true, firstName: true, lastName: true }
+            }
+          },
           orderBy: { createdAt: 'desc' },
           take: 50
         }
@@ -260,6 +265,95 @@ router.patch('/:id',
     } catch (error) {
       console.error('Error updating ticket:', error);
       return res.status(500).json({ error: 'Failed to update ticket' });
+    }
+  }
+);
+
+// Bulk update tickets
+router.patch('/bulk/update',
+  requireAuth,
+  requireAgent,
+  [
+    body('ticketIds').isArray().notEmpty(),
+    body('ticketIds.*').isUUID(),
+    body('status').optional().isIn(['NEW', 'OPEN', 'PENDING', 'ON_HOLD', 'SOLVED', 'CLOSED'])
+  ],
+  async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    try {
+      const { ticketIds, status } = req.body;
+      const userId = req.userId!;
+
+      const updateData: any = { updatedAt: new Date() };
+
+      if (status) {
+        updateData.status = status;
+
+        if (status === 'SOLVED') {
+          updateData.solvedAt = new Date();
+        } else if (status === 'CLOSED') {
+          updateData.closedAt = new Date();
+        }
+      }
+
+      await prisma.ticket.updateMany({
+        where: { id: { in: ticketIds } },
+        data: updateData
+      });
+
+      // Create activity logs for each ticket
+      if (status) {
+        await Promise.all(
+          ticketIds.map((ticketId: string) =>
+            prisma.ticketActivity.create({
+              data: {
+                ticketId,
+                userId,
+                action: 'status_changed',
+                details: { newStatus: status }
+              }
+            })
+          )
+        );
+      }
+
+      return res.json({ success: true, updated: ticketIds.length });
+    } catch (error) {
+      console.error('Error bulk updating tickets:', error);
+      return res.status(500).json({ error: 'Failed to bulk update tickets' });
+    }
+  }
+);
+
+// Bulk delete tickets
+router.delete('/bulk/delete',
+  requireAuth,
+  requireAgent,
+  [
+    body('ticketIds').isArray().notEmpty(),
+    body('ticketIds.*').isUUID()
+  ],
+  async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    try {
+      const { ticketIds } = req.body;
+
+      await prisma.ticket.deleteMany({
+        where: { id: { in: ticketIds } }
+      });
+
+      return res.json({ success: true, deleted: ticketIds.length });
+    } catch (error) {
+      console.error('Error bulk deleting tickets:', error);
+      return res.status(500).json({ error: 'Failed to bulk delete tickets' });
     }
   }
 );

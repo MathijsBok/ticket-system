@@ -56,13 +56,14 @@ model User {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
-  organization      Organization?   @relation(fields: [organizationId], references: [id])
-  ticketsCreated    Ticket[]        @relation("TicketRequester")
-  ticketsAssigned   Ticket[]        @relation("TicketAssignee")
+  organization      Organization?     @relation(fields: [organizationId], references: [id])
+  ticketsCreated    Ticket[]          @relation("TicketRequester")
+  ticketsAssigned   Ticket[]          @relation("TicketAssignee")
   comments          Comment[]
   attachments       Attachment[]
   agentSessions     AgentSession[]
   timeEntries       TicketTimeEntry[]
+  activities        TicketActivity[]  @relation("UserActivities")
 
   @@index([clerkId])
   @@index([email])
@@ -187,8 +188,10 @@ model TicketActivity {
   createdAt   DateTime @default(now())
 
   ticket      Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user        User?    @relation("UserActivities", fields: [userId], references: [id])
 
   @@index([ticketId])
+  @@index([userId])
   @@index([createdAt])
 }
 
