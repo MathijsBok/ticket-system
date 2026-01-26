@@ -11,7 +11,9 @@ import commentRoutes from './routes/comments';
 import attachmentRoutes from './routes/attachments';
 import formRoutes from './routes/forms';
 import analyticsRoutes from './routes/analytics';
+import adminAnalyticsRoutes from './routes/adminAnalytics';
 import sessionRoutes from './routes/sessions';
+import timeTrackingRoutes from './routes/timeTracking';
 import webhookRoutes from './routes/webhooks';
 
 dotenv.config();
@@ -42,7 +44,9 @@ app.use('/api/comments', commentRoutes);
 app.use('/api/attachments', attachmentRoutes);
 app.use('/api/forms', formRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/admin-analytics', adminAnalyticsRoutes);
 app.use('/api/sessions', sessionRoutes);
+app.use('/api/time-tracking', timeTrackingRoutes);
 
 // Health check
 app.get('/health', (_req, res) => {

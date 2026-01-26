@@ -1,11 +1,12 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ticketApi } from '../lib/api';
 import Layout from '../components/Layout';
 import { format } from 'date-fns';
 
 const UserDashboard: React.FC = () => {
+  const navigate = useNavigate();
   const { data: tickets, isLoading, error } = useQuery({
     queryKey: ['userTickets'],
     queryFn: async () => {
@@ -111,35 +112,29 @@ const UserDashboard: React.FC = () => {
               </thead>
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                 {tickets.map((ticket: any) => (
-                  <tr key={ticket.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <Link
-                        to={`/tickets/${ticket.id}`}
-                        className="text-sm font-medium text-primary hover:underline"
-                      >
-                        #{ticket.ticketNumber}
-                      </Link>
+                  <tr
+                    key={ticket.id}
+                    onClick={() => navigate(`/tickets/${ticket.id}`)}
+                    className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer"
+                  >
+                    <td className="px-6 py-2 whitespace-nowrap text-sm font-medium text-primary">
+                      #{ticket.ticketNumber}
                     </td>
-                    <td className="px-6 py-4">
-                      <Link
-                        to={`/tickets/${ticket.id}`}
-                        className="text-sm text-gray-900 dark:text-white hover:text-primary"
-                      >
-                        {ticket.subject}
-                      </Link>
+                    <td className="px-6 py-2 text-sm text-gray-900 dark:text-white">
+                      {ticket.subject}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-6 py-2 whitespace-nowrap">
                       <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(ticket.status)}`}>
                         {ticket.status.replace('_', ' ')}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white capitalize">
+                    <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-white capitalize">
                       {ticket.priority.toLowerCase()}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                    <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       {format(new Date(ticket.createdAt), 'MMM d, yyyy')}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                    <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       {ticket._count.comments}
                     </td>
                   </tr>

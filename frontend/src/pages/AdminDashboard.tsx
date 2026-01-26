@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { analyticsApi, ticketApi } from '../lib/api';
+import { analyticsApi, ticketApi, adminAnalyticsApi } from '../lib/api';
 import Layout from '../components/Layout';
 import { format } from 'date-fns';
 import { useNotification } from '../contexts/NotificationContext';
@@ -9,7 +9,7 @@ import { useTicketNotifications } from '../hooks/useTicketNotifications';
 
 const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'analytics' | 'tickets'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'tickets' | 'performance'>('analytics');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
 
@@ -56,6 +56,15 @@ const AdminDashboard: React.FC = () => {
     enabled: activeTab === 'tickets'
   });
 
+  const { data: agentPerformance, isLoading: loadingPerformance } = useQuery({
+    queryKey: ['agentPerformance'],
+    queryFn: async () => {
+      const response = await adminAnalyticsApi.getAgentPerformance();
+      return response.data;
+    },
+    enabled: activeTab === 'performance'
+  });
+
   const formatDuration = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
@@ -93,7 +102,8 @@ const AdminDashboard: React.FC = () => {
     { value: 'OPEN', label: 'Open' },
     { value: 'PENDING', label: 'Pending' },
     { value: 'ON_HOLD', label: 'On Hold' },
-    { value: 'SOLVED', label: 'Solved' }
+    { value: 'SOLVED', label: 'Solved' },
+    { value: 'CLOSED', label: 'Closed' }
   ];
 
   return (
@@ -104,7 +114,11 @@ const AdminDashboard: React.FC = () => {
           <div>
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Admin Dashboard</h1>
             <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-              {activeTab === 'analytics' ? 'System analytics and agent performance metrics' : 'Manage and respond to tickets'}
+              {activeTab === 'analytics'
+                ? 'System analytics and agent performance metrics'
+                : activeTab === 'performance'
+                ? 'Detailed agent contributions and solve rates based on time and replies'
+                : 'Manage and respond to tickets'}
             </p>
           </div>
 
@@ -161,6 +175,16 @@ const AdminDashboard: React.FC = () => {
               }`}
             >
               Analytics
+            </button>
+            <button
+              onClick={() => setActiveTab('performance')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
+                activeTab === 'performance'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
+              }`}
+            >
+              Agent Performance
             </button>
             <button
               onClick={() => setActiveTab('tickets')}
@@ -317,28 +341,134 @@ const AdminDashboard: React.FC = () => {
         </div>
         )}
 
+        {/* Agent Performance Tab */}
+        {activeTab === 'performance' && (
+          <div className="space-y-6">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Agent Performance & Contributions</h2>
+
+            {loadingPerformance && (
+              <div className="text-center py-12">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                <p className="mt-2 text-gray-600 dark:text-gray-400">Loading performance data...</p>
+              </div>
+            )}
+
+            {agentPerformance && agentPerformance.agents && agentPerformance.agents.length > 0 && (
+              <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                  <thead className="bg-gray-50 dark:bg-gray-900">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Agent
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Total Tickets
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Solved Tickets
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Solve Rate
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Total Time Spent
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Avg Time/Ticket
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Total Replies
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                    {agentPerformance.agents.map((perf: any) => (
+                      <tr key={perf.agent.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-medium text-gray-900 dark:text-white">
+                            {perf.agent.firstName && perf.agent.lastName
+                              ? `${perf.agent.firstName} ${perf.agent.lastName}`
+                              : perf.agent.email}
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">{perf.agent.email}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                          {perf.totalTickets}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                          {perf.solvedTickets}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2 max-w-[100px]">
+                              <div
+                                className="bg-green-600 h-2 rounded-full"
+                                style={{ width: `${perf.solveRate}%` }}
+                              ></div>
+                            </div>
+                            <span className="text-sm font-medium text-gray-900 dark:text-white">
+                              {perf.solveRate}%
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                          {formatDuration(perf.totalTimeSpent)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                          {formatDuration(perf.avgTimePerTicket)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                          {perf.totalReplies}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {agentPerformance && agentPerformance.agents && agentPerformance.agents.length === 0 && (
+              <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                <p className="text-gray-600 dark:text-gray-400">No agent performance data available</p>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Tickets Tab */}
         {activeTab === 'tickets' && (
           <div className="space-y-6">
             {/* Statistics Cards */}
             {ticketStats && (
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-                  <div className="text-sm font-medium text-gray-600 dark:text-gray-400">Total</div>
-                  <div className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">{ticketStats.total}</div>
-                </div>
-                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <button
+                  onClick={() => setStatusFilter('NEW')}
+                  className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                >
+                  <div className="text-sm font-medium text-gray-600 dark:text-gray-400">New</div>
+                  <div className="mt-2 text-3xl font-bold text-blue-600 dark:text-blue-400">{ticketStats.byStatus.new || 0}</div>
+                </button>
+                <button
+                  onClick={() => setStatusFilter('OPEN')}
+                  className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                >
                   <div className="text-sm font-medium text-gray-600 dark:text-gray-400">Open</div>
                   <div className="mt-2 text-3xl font-bold text-green-600 dark:text-green-400">{ticketStats.byStatus.open || 0}</div>
-                </div>
-                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                </button>
+                <button
+                  onClick={() => setStatusFilter('PENDING')}
+                  className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                >
                   <div className="text-sm font-medium text-gray-600 dark:text-gray-400">Pending</div>
                   <div className="mt-2 text-3xl font-bold text-yellow-600 dark:text-yellow-400">{ticketStats.byStatus.pending || 0}</div>
-                </div>
-                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-                  <div className="text-sm font-medium text-gray-600 dark:text-gray-400">Solved</div>
-                  <div className="mt-2 text-3xl font-bold text-purple-600 dark:text-purple-400">{ticketStats.byStatus.solved || 0}</div>
-                </div>
+                </button>
+                <button
+                  onClick={() => setStatusFilter('ON_HOLD')}
+                  className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                >
+                  <div className="text-sm font-medium text-gray-600 dark:text-gray-400">On Hold</div>
+                  <div className="mt-2 text-3xl font-bold text-orange-600 dark:text-orange-400">{ticketStats.byStatus.on_hold || 0}</div>
+                </button>
               </div>
             )}
 
@@ -408,27 +538,27 @@ const AdminDashboard: React.FC = () => {
                         onClick={() => navigate(`/tickets/${ticket.id}`)}
                         className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer"
                       >
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-primary">
+                        <td className="px-6 py-2 whitespace-nowrap text-sm font-medium text-primary">
                           #{ticket.ticketNumber}
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                        <td className="px-6 py-2 text-sm text-gray-900 dark:text-white">
                           {ticket.subject}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                        <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                           {ticket.requester.email}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-6 py-2 whitespace-nowrap">
                           <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(ticket.status)}`}>
                             {ticket.status.replace('_', ' ')}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white capitalize">
+                        <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-white capitalize">
                           {ticket.priority.toLowerCase()}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                        <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                           {ticket.assignee ? ticket.assignee.email : 'Unassigned'}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                        <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                           {format(new Date(ticket.updatedAt), 'MMM d, HH:mm')}
                         </td>
                       </tr>
@@ -446,7 +576,7 @@ const AdminDashboard: React.FC = () => {
                 </svg>
                 <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">No tickets found</h3>
                 <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  {statusFilter ? `No ${statusFilter.toLowerCase()} tickets at the moment.` : 'No tickets in the system.'}
+                  {statusFilter ? `No ${statusFilter.toLowerCase().replace('_', ' ')} tickets at the moment.` : 'No tickets in the system.'}
                 </p>
               </div>
             )}

@@ -34,14 +34,16 @@ const AgentDashboard: React.FC = () => {
     };
 
     startSession();
+  }, []);
 
-    // End session on unmount
+  // End session on unmount
+  useEffect(() => {
     return () => {
       if (activeSessionId) {
         sessionApi.end(activeSessionId).catch(console.error);
       }
     };
-  }, []);
+  }, [activeSessionId]);
 
   const { data: tickets, isLoading } = useQuery({
     queryKey: ['agentTickets', statusFilter],
@@ -79,7 +81,8 @@ const AgentDashboard: React.FC = () => {
     { value: 'OPEN', label: 'Open' },
     { value: 'PENDING', label: 'Pending' },
     { value: 'ON_HOLD', label: 'On Hold' },
-    { value: 'SOLVED', label: 'Solved' }
+    { value: 'SOLVED', label: 'Solved' },
+    { value: 'CLOSED', label: 'Closed' }
   ];
 
   const handleToggleNotifications = async () => {
@@ -164,23 +167,35 @@ const AgentDashboard: React.FC = () => {
 
         {/* Statistics Cards */}
         {stats && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-              <div className="text-sm font-medium text-gray-600 dark:text-gray-400">Total</div>
-              <div className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">{stats.total}</div>
-            </div>
-            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <button
+              onClick={() => setStatusFilter('NEW')}
+              className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+            >
+              <div className="text-sm font-medium text-gray-600 dark:text-gray-400">New</div>
+              <div className="mt-2 text-3xl font-bold text-blue-600 dark:text-blue-400">{stats.byStatus.new || 0}</div>
+            </button>
+            <button
+              onClick={() => setStatusFilter('OPEN')}
+              className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+            >
               <div className="text-sm font-medium text-gray-600 dark:text-gray-400">Open</div>
-              <div className="mt-2 text-3xl font-bold text-green-600 dark:text-green-400">{stats.byStatus.open}</div>
-            </div>
-            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+              <div className="mt-2 text-3xl font-bold text-green-600 dark:text-green-400">{stats.byStatus.open || 0}</div>
+            </button>
+            <button
+              onClick={() => setStatusFilter('PENDING')}
+              className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+            >
               <div className="text-sm font-medium text-gray-600 dark:text-gray-400">Pending</div>
-              <div className="mt-2 text-3xl font-bold text-yellow-600 dark:text-yellow-400">{stats.byStatus.pending}</div>
-            </div>
-            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-              <div className="text-sm font-medium text-gray-600 dark:text-gray-400">Solved</div>
-              <div className="mt-2 text-3xl font-bold text-purple-600 dark:text-purple-400">{stats.byStatus.solved}</div>
-            </div>
+              <div className="mt-2 text-3xl font-bold text-yellow-600 dark:text-yellow-400">{stats.byStatus.pending || 0}</div>
+            </button>
+            <button
+              onClick={() => setStatusFilter('ON_HOLD')}
+              className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+            >
+              <div className="text-sm font-medium text-gray-600 dark:text-gray-400">On Hold</div>
+              <div className="mt-2 text-3xl font-bold text-orange-600 dark:text-orange-400">{stats.byStatus.on_hold || 0}</div>
+            </button>
           </div>
         )}
 
@@ -250,27 +265,27 @@ const AgentDashboard: React.FC = () => {
                     onClick={() => navigate(`/tickets/${ticket.id}`)}
                     className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer"
                   >
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-primary">
+                    <td className="px-6 py-2 whitespace-nowrap text-sm font-medium text-primary">
                       #{ticket.ticketNumber}
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                    <td className="px-6 py-2 text-sm text-gray-900 dark:text-white">
                       {ticket.subject}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                    <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       {ticket.requester.email}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-6 py-2 whitespace-nowrap">
                       <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(ticket.status)}`}>
                         {ticket.status.replace('_', ' ')}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white capitalize">
+                    <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-white capitalize">
                       {ticket.priority.toLowerCase()}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                    <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       {ticket.assignee ? ticket.assignee.email : 'Unassigned'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                    <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       {format(new Date(ticket.updatedAt), 'MMM d, HH:mm')}
                     </td>
                   </tr>
@@ -288,7 +303,7 @@ const AgentDashboard: React.FC = () => {
             </svg>
             <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">No tickets found</h3>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              {statusFilter ? `No ${statusFilter.toLowerCase()} tickets at the moment.` : 'No tickets in the system.'}
+              {statusFilter ? `No ${statusFilter.toLowerCase().replace('_', ' ')} tickets at the moment.` : 'No tickets in the system.'}
             </p>
           </div>
         )}

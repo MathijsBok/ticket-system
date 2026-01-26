@@ -109,6 +109,60 @@ const TicketDetail: React.FC = () => {
     return colors[status] || colors.NEW;
   };
 
+  const formatActivityMessage = (action: string, details: any) => {
+    const formatStatus = (status: string) => {
+      return status.replace('_', ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
+    };
+
+    const formatChannel = (channel: string) => {
+      return channel.charAt(0).toUpperCase() + channel.slice(1).toLowerCase();
+    };
+
+    switch (action) {
+      case 'ticket_created':
+        if (details?.subject) {
+          return `Ticket created via ${formatChannel(details.channel || 'Web')}: "${details.subject}"`;
+        }
+        return `Ticket created via ${formatChannel(details?.channel || 'Web')}`;
+
+      case 'status_changed':
+        if (details?.oldStatus && details?.newStatus) {
+          return `Status changed from ${formatStatus(details.oldStatus)} to ${formatStatus(details.newStatus)}`;
+        } else if (details?.newStatus) {
+          return `Status changed to ${formatStatus(details.newStatus)}`;
+        }
+        return 'Status changed';
+
+      case 'assignee_changed':
+        if (details?.newAssignee) {
+          return `Assigned to ${details.newAssignee}`;
+        } else if (details?.oldAssignee) {
+          return 'Unassigned';
+        }
+        return 'Assignee changed';
+
+      case 'priority_changed':
+        if (details?.oldPriority && details?.newPriority) {
+          return `Priority changed from ${formatStatus(details.oldPriority)} to ${formatStatus(details.newPriority)}`;
+        } else if (details?.newPriority) {
+          return `Priority changed to ${formatStatus(details.newPriority)}`;
+        }
+        return 'Priority changed';
+
+      case 'comment_added':
+        return details?.isInternal ? 'Internal note added' : 'Reply added';
+
+      case 'category_changed':
+        if (details?.newCategory) {
+          return `Category changed to ${details.newCategory}`;
+        }
+        return 'Category changed';
+
+      default:
+        return action.replace('_', ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
+    }
+  };
+
   if (isLoading) {
     return (
       <Layout>
@@ -130,7 +184,9 @@ const TicketDetail: React.FC = () => {
     );
   }
 
-  const isAgent = userRole === 'AGENT' || userRole === 'ADMIN';
+  // Determine if user should see agent controls based on role and view context
+  const effectiveRole = userRole === 'ADMIN' ? currentView : userRole;
+  const isAgent = effectiveRole === 'AGENT' || effectiveRole === 'ADMIN';
 
   return (
     <Layout>
@@ -167,60 +223,60 @@ const TicketDetail: React.FC = () => {
 
         {/* Ticket header */}
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-          <div className="flex justify-between items-start">
-            <div>
-              <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  Ticket #{ticket.ticketNumber}
-                </h1>
-                <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(ticket.status)}`}>
-                  {ticket.status.replace('_', ' ')}
-                </span>
-              </div>
-              <h2 className="mt-2 text-xl text-gray-700 dark:text-gray-300">{ticket.subject}</h2>
-              <div className="mt-4 flex gap-6 text-sm text-gray-600 dark:text-gray-400">
-                <div>
-                  <span className="font-medium">Created:</span> {format(new Date(ticket.createdAt), 'MMM d, yyyy HH:mm')}
-                </div>
-                <div>
-                  <span className="font-medium">Priority:</span> <span className="capitalize">{ticket.priority.toLowerCase()}</span>
-                </div>
-                <div>
-                  <span className="font-medium">Requester:</span> {ticket.requester.email}
-                </div>
-                {ticket.assignee && (
-                  <div>
-                    <span className="font-medium">Assigned to:</span> {ticket.assignee.email}
-                  </div>
-                )}
-              </div>
-            </div>
+          <div className="flex justify-between items-start mb-4">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+              Ticket #{ticket.ticketNumber}
+            </h1>
 
-            {/* Agent actions */}
-            {isAgent && (
-              <div className="flex gap-3">
-                {!ticket.assignee && (
-                  <button
-                    onClick={() => assignToMeMutation.mutate()}
-                    disabled={assignToMeMutation.isPending}
-                    className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:opacity-90 text-sm font-medium disabled:opacity-50 transition-colors"
+            <div className="flex items-center gap-3">
+              <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(ticket.status)}`}>
+                {ticket.status.replace('_', ' ')}
+              </span>
+
+              {/* Agent actions */}
+              {isAgent && (
+                <>
+                  {!ticket.assignee && (
+                    <button
+                      onClick={() => assignToMeMutation.mutate()}
+                      disabled={assignToMeMutation.isPending}
+                      className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:opacity-90 text-sm font-medium disabled:opacity-50 transition-colors"
+                    >
+                      Assign to Me
+                    </button>
+                  )}
+                  <select
+                    value={ticket.status}
+                    onChange={handleStatusChange}
+                    disabled={updateStatusMutation.isPending}
+                    className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                   >
-                    Assign to Me
-                  </button>
-                )}
-                <select
-                  value={ticket.status}
-                  onChange={handleStatusChange}
-                  disabled={updateStatusMutation.isPending}
-                  className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <option value="NEW">New</option>
-                  <option value="OPEN">Open</option>
-                  <option value="PENDING">Pending</option>
-                  <option value="ON_HOLD">On Hold</option>
-                  <option value="SOLVED">Solved</option>
-                  <option value="CLOSED">Closed</option>
-                </select>
+                    <option value="NEW">New</option>
+                    <option value="OPEN">Open</option>
+                    <option value="PENDING">Pending</option>
+                    <option value="ON_HOLD">On Hold</option>
+                    <option value="SOLVED">Solved</option>
+                    <option value="CLOSED">Closed</option>
+                  </select>
+                </>
+              )}
+            </div>
+          </div>
+
+          <h2 className="text-xl text-gray-700 dark:text-gray-300">{ticket.subject}</h2>
+          <div className="mt-4 flex gap-6 text-sm text-gray-600 dark:text-gray-400">
+            <div>
+              <span className="font-medium">Created:</span> {format(new Date(ticket.createdAt), 'MMM d, yyyy HH:mm')}
+            </div>
+            <div>
+              <span className="font-medium">Priority:</span> <span className="capitalize">{ticket.priority.toLowerCase()}</span>
+            </div>
+            <div>
+              <span className="font-medium">Requester:</span> {ticket.requester.email}
+            </div>
+            {ticket.assignee && (
+              <div>
+                <span className="font-medium">Assigned to:</span> {ticket.assignee.email}
               </div>
             )}
           </div>
@@ -230,15 +286,17 @@ const TicketDetail: React.FC = () => {
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Conversation</h3>
           <div className="space-y-6">
-            {ticket.comments.map((comment: any) => (
-              <div
-                key={comment.id}
-                className={`p-4 rounded-lg ${
-                  comment.isInternal
-                    ? 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800'
-                    : 'bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600'
-                }`}
-              >
+            {ticket.comments
+              .filter((comment: any) => isAgent || !comment.isInternal)
+              .map((comment: any) => (
+                <div
+                  key={comment.id}
+                  className={`p-4 rounded-lg ${
+                    comment.isInternal
+                      ? 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800'
+                      : 'bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600'
+                  }`}
+                >
                 <div className="flex justify-between items-start mb-2">
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-gray-900 dark:text-white">
@@ -313,12 +371,7 @@ const TicketDetail: React.FC = () => {
                   <div className="w-2 h-2 mt-1.5 rounded-full bg-primary"></div>
                   <div className="flex-1">
                     <div className="text-gray-700 dark:text-gray-300">
-                      <span className="font-medium">{activity.action.replace('_', ' ')}</span>
-                      {activity.details && (
-                        <span className="text-gray-500 dark:text-gray-400">
-                          {' '}- {JSON.stringify(activity.details)}
-                        </span>
-                      )}
+                      {formatActivityMessage(activity.action, activity.details)}
                     </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                       {format(new Date(activity.createdAt), 'MMM d, yyyy HH:mm:ss')}

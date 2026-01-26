@@ -136,3 +136,27 @@ export const sessionApi = {
   getCurrent: () =>
     api.get('/sessions/current')
 };
+
+// Time Tracking API
+export const timeTrackingApi = {
+  start: (data: { ticketId: string; description?: string }) =>
+    api.post('/time-tracking/start', data),
+
+  stop: (entryId: string) =>
+    api.post(`/time-tracking/stop/${entryId}`),
+
+  getByTicket: (ticketId: string) =>
+    api.get(`/time-tracking/ticket/${ticketId}`),
+
+  getActive: (ticketId: string) =>
+    api.get(`/time-tracking/active/${ticketId}`)
+};
+
+// Admin Analytics API
+export const adminAnalyticsApi = {
+  getTicketContributions: () =>
+    api.get('/admin-analytics/ticket-contributions'),
+
+  getAgentPerformance: () =>
+    api.get('/admin-analytics/agent-performance')
+};
