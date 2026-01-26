@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useClerk } from '@clerk/clerk-react';
@@ -8,6 +8,9 @@ import { format } from 'date-fns';
 import { useNotification } from '../contexts/NotificationContext';
 import { useTicketNotifications } from '../hooks/useTicketNotifications';
 import toast from 'react-hot-toast';
+
+type SortField = 'ticketNumber' | 'subject' | 'requester' | 'status' | 'priority' | 'assignee' | 'updatedAt';
+type SortDirection = 'asc' | 'desc';
 
 const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -20,6 +23,8 @@ const AdminDashboard: React.FC = () => {
   const [bulkStatus, setBulkStatus] = useState<string>('');
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [sortField, setSortField] = useState<SortField>('updatedAt');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
   const { permission, requestPermission, isSupported } = useNotification();
   const { newTicketCount, isPolling } = useTicketNotifications({
@@ -159,6 +164,62 @@ const AdminDashboard: React.FC = () => {
     enabled: activeTab === 'performance'
   });
 
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  const sortedTickets = useMemo(() => {
+    if (!tickets) return [];
+
+    return [...tickets].sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
+
+      switch (sortField) {
+        case 'ticketNumber':
+          aValue = a.ticketNumber;
+          bValue = b.ticketNumber;
+          break;
+        case 'subject':
+          aValue = a.subject.toLowerCase();
+          bValue = b.subject.toLowerCase();
+          break;
+        case 'requester':
+          aValue = a.requester.email.toLowerCase();
+          bValue = b.requester.email.toLowerCase();
+          break;
+        case 'status':
+          aValue = a.status;
+          bValue = b.status;
+          break;
+        case 'priority':
+          const priorityOrder = { LOW: 0, NORMAL: 1, HIGH: 2, URGENT: 3 };
+          aValue = priorityOrder[a.priority as keyof typeof priorityOrder];
+          bValue = priorityOrder[b.priority as keyof typeof priorityOrder];
+          break;
+        case 'assignee':
+          aValue = a.assignee ? a.assignee.email.toLowerCase() : '';
+          bValue = b.assignee ? b.assignee.email.toLowerCase() : '';
+          break;
+        case 'updatedAt':
+          aValue = new Date(a.updatedAt).getTime();
+          bValue = new Date(b.updatedAt).getTime();
+          break;
+        default:
+          return 0;
+      }
+
+      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [tickets, sortField, sortDirection]);
+
   const bulkUpdateMutation = useMutation({
     mutationFn: async (data: { ticketIds: string[]; status?: string }) => {
       return await ticketApi.bulkUpdate(data);
@@ -205,10 +266,10 @@ const AdminDashboard: React.FC = () => {
   });
 
   const handleSelectAll = () => {
-    if (selectedTickets.length === tickets?.length) {
+    if (selectedTickets.length === sortedTickets?.length) {
       setSelectedTickets([]);
     } else {
-      setSelectedTickets(tickets?.map((t: any) => t.id) || []);
+      setSelectedTickets(sortedTickets?.map((t: any) => t.id) || []);
     }
   };
 
@@ -236,8 +297,27 @@ const AdminDashboard: React.FC = () => {
   const handleMarkAsSpam = () => {
     if (selectedTickets.length === 0) return;
     if (window.confirm(`Mark ${selectedTickets.length} ticket(s) as spam and close them?`)) {
-      bulkUpdateMutation.mutate({ ticketIds: selectedTickets, status: 'CLOSED' });
+      bulkUpdateMutation.mutate({ ticketIds: selectedTickets, status: 'SOLVED' });
     }
+  };
+
+  const SortIcon: React.FC<{ field: SortField }> = ({ field }) => {
+    if (sortField !== field) {
+      return (
+        <svg className="w-4 h-4 ml-1 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+        </svg>
+      );
+    }
+    return sortDirection === 'asc' ? (
+      <svg className="w-4 h-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+      </svg>
+    ) : (
+      <svg className="w-4 h-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+      </svg>
+    );
   };
 
   const formatDuration = (seconds: number) => {
@@ -252,8 +332,7 @@ const AdminDashboard: React.FC = () => {
       OPEN: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
       PENDING: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
       ON_HOLD: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
-      SOLVED: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-      CLOSED: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
+      SOLVED: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
     };
     return colors[status] || colors.NEW;
   };
@@ -277,9 +356,14 @@ const AdminDashboard: React.FC = () => {
     { value: 'OPEN', label: 'Open' },
     { value: 'PENDING', label: 'Pending' },
     { value: 'ON_HOLD', label: 'On Hold' },
-    { value: 'SOLVED', label: 'Solved' },
-    { value: 'CLOSED', label: 'Closed' }
+    { value: 'SOLVED', label: 'Solved' }
   ];
+
+  // Helper to get the correct stats key for a status value
+  const getStatsKey = (status: string): string => {
+    if (status === 'ON_HOLD') return 'onHold';
+    return status.toLowerCase();
+  };
 
   return (
     <Layout>
@@ -652,7 +736,7 @@ const AdminDashboard: React.FC = () => {
                   className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                 >
                   <div className="text-sm font-medium text-gray-600 dark:text-gray-400">On Hold</div>
-                  <div className="mt-1 text-2xl font-bold text-orange-600 dark:text-orange-400">{ticketStats.byStatus.on_hold || 0}</div>
+                  <div className="mt-1 text-2xl font-bold text-orange-600 dark:text-orange-400">{ticketStats.byStatus.onHold || 0}</div>
                 </button>
               </div>
             )}
@@ -672,7 +756,7 @@ const AdminDashboard: React.FC = () => {
                   {filter.label}
                   {ticketStats && filter.value && (
                     <span className="ml-2 px-2 py-0.5 rounded-full bg-white/20 text-xs">
-                      {ticketStats.byStatus[filter.value.toLowerCase()] || 0}
+                      {ticketStats.byStatus[getStatsKey(filter.value)] || 0}
                     </span>
                   )}
                 </button>
@@ -756,18 +840,9 @@ const AdminDashboard: React.FC = () => {
                                 setBulkStatus('SOLVED');
                                 setShowStatusDropdown(false);
                               }}
-                              className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                            >
-                              Solved
-                            </button>
-                            <button
-                              onClick={() => {
-                                setBulkStatus('CLOSED');
-                                setShowStatusDropdown(false);
-                              }}
                               className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 last:rounded-b-md"
                             >
-                              Closed
+                              Solved
                             </button>
                           </div>
                         </>
@@ -817,7 +892,7 @@ const AdminDashboard: React.FC = () => {
             )}
 
             {/* Tickets table */}
-            {tickets && tickets.length > 0 && (
+            {sortedTickets && sortedTickets.length > 0 && (
               <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
                 <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                   <thead className="bg-gray-50 dark:bg-gray-900">
@@ -825,36 +900,78 @@ const AdminDashboard: React.FC = () => {
                       <th className="px-6 py-3 text-left">
                         <input
                           type="checkbox"
-                          checked={selectedTickets.length === tickets.length}
+                          checked={selectedTickets.length === sortedTickets.length}
                           onChange={handleSelectAll}
                           className="rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-primary"
                         />
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Ticket #
+                      <th
+                        onClick={() => handleSort('ticketNumber')}
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                      >
+                        <div className="flex items-center">
+                          Ticket #
+                          <SortIcon field="ticketNumber" />
+                        </div>
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Subject
+                      <th
+                        onClick={() => handleSort('subject')}
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                      >
+                        <div className="flex items-center">
+                          Subject
+                          <SortIcon field="subject" />
+                        </div>
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Requester
+                      <th
+                        onClick={() => handleSort('requester')}
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                      >
+                        <div className="flex items-center">
+                          Requester
+                          <SortIcon field="requester" />
+                        </div>
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Status
+                      <th
+                        onClick={() => handleSort('status')}
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                      >
+                        <div className="flex items-center">
+                          Status
+                          <SortIcon field="status" />
+                        </div>
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Priority
+                      <th
+                        onClick={() => handleSort('priority')}
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                      >
+                        <div className="flex items-center">
+                          Priority
+                          <SortIcon field="priority" />
+                        </div>
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Assignee
+                      <th
+                        onClick={() => handleSort('assignee')}
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                      >
+                        <div className="flex items-center">
+                          Assignee
+                          <SortIcon field="assignee" />
+                        </div>
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Updated
+                      <th
+                        onClick={() => handleSort('updatedAt')}
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                      >
+                        <div className="flex items-center">
+                          Updated
+                          <SortIcon field="updatedAt" />
+                        </div>
                       </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                    {tickets.map((ticket: any) => (
+                    {sortedTickets.map((ticket: any) => (
                       <tr
                         key={ticket.id}
                         className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
@@ -920,7 +1037,7 @@ const AdminDashboard: React.FC = () => {
             )}
 
             {/* Empty state */}
-            {tickets && tickets.length === 0 && (
+            {sortedTickets && sortedTickets.length === 0 && (
               <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
                 <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />

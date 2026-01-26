@@ -19,7 +19,6 @@ enum TicketStatus {
   PENDING
   ON_HOLD
   SOLVED
-  CLOSED
 }
 
 enum TicketPriority {
@@ -95,7 +94,6 @@ model Ticket {
   dueAt           DateTime?
   firstResponseAt DateTime?
   solvedAt        DateTime?
-  closedAt        DateTime?
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 

@@ -49,16 +49,19 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navigation = React.useMemo(() => {
     const nav = [];
 
-    if (userRole === 'USER') {
+    // Use currentView for admins (respects "View as" switcher), userRole for others
+    const effectiveRole = userRole === 'ADMIN' ? currentView : userRole;
+
+    if (effectiveRole === 'USER') {
       nav.push(
         { name: 'My Tickets', href: '/user' },
         { name: 'New Ticket', href: '/tickets/new' }
       );
-    } else if (userRole === 'AGENT') {
+    } else if (effectiveRole === 'AGENT') {
       nav.push(
         { name: 'Dashboard', href: '/agent' }
       );
-    } else if (userRole === 'ADMIN') {
+    } else if (effectiveRole === 'ADMIN') {
       nav.push(
         { name: 'Dashboard', href: '/admin' },
         { name: 'Forms', href: '/admin/forms' }
@@ -66,7 +69,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     }
 
     return nav;
-  }, [userRole]);
+  }, [userRole, currentView]);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">

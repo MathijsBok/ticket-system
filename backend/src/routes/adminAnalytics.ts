@@ -109,7 +109,6 @@ router.get('/ticket-contributions', requireAuth, requireAdmin, async (_req: Auth
         priority: ticket.priority,
         createdAt: ticket.createdAt,
         solvedAt: ticket.solvedAt,
-        closedAt: ticket.closedAt,
         requester: ticket.requester,
         assignee: ticket.assignee,
         totalTime: totalTime,
@@ -159,8 +158,7 @@ router.get('/agent-performance', requireAuth, requireAdmin, async (_req: AuthReq
                 id: true,
                 ticketNumber: true,
                 status: true,
-                solvedAt: true,
-                closedAt: true
+                solvedAt: true
               }
             }
           }
@@ -177,8 +175,7 @@ router.get('/agent-performance', requireAuth, requireAdmin, async (_req: AuthReq
                 id: true,
                 ticketNumber: true,
                 status: true,
-                solvedAt: true,
-                closedAt: true
+                solvedAt: true
               }
             }
           }
@@ -203,7 +200,7 @@ router.get('/agent-performance', requireAuth, requireAdmin, async (_req: AuthReq
           const timeEntry = timeEntries.find(e => e.ticket.id === ticketId);
           const comment = comments.find(c => c.ticket.id === ticketId);
           const ticket = timeEntry?.ticket || comment?.ticket;
-          return ticket && (ticket.status === 'SOLVED' || ticket.status === 'CLOSED');
+          return ticket && ticket.status === 'SOLVED';
         }).length;
 
         // Calculate solve rate

@@ -10,8 +10,11 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
-    "db:seed": "ts-node src/seed.ts",
+    "db:seed": "ts-node prisma/seed.ts",
     "user:create": "ts-node src/scripts/create-user.ts"
+  },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
   },
   "dependencies": {
     "@clerk/express": "^1.0.0",

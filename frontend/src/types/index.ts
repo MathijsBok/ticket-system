@@ -1,6 +1,6 @@
 export type UserRole = 'USER' | 'AGENT' | 'ADMIN';
 
-export type TicketStatus = 'NEW' | 'OPEN' | 'PENDING' | 'ON_HOLD' | 'SOLVED' | 'CLOSED';
+export type TicketStatus = 'NEW' | 'OPEN' | 'PENDING' | 'ON_HOLD' | 'SOLVED';
 
 export type TicketPriority = 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
 
@@ -35,7 +35,6 @@ export interface Ticket {
   dueAt?: string;
   firstResponseAt?: string;
   solvedAt?: string;
-  closedAt?: string;
   createdAt: string;
   updatedAt: string;
   requester: User;
@@ -149,6 +148,5 @@ export interface TicketStats {
     pending: number;
     onHold: number;
     solved: number;
-    closed: number;
   };
 }

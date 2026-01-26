@@ -182,7 +182,7 @@ router.patch('/:id',
   requireAuth,
   requireAgent,
   [
-    body('status').optional().isIn(['NEW', 'OPEN', 'PENDING', 'ON_HOLD', 'SOLVED', 'CLOSED']),
+    body('status').optional().isIn(['NEW', 'OPEN', 'PENDING', 'ON_HOLD', 'SOLVED']),
     body('priority').optional().isIn(['LOW', 'NORMAL', 'HIGH', 'URGENT']),
     body('assigneeId').optional().isUUID(),
     body('categoryId').optional().isUUID()
@@ -207,8 +207,6 @@ router.patch('/:id',
         // Track status changes
         if (status === 'SOLVED') {
           updateData.solvedAt = new Date();
-        } else if (status === 'CLOSED') {
-          updateData.closedAt = new Date();
         }
 
         activities.push({
@@ -276,7 +274,7 @@ router.patch('/bulk/update',
   [
     body('ticketIds').isArray().notEmpty(),
     body('ticketIds.*').isUUID(),
-    body('status').optional().isIn(['NEW', 'OPEN', 'PENDING', 'ON_HOLD', 'SOLVED', 'CLOSED'])
+    body('status').optional().isIn(['NEW', 'OPEN', 'PENDING', 'ON_HOLD', 'SOLVED'])
   ],
   async (req: AuthRequest, res: Response) => {
     const errors = validationResult(req);
@@ -295,8 +293,6 @@ router.patch('/bulk/update',
 
         if (status === 'SOLVED') {
           updateData.solvedAt = new Date();
-        } else if (status === 'CLOSED') {
-          updateData.closedAt = new Date();
         }
       }
 
@@ -366,14 +362,13 @@ router.get('/stats/overview', requireAuth, requireAgent, async (req: AuthRequest
 
     const where = userRole === 'AGENT' ? { assigneeId: userId } : {};
 
-    const [total, newCount, openCount, pendingCount, onHoldCount, solvedCount, closedCount] = await Promise.all([
+    const [total, newCount, openCount, pendingCount, onHoldCount, solvedCount] = await Promise.all([
       prisma.ticket.count({ where }),
       prisma.ticket.count({ where: { ...where, status: 'NEW' } }),
       prisma.ticket.count({ where: { ...where, status: 'OPEN' } }),
       prisma.ticket.count({ where: { ...where, status: 'PENDING' } }),
       prisma.ticket.count({ where: { ...where, status: 'ON_HOLD' } }),
-      prisma.ticket.count({ where: { ...where, status: 'SOLVED' } }),
-      prisma.ticket.count({ where: { ...where, status: 'CLOSED' } })
+      prisma.ticket.count({ where: { ...where, status: 'SOLVED' } })
     ]);
 
     return res.json({
@@ -383,8 +378,7 @@ router.get('/stats/overview', requireAuth, requireAgent, async (req: AuthRequest
         open: openCount,
         pending: pendingCount,
         onHold: onHoldCount,
-        solved: solvedCount,
-        closed: closedCount
+        solved: solvedCount
       }
     });
   } catch (error) {

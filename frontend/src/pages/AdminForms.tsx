@@ -8,6 +8,7 @@ import { format } from 'date-fns';
 const AdminForms: React.FC = () => {
   const queryClient = useQueryClient();
   const [isCreating, setIsCreating] = useState(false);
+  const [editingFormId, setEditingFormId] = useState<string | null>(null);
   const [formName, setFormName] = useState('');
   const [formDescription, setFormDescription] = useState('');
   const [fields, setFields] = useState<any[]>([]);
@@ -27,14 +28,26 @@ const AdminForms: React.FC = () => {
     },
     onSuccess: () => {
       toast.success('Form created successfully');
-      setIsCreating(false);
-      setFormName('');
-      setFormDescription('');
-      setFields([]);
+      resetForm();
       queryClient.invalidateQueries({ queryKey: ['adminForms'] });
     },
     onError: () => {
       toast.error('Failed to create form');
+    }
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: any }) => {
+      const response = await formApi.update(id, data);
+      return response.data;
+    },
+    onSuccess: () => {
+      toast.success('Form updated successfully');
+      resetForm();
+      queryClient.invalidateQueries({ queryKey: ['adminForms'] });
+    },
+    onError: () => {
+      toast.error('Failed to update form');
     }
   });
 
@@ -50,6 +63,22 @@ const AdminForms: React.FC = () => {
       toast.error('Failed to delete form');
     }
   });
+
+  const resetForm = () => {
+    setIsCreating(false);
+    setEditingFormId(null);
+    setFormName('');
+    setFormDescription('');
+    setFields([]);
+  };
+
+  const handleEdit = (form: any) => {
+    setEditingFormId(form.id);
+    setFormName(form.name);
+    setFormDescription(form.description || '');
+    setFields(Array.isArray(form.fields) ? form.fields : []);
+    setIsCreating(false);
+  };
 
   const handleAddField = () => {
     setFields([
@@ -80,12 +109,20 @@ const AdminForms: React.FC = () => {
       return;
     }
 
-    createMutation.mutate({
+    const formData = {
       name: formName,
       description: formDescription,
       fields
-    });
+    };
+
+    if (editingFormId) {
+      updateMutation.mutate({ id: editingFormId, data: formData });
+    } else {
+      createMutation.mutate(formData);
+    }
   };
+
+  const isFormOpen = isCreating || editingFormId !== null;
 
   return (
     <Layout>
@@ -99,20 +136,28 @@ const AdminForms: React.FC = () => {
             </p>
           </div>
           <button
-            onClick={() => setIsCreating(!isCreating)}
+            onClick={() => {
+              if (isFormOpen) {
+                resetForm();
+              } else {
+                setIsCreating(true);
+              }
+            }}
             className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors"
           >
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            {isCreating ? 'Cancel' : 'New Form'}
+            {isFormOpen ? 'Cancel' : 'New Form'}
           </button>
         </div>
 
-        {/* Create Form */}
-        {isCreating && (
+        {/* Create/Edit Form */}
+        {isFormOpen && (
           <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Create New Form</h2>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              {editingFormId ? 'Edit Form' : 'Create New Form'}
+            </h2>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -208,14 +253,17 @@ const AdminForms: React.FC = () => {
               <div className="flex gap-3 pt-4">
                 <button
                   type="submit"
-                  disabled={createMutation.isPending}
+                  disabled={createMutation.isPending || updateMutation.isPending}
                   className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary text-sm font-medium disabled:opacity-50 transition-colors"
                 >
-                  {createMutation.isPending ? 'Creating...' : 'Create Form'}
+                  {(createMutation.isPending || updateMutation.isPending)
+                    ? (editingFormId ? 'Updating...' : 'Creating...')
+                    : (editingFormId ? 'Update Form' : 'Create Form')
+                  }
                 </button>
                 <button
                   type="button"
-                  onClick={() => setIsCreating(false)}
+                  onClick={resetForm}
                   className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-sm font-medium transition-colors"
                 >
                   Cancel
@@ -281,7 +329,13 @@ const AdminForms: React.FC = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       {format(new Date(form.createdAt), 'MMM d, yyyy')}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
+                      <button
+                        onClick={() => handleEdit(form)}
+                        className="text-primary hover:text-primary-dark dark:hover:text-primary-light"
+                      >
+                        Edit
+                      </button>
                       <button
                         onClick={() => {
                           if (window.confirm('Are you sure you want to delete this form?')) {
@@ -300,7 +354,7 @@ const AdminForms: React.FC = () => {
           </div>
         )}
 
-        {forms && forms.length === 0 && !isCreating && (
+        {forms && forms.length === 0 && !isFormOpen && (
           <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
             <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />

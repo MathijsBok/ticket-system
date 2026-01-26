@@ -6,6 +6,9 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { ViewProvider } from './contexts/ViewContext';
 
+// Components
+import ProtectedRoute from './components/ProtectedRoute';
+
 // Pages
 import UserDashboard from './pages/UserDashboard';
 import AgentDashboard from './pages/AgentDashboard';
@@ -53,10 +56,46 @@ function App() {
                 <SignedIn>
                   <Routes>
                     <Route path="/" element={<DashboardRouter />} />
-                    <Route path="/user" element={<UserDashboard />} />
-                    <Route path="/agent" element={<AgentDashboard />} />
-                    <Route path="/admin" element={<AdminDashboard />} />
-                    <Route path="/admin/forms" element={<AdminForms />} />
+
+                    {/* User Routes */}
+                    <Route
+                      path="/user"
+                      element={
+                        <ProtectedRoute allowedRoles={['USER', 'AGENT', 'ADMIN']}>
+                          <UserDashboard />
+                        </ProtectedRoute>
+                      }
+                    />
+
+                    {/* Agent Routes */}
+                    <Route
+                      path="/agent"
+                      element={
+                        <ProtectedRoute allowedRoles={['AGENT', 'ADMIN']}>
+                          <AgentDashboard />
+                        </ProtectedRoute>
+                      }
+                    />
+
+                    {/* Admin Routes */}
+                    <Route
+                      path="/admin"
+                      element={
+                        <ProtectedRoute allowedRoles={['ADMIN']}>
+                          <AdminDashboard />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/admin/forms"
+                      element={
+                        <ProtectedRoute allowedRoles={['ADMIN']}>
+                          <AdminForms />
+                        </ProtectedRoute>
+                      }
+                    />
+
+                    {/* Common Routes */}
                     <Route path="/tickets/new" element={<CreateTicket />} />
                     <Route path="/tickets/:id" element={<TicketDetail />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
