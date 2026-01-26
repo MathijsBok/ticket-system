@@ -13,6 +13,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import UserDashboard from './pages/UserDashboard';
 import AgentDashboard from './pages/AgentDashboard';
 import AdminDashboard from './pages/AdminDashboard';
+import AnalyticsDashboard from './pages/AnalyticsDashboard';
 import TicketDetail from './pages/TicketDetail';
 import CreateTicket from './pages/CreateTicket';
 import AdminForms from './pages/AdminForms';
@@ -84,6 +85,14 @@ function App() {
                       element={
                         <ProtectedRoute allowedRoles={['ADMIN']}>
                           <AdminDashboard />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/admin/analytics"
+                      element={
+                        <ProtectedRoute allowedRoles={['ADMIN']}>
+                          <AnalyticsDashboard />
                         </ProtectedRoute>
                       }
                     />

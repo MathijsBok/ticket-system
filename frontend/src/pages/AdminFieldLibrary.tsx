@@ -187,11 +187,13 @@ const AdminFieldLibrary: React.FC = () => {
   const isFormOpen = isCreating || editingFieldId !== null;
   const requiresOptions = ['select', 'radio', 'checkbox'].includes(fieldType);
 
-  // Filter fields based on search query
-  const filteredFields = fields?.filter(field =>
-    field.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    field.fieldType.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Filter and sort fields alphabetically by label
+  const filteredFields = fields
+    ?.filter(field =>
+      field.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      field.fieldType.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+    .sort((a, b) => a.label.localeCompare(b.label));
 
   return (
     <Layout>

@@ -143,6 +143,16 @@ router.post('/',
       const { subject, channel, priority, categoryId, formId, description, formResponses } = req.body;
       const userId = req.userId!;
 
+      // Get IP address from request
+      const ipAddress = (req.headers['x-forwarded-for'] as string)?.split(',')[0] ||
+                       req.socket.remoteAddress ||
+                       'unknown';
+
+      // Get country from Cloudflare header if available, otherwise use a placeholder
+      const country = (req.headers['cf-ipcountry'] as string) ||
+                     (req.headers['x-country'] as string) ||
+                     null;
+
       // Create ticket with initial comment and form responses in a transaction
       const ticket = await prisma.$transaction(async (tx) => {
         const newTicket = await tx.ticket.create({
@@ -153,6 +163,8 @@ router.post('/',
             requesterId: userId,
             categoryId: categoryId || null,
             formId: formId || null,
+            country,
+            ipAddress,
             comments: {
               create: {
                 authorId: userId,
@@ -263,6 +275,25 @@ router.patch('/:id',
       }
 
       if (assigneeId !== undefined) {
+        // Validate assignee exists and has AGENT or ADMIN role
+        if (assigneeId) {
+          const assignee = await prisma.user.findUnique({
+            where: { id: assigneeId },
+            select: { id: true, role: true, email: true }
+          });
+
+          if (!assignee) {
+            return res.status(400).json({ error: 'Assignee not found' });
+          }
+
+          if (assignee.role !== 'AGENT' && assignee.role !== 'ADMIN') {
+            return res.status(400).json({
+              error: 'Can only assign tickets to agents or admins',
+              details: `User ${assignee.email} has role ${assignee.role}`
+            });
+          }
+        }
+
         updateData.assigneeId = assigneeId;
         activities.push({
           userId,

@@ -91,6 +91,8 @@ model Ticket {
   organizationId  String?        @db.Uuid
   formId          String?        @db.Uuid
   categoryId      String?        @db.Uuid
+  country         String?        @db.VarChar(100)
+  ipAddress       String?        @db.VarChar(50)
   dueAt           DateTime?
   firstResponseAt DateTime?
   solvedAt        DateTime?

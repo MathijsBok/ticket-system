@@ -64,6 +64,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     } else if (effectiveRole === 'ADMIN') {
       nav.push(
         { name: 'Dashboard', href: '/admin' },
+        { name: 'Analytics', href: '/admin/analytics' },
         { name: 'Forms', href: '/admin/forms' },
         { name: 'Field Library', href: '/admin/fields' }
       );

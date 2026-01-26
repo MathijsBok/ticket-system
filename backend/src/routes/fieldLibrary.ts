@@ -14,7 +14,7 @@ router.get('/', requireAuth, async (_req: AuthRequest, res: Response) => {
   try {
     const fields = await prisma.formFieldLibrary.findMany({
       orderBy: [
-        { createdAt: 'desc' }
+        { label: 'asc' }
       ],
       include: {
         _count: {

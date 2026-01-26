@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useUser } from '@clerk/clerk-react';
 import toast from 'react-hot-toast';
-import { ticketApi, commentApi } from '../lib/api';
+import { ticketApi, commentApi, userApi } from '../lib/api';
 import { useView } from '../contexts/ViewContext';
 import Layout from '../components/Layout';
 import { format } from 'date-fns';
@@ -26,6 +26,16 @@ const TicketDetail: React.FC = () => {
       return response.data;
     },
     enabled: !!id
+  });
+
+  // Fetch current user's database profile
+  const { data: currentUser } = useQuery({
+    queryKey: ['currentUser'],
+    queryFn: async () => {
+      const response = await userApi.getMe();
+      return response.data;
+    },
+    enabled: userRole === 'AGENT' || userRole === 'ADMIN'
   });
 
   const replyMutation = useMutation({
@@ -62,16 +72,19 @@ const TicketDetail: React.FC = () => {
 
   const assignToMeMutation = useMutation({
     mutationFn: async () => {
-      const userId = user?.id;
-      const response = await ticketApi.update(id!, { assigneeId: userId });
+      if (!currentUser?.id) {
+        throw new Error('User profile not loaded');
+      }
+      const response = await ticketApi.update(id!, { assigneeId: currentUser.id });
       return response.data;
     },
     onSuccess: () => {
       toast.success('Ticket assigned to you');
       queryClient.invalidateQueries({ queryKey: ['ticket', id] });
     },
-    onError: () => {
-      toast.error('Failed to assign ticket');
+    onError: (error: any) => {
+      const errorMessage = error?.response?.data?.error || 'Failed to assign ticket';
+      toast.error(errorMessage);
     }
   });
 

@@ -16,6 +16,7 @@ import adminAnalyticsRoutes from './routes/adminAnalytics';
 import sessionRoutes from './routes/sessions';
 import timeTrackingRoutes from './routes/timeTracking';
 import webhookRoutes from './routes/webhooks';
+import userRoutes from './routes/users';
 
 dotenv.config();
 
@@ -49,6 +50,7 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/admin-analytics', adminAnalyticsRoutes);
 app.use('/api/sessions', sessionRoutes);
 app.use('/api/time-tracking', timeTrackingRoutes);
+app.use('/api/users', userRoutes);
 
 // Health check
 app.get('/health', (_req, res) => {

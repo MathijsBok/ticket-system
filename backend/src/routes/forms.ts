@@ -6,10 +6,15 @@ import { requireAuth, requireAdmin, AuthRequest } from '../middleware/auth';
 const router = Router();
 
 // Get all forms (public endpoint for users creating tickets)
-router.get('/', requireAuth, async (_req: AuthRequest, res: Response) => {
+router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
+    const userRole = req.userRole;
+
+    // Admins see all forms, regular users only see active forms
+    const whereClause = userRole === 'ADMIN' ? {} : { isActive: true };
+
     const forms = await prisma.form.findMany({
-      where: { isActive: true },
+      where: whereClause,
       orderBy: { order: 'asc' },
       include: {
         formFields: {

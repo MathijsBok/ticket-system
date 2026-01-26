@@ -161,6 +161,9 @@ export const analyticsApi = {
   getSystemStats: () =>
     api.get('/analytics/system'),
 
+  getDashboard: () =>
+    api.get('/analytics/dashboard'),
+
   getAgentSessions: (agentId: string, limit?: number) =>
     api.get(`/analytics/agents/${agentId}/sessions`, {
       params: { limit }
@@ -204,4 +207,13 @@ export const adminAnalyticsApi = {
 
   getAgentPerformance: () =>
     api.get('/admin-analytics/agent-performance')
+};
+
+// User API
+export const userApi = {
+  getMe: () =>
+    api.get('/users/me'),
+
+  getAgents: () =>
+    api.get('/users/agents')
 };
