@@ -19,6 +19,8 @@ import webhookRoutes from './routes/webhooks';
 import userRoutes from './routes/users';
 import settingsRoutes from './routes/settings';
 import zendeskImportRoutes from './routes/zendesk-import';
+import macroRoutes from './routes/macros';
+import emailTemplateRoutes from './routes/emailTemplates';
 
 // Import automation jobs
 import { initializeTicketAutomation } from './jobs/ticketAutomation';
@@ -58,6 +60,8 @@ app.use('/api/time-tracking', timeTrackingRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/zendesk', zendeskImportRoutes);
+app.use('/api/macros', macroRoutes);
+app.use('/api/email-templates', emailTemplateRoutes);
 
 // Health check
 app.get('/health', (_req, res) => {

@@ -3,7 +3,8 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useUser } from '@clerk/clerk-react';
 import toast from 'react-hot-toast';
-import { ticketApi, commentApi, userApi } from '../lib/api';
+import { ticketApi, commentApi, userApi, macroApi } from '../lib/api';
+import { Macro } from '../types';
 import { useView } from '../contexts/ViewContext';
 import Layout from '../components/Layout';
 import { format } from 'date-fns';
@@ -34,6 +35,16 @@ const TicketDetail: React.FC = () => {
     queryFn: async () => {
       const response = await userApi.getMe();
       return response.data;
+    },
+    enabled: userRole === 'AGENT' || userRole === 'ADMIN'
+  });
+
+  // Fetch macros for agents
+  const { data: macros } = useQuery({
+    queryKey: ['macros'],
+    queryFn: async () => {
+      const response = await macroApi.getAll();
+      return response.data as Macro[];
     },
     enabled: userRole === 'AGENT' || userRole === 'ADMIN'
   });
@@ -529,6 +540,35 @@ const TicketDetail: React.FC = () => {
             </div>
           ) : (
             <form onSubmit={handleReply} className="space-y-4">
+              {/* Macro selector for agents */}
+              {isAgent && macros && macros.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Apply Macro
+                  </label>
+                  <select
+                    onChange={(e) => {
+                      const macro = macros.find(m => m.id === e.target.value);
+                      if (macro) {
+                        setReplyBody(macro.content);
+                      }
+                      e.target.value = '';
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                  >
+                    <option value="">Select a macro to insert...</option>
+                    {macros.map(macro => (
+                      <option key={macro.id} value={macro.id}>
+                        {macro.category ? `[${macro.category}] ` : ''}{macro.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Selecting a macro will replace the reply text. You can edit it before sending.
+                  </p>
+                </div>
+              )}
+
               <textarea
                 value={replyBody}
                 onChange={(e) => setReplyBody(e.target.value)}

@@ -19,6 +19,8 @@ import CreateTicket from './pages/CreateTicket';
 import AdminForms from './pages/AdminForms';
 import AdminFieldLibrary from './pages/AdminFieldLibrary';
 import AdminSettings from './pages/AdminSettings';
+import AdminMacros from './pages/AdminMacros';
+import AdminEmailTemplates from './pages/AdminEmailTemplates';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -118,6 +120,22 @@ function App() {
                       element={
                         <ProtectedRoute allowedRoles={['ADMIN']}>
                           <AdminSettings />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/admin/macros"
+                      element={
+                        <ProtectedRoute allowedRoles={['AGENT', 'ADMIN']}>
+                          <AdminMacros />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/admin/email-templates"
+                      element={
+                        <ProtectedRoute allowedRoles={['AGENT', 'ADMIN']}>
+                          <AdminEmailTemplates />
                         </ProtectedRoute>
                       }
                     />

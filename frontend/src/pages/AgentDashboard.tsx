@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { useClerk } from '@clerk/clerk-react';
+import { useClerk, useUser } from '@clerk/clerk-react';
 import { ticketApi, sessionApi } from '../lib/api';
 import Layout from '../components/Layout';
 import { format } from 'date-fns';
 import { useNotification } from '../contexts/NotificationContext';
+import { useView } from '../contexts/ViewContext';
 import { useTicketNotifications } from '../hooks/useTicketNotifications';
 import toast from 'react-hot-toast';
 
@@ -16,6 +17,12 @@ const AgentDashboard: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const clerk = useClerk();
+  const { user } = useUser();
+  const userRole = user?.publicMetadata?.role as string;
+  const { currentView } = useView();
+
+  // Use currentView for admins (respects "View as" switcher), userRole for others
+  const effectiveRole = userRole === 'ADMIN' ? currentView : userRole;
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
@@ -326,7 +333,7 @@ const AgentDashboard: React.FC = () => {
         {/* Header */}
         <div className="flex justify-between items-start">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Agent Dashboard</h1>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{effectiveRole === 'ADMIN' ? 'Admin Dashboard' : 'Agent Dashboard'}</h1>
             <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
               Manage and respond to customer tickets
             </p>

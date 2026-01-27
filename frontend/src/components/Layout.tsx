@@ -16,19 +16,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const userRole = user?.publicMetadata?.role as string;
 
-  // Update currentView based on URL when user navigates
-  React.useEffect(() => {
-    if (userRole === 'ADMIN') {
-      if (location.pathname.startsWith('/admin')) {
-        setCurrentView('ADMIN');
-      } else if (location.pathname.startsWith('/agent')) {
-        setCurrentView('AGENT');
-      } else if (location.pathname.startsWith('/user')) {
-        setCurrentView('USER');
-      }
-      // Don't update for /tickets routes - maintain current view
-    }
-  }, [location.pathname, userRole, setCurrentView]);
+  // Only update currentView when admin uses "View as" dropdown
+  // Don't auto-switch based on URL - this was causing navigation issues
 
   const handleViewChange = (view: string) => {
     const newView = view as 'USER' | 'AGENT' | 'ADMIN';
@@ -46,11 +35,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     }
   };
 
+  // Use currentView for admins (respects "View as" switcher), userRole for others
+  const effectiveRole = userRole === 'ADMIN' ? currentView : userRole;
+
   const navigation = React.useMemo(() => {
     const nav = [];
-
-    // Use currentView for admins (respects "View as" switcher), userRole for others
-    const effectiveRole = userRole === 'ADMIN' ? currentView : userRole;
 
     if (effectiveRole === 'USER') {
       nav.push(
@@ -59,20 +48,14 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       );
     } else if (effectiveRole === 'AGENT') {
       nav.push(
-        { name: 'Dashboard', href: '/agent' }
-      );
-    } else if (effectiveRole === 'ADMIN') {
-      nav.push(
-        { name: 'Dashboard', href: '/admin' },
-        { name: 'Analytics', href: '/admin/analytics' },
-        { name: 'Forms', href: '/admin/forms' },
-        { name: 'Field Library', href: '/admin/fields' },
-        { name: 'Settings', href: '/admin/settings' }
+        { name: 'Tickets', href: '/agent' },
+        { name: 'Macros', href: '/admin/macros' },
+        { name: 'Email Templates', href: '/admin/email-templates' }
       );
     }
 
     return nav;
-  }, [userRole, currentView]);
+  }, [effectiveRole]);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -103,7 +86,92 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 </Link>
               ))}
 
-              {/* View As Role Switcher (Admin Only) */}
+              {/* Admin Navigation Links */}
+              {userRole === 'ADMIN' && effectiveRole === 'ADMIN' && (
+                <>
+                  <Link
+                    to="/agent"
+                    className={`text-sm font-medium transition-colors ${
+                      location.pathname === '/agent'
+                        ? 'text-primary'
+                        : 'text-gray-700 dark:text-gray-300 hover:text-primary'
+                    }`}
+                  >
+                    Dashboard
+                  </Link>
+                  <Link
+                    to="/admin/analytics"
+                    className={`text-sm font-medium transition-colors ${
+                      location.pathname === '/admin/analytics'
+                        ? 'text-primary'
+                        : 'text-gray-700 dark:text-gray-300 hover:text-primary'
+                    }`}
+                  >
+                    Analytics
+                  </Link>
+                  <Link
+                    to="/admin"
+                    className={`text-sm font-medium transition-colors ${
+                      location.pathname === '/admin'
+                        ? 'text-primary'
+                        : 'text-gray-700 dark:text-gray-300 hover:text-primary'
+                    }`}
+                  >
+                    Agent Performance
+                  </Link>
+                  <Link
+                    to="/admin/forms"
+                    className={`text-sm font-medium transition-colors ${
+                      location.pathname === '/admin/forms'
+                        ? 'text-primary'
+                        : 'text-gray-700 dark:text-gray-300 hover:text-primary'
+                    }`}
+                  >
+                    Forms
+                  </Link>
+                  <Link
+                    to="/admin/fields"
+                    className={`text-sm font-medium transition-colors ${
+                      location.pathname === '/admin/fields'
+                        ? 'text-primary'
+                        : 'text-gray-700 dark:text-gray-300 hover:text-primary'
+                    }`}
+                  >
+                    Field Library
+                  </Link>
+                  <Link
+                    to="/admin/macros"
+                    className={`text-sm font-medium transition-colors ${
+                      location.pathname === '/admin/macros'
+                        ? 'text-primary'
+                        : 'text-gray-700 dark:text-gray-300 hover:text-primary'
+                    }`}
+                  >
+                    Macros
+                  </Link>
+                  <Link
+                    to="/admin/email-templates"
+                    className={`text-sm font-medium transition-colors ${
+                      location.pathname === '/admin/email-templates'
+                        ? 'text-primary'
+                        : 'text-gray-700 dark:text-gray-300 hover:text-primary'
+                    }`}
+                  >
+                    Email Templates
+                  </Link>
+                  <Link
+                    to="/admin/settings"
+                    className={`text-sm font-medium transition-colors ${
+                      location.pathname === '/admin/settings'
+                        ? 'text-primary'
+                        : 'text-gray-700 dark:text-gray-300 hover:text-primary'
+                    }`}
+                  >
+                    Settings
+                  </Link>
+                </>
+              )}
+
               {userRole === 'ADMIN' && (
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-gray-500 dark:text-gray-400">View as:</span>
@@ -141,6 +209,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             </nav>
           </div>
         </div>
+
       </header>
 
       {/* Main content */}
