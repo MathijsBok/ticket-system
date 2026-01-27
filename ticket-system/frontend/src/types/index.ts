@@ -17,7 +17,10 @@ export interface User {
   role: UserRole;
   organizationId?: string;
   createdAt: string;
-  updatedAt: string;
+  updatedAt?: string;
+  _count?: {
+    ticketsCreated: number;
+  };
 }
 
 export interface Ticket {

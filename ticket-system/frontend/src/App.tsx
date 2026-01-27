@@ -21,6 +21,7 @@ import AdminFieldLibrary from './pages/AdminFieldLibrary';
 import AdminSettings from './pages/AdminSettings';
 import AdminMacros from './pages/AdminMacros';
 import AdminEmailTemplates from './pages/AdminEmailTemplates';
+import AdminUsers from './pages/AdminUsers';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -40,10 +41,11 @@ if (!CLERK_PUBLISHABLE_KEY) {
 // Role-based dashboard router
 function DashboardRouter() {
   const { user } = useUser();
-  const userRole = user?.publicMetadata?.role as string;
+  // Default to 'USER' role if no role is set (new users)
+  const userRole = (user?.publicMetadata?.role as string) || 'USER';
 
   if (userRole === 'ADMIN') {
-    return <Navigate to="/admin" replace />;
+    return <Navigate to="/agent" replace />;
   } else if (userRole === 'AGENT') {
     return <Navigate to="/agent" replace />;
   }
@@ -136,6 +138,14 @@ function App() {
                       element={
                         <ProtectedRoute allowedRoles={['AGENT', 'ADMIN']}>
                           <AdminEmailTemplates />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/admin/users"
+                      element={
+                        <ProtectedRoute allowedRoles={['ADMIN']}>
+                          <AdminUsers />
                         </ProtectedRoute>
                       }
                     />

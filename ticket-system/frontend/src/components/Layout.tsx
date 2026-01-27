@@ -14,7 +14,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { currentView, setCurrentView } = useView();
   const location = useLocation();
   const navigate = useNavigate();
-  const userRole = user?.publicMetadata?.role as string;
+  // Default to 'USER' role if no role is set (new users)
+  const userRole = (user?.publicMetadata?.role as string) || 'USER';
 
   // Only update currentView when admin uses "View as" dropdown
   // Don't auto-switch based on URL - this was causing navigation issues
@@ -41,16 +42,32 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navigation = React.useMemo(() => {
     const nav = [];
 
+    // Navigation based on effective role (for admins, this respects the "View as" selection)
     if (effectiveRole === 'USER') {
+      // User view: only show user-facing navigation
       nav.push(
         { name: 'My Tickets', href: '/user' },
         { name: 'New Ticket', href: '/tickets/new' }
       );
     } else if (effectiveRole === 'AGENT') {
+      // Agent view: show agent-facing navigation
       nav.push(
         { name: 'Tickets', href: '/agent' },
         { name: 'Macros', href: '/admin/macros' },
         { name: 'Email Templates', href: '/admin/email-templates' }
+      );
+    } else if (effectiveRole === 'ADMIN') {
+      // Admin view: show all admin navigation in the main nav array
+      nav.push(
+        { name: 'Dashboard', href: '/agent' },
+        { name: 'Analytics', href: '/admin/analytics' },
+        { name: 'Agent Performance', href: '/admin' },
+        { name: 'Forms', href: '/admin/forms' },
+        { name: 'Field Library', href: '/admin/fields' },
+        { name: 'Macros', href: '/admin/macros' },
+        { name: 'Email Templates', href: '/admin/email-templates' },
+        { name: 'Users', href: '/admin/users' },
+        { name: 'Settings', href: '/admin/settings' }
       );
     }
 
@@ -85,92 +102,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   {item.name}
                 </Link>
               ))}
-
-              {/* Admin Navigation Links */}
-              {userRole === 'ADMIN' && effectiveRole === 'ADMIN' && (
-                <>
-                  <Link
-                    to="/agent"
-                    className={`text-sm font-medium transition-colors ${
-                      location.pathname === '/agent'
-                        ? 'text-primary'
-                        : 'text-gray-700 dark:text-gray-300 hover:text-primary'
-                    }`}
-                  >
-                    Dashboard
-                  </Link>
-                  <Link
-                    to="/admin/analytics"
-                    className={`text-sm font-medium transition-colors ${
-                      location.pathname === '/admin/analytics'
-                        ? 'text-primary'
-                        : 'text-gray-700 dark:text-gray-300 hover:text-primary'
-                    }`}
-                  >
-                    Analytics
-                  </Link>
-                  <Link
-                    to="/admin"
-                    className={`text-sm font-medium transition-colors ${
-                      location.pathname === '/admin'
-                        ? 'text-primary'
-                        : 'text-gray-700 dark:text-gray-300 hover:text-primary'
-                    }`}
-                  >
-                    Agent Performance
-                  </Link>
-                  <Link
-                    to="/admin/forms"
-                    className={`text-sm font-medium transition-colors ${
-                      location.pathname === '/admin/forms'
-                        ? 'text-primary'
-                        : 'text-gray-700 dark:text-gray-300 hover:text-primary'
-                    }`}
-                  >
-                    Forms
-                  </Link>
-                  <Link
-                    to="/admin/fields"
-                    className={`text-sm font-medium transition-colors ${
-                      location.pathname === '/admin/fields'
-                        ? 'text-primary'
-                        : 'text-gray-700 dark:text-gray-300 hover:text-primary'
-                    }`}
-                  >
-                    Field Library
-                  </Link>
-                  <Link
-                    to="/admin/macros"
-                    className={`text-sm font-medium transition-colors ${
-                      location.pathname === '/admin/macros'
-                        ? 'text-primary'
-                        : 'text-gray-700 dark:text-gray-300 hover:text-primary'
-                    }`}
-                  >
-                    Macros
-                  </Link>
-                  <Link
-                    to="/admin/email-templates"
-                    className={`text-sm font-medium transition-colors ${
-                      location.pathname === '/admin/email-templates'
-                        ? 'text-primary'
-                        : 'text-gray-700 dark:text-gray-300 hover:text-primary'
-                    }`}
-                  >
-                    Email Templates
-                  </Link>
-                  <Link
-                    to="/admin/settings"
-                    className={`text-sm font-medium transition-colors ${
-                      location.pathname === '/admin/settings'
-                        ? 'text-primary'
-                        : 'text-gray-700 dark:text-gray-300 hover:text-primary'
-                    }`}
-                  >
-                    Settings
-                  </Link>
-                </>
-              )}
 
               {userRole === 'ADMIN' && (
                 <div className="flex items-center gap-2">

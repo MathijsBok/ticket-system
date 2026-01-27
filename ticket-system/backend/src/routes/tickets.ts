@@ -442,12 +442,10 @@ router.delete('/bulk/delete',
 );
 
 // Get ticket statistics (for dashboard)
-router.get('/stats/overview', requireAuth, requireAgent, async (req: AuthRequest, res) => {
+router.get('/stats/overview', requireAuth, requireAgent, async (_req: AuthRequest, res) => {
   try {
-    const userId = req.userId;
-    const userRole = req.userRole;
-
-    const where = userRole === 'AGENT' ? { assigneeId: userId } : {};
+    // Agents and Admins see all ticket stats
+    const where = {};
 
     const [total, newCount, openCount, pendingCount, onHoldCount, solvedCount, closedCount] = await Promise.all([
       prisma.ticket.count({ where }),

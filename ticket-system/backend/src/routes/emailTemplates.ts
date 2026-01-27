@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import { prisma } from '../lib/prisma';
-import { requireAuth, requireAdmin, AuthRequest } from '../middleware/auth';
+import { requireAuth, requireAdmin, requireAgent, AuthRequest } from '../middleware/auth';
 import { EmailTemplateType } from '@prisma/client';
 
 const router = Router();
@@ -416,7 +416,7 @@ function replacePlaceholders(template: string, data: Record<string, string>): st
 }
 
 // Get all email templates (creates defaults if none exist)
-router.get('/', requireAuth, requireAdmin, async (_req: AuthRequest, res: Response) => {
+router.get('/', requireAuth, requireAgent, async (_req: AuthRequest, res: Response) => {
   try {
     // Check if templates exist
     const existingTemplates = await prisma.emailTemplate.findMany();

@@ -18,7 +18,8 @@ const AgentDashboard: React.FC = () => {
   const queryClient = useQueryClient();
   const clerk = useClerk();
   const { user } = useUser();
-  const userRole = user?.publicMetadata?.role as string;
+  // Default to 'USER' role if no role is set (new users)
+  const userRole = (user?.publicMetadata?.role as string) || 'USER';
   const { currentView } = useView();
 
   // Use currentView for admins (respects "View as" switcher), userRole for others
@@ -31,6 +32,8 @@ const AgentDashboard: React.FC = () => {
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [sortField, setSortField] = useState<SortField>('updatedAt');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
 
   const { permission, requestPermission, isSupported } = useNotification();
   const { newTicketCount, isPolling } = useTicketNotifications({
@@ -198,6 +201,33 @@ const AgentDashboard: React.FC = () => {
     });
   }, [tickets, sortField, sortDirection]);
 
+  // Reset to page 1 when filters or sorting changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, sortField, sortDirection]);
+
+  // Pagination calculations
+  const totalTickets = sortedTickets?.length || 0;
+  const totalPages = Math.ceil(totalTickets / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = Math.min(startIndex + itemsPerPage, totalTickets);
+
+  const paginatedTickets = useMemo(() => {
+    return sortedTickets.slice(startIndex, endIndex);
+  }, [sortedTickets, startIndex, endIndex]);
+
+  // Handle page changes
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    // Scroll to top of table
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleItemsPerPageChange = (newItemsPerPage: number) => {
+    setItemsPerPage(newItemsPerPage);
+    setCurrentPage(1);
+  };
+
   const bulkUpdateMutation = useMutation({
     mutationFn: async (data: { ticketIds: string[]; status?: string }) => {
       return await ticketApi.bulkUpdate(data);
@@ -230,10 +260,15 @@ const AgentDashboard: React.FC = () => {
   });
 
   const handleSelectAll = () => {
-    if (selectedTickets.length === sortedTickets?.length) {
-      setSelectedTickets([]);
+    const currentPageIds = paginatedTickets?.map((t: any) => t.id) || [];
+    const allCurrentPageSelected = currentPageIds.every(id => selectedTickets.includes(id));
+
+    if (allCurrentPageSelected) {
+      // Deselect all tickets on current page
+      setSelectedTickets(prev => prev.filter(id => !currentPageIds.includes(id)));
     } else {
-      setSelectedTickets(sortedTickets?.map((t: any) => t.id) || []);
+      // Select all tickets on current page (add to existing selection)
+      setSelectedTickets(prev => [...new Set([...prev, ...currentPageIds])]);
     }
   };
 
@@ -585,7 +620,7 @@ const AgentDashboard: React.FC = () => {
                   <th className="px-6 py-3 text-left">
                     <input
                       type="checkbox"
-                      checked={selectedTickets.length === sortedTickets.length}
+                      checked={paginatedTickets.length > 0 && paginatedTickets.every((t: any) => selectedTickets.includes(t.id))}
                       onChange={handleSelectAll}
                       className="rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-primary"
                     />
@@ -656,7 +691,7 @@ const AgentDashboard: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                {sortedTickets.map((ticket: any) => (
+                {paginatedTickets.map((ticket: any) => (
                   <tr
                     key={ticket.id}
                     className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
@@ -718,6 +753,108 @@ const AgentDashboard: React.FC = () => {
                 ))}
               </tbody>
             </table>
+
+            {/* Pagination Controls */}
+            {totalPages > 0 && (
+              <div className="bg-white dark:bg-gray-800 px-4 py-3 flex items-center justify-between border-t border-gray-200 dark:border-gray-700 sm:px-6">
+                <div className="flex-1 flex justify-between sm:hidden">
+                  <button
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
+                <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-4">
+                    <p className="text-sm text-gray-700 dark:text-gray-300">
+                      Showing <span className="font-medium">{startIndex + 1}</span> to{' '}
+                      <span className="font-medium">{endIndex}</span> of{' '}
+                      <span className="font-medium">{totalTickets}</span> tickets
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <label htmlFor="itemsPerPage" className="text-sm text-gray-700 dark:text-gray-300">
+                        Show:
+                      </label>
+                      <select
+                        id="itemsPerPage"
+                        value={itemsPerPage}
+                        onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
+                        className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                      >
+                        <option value={25}>25</option>
+                        <option value={50}>50</option>
+                        <option value={75}>75</option>
+                        <option value={100}>100</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                      <button
+                        onClick={() => handlePageChange(currentPage - 1)}
+                        disabled={currentPage === 1}
+                        className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <span className="sr-only">Previous</span>
+                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                        </svg>
+                      </button>
+                      {/* Page numbers */}
+                      {Array.from({ length: totalPages }, (_, i) => i + 1)
+                        .filter(page => {
+                          // Show first page, last page, current page, and pages around current
+                          if (page === 1 || page === totalPages) return true;
+                          if (Math.abs(page - currentPage) <= 1) return true;
+                          return false;
+                        })
+                        .map((page, index, array) => {
+                          // Add ellipsis between non-consecutive pages
+                          const showEllipsisBefore = index > 0 && page - array[index - 1] > 1;
+                          return (
+                            <React.Fragment key={page}>
+                              {showEllipsisBefore && (
+                                <span className="relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm font-medium text-gray-700 dark:text-gray-300">
+                                  ...
+                                </span>
+                              )}
+                              <button
+                                onClick={() => handlePageChange(page)}
+                                className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                                  currentPage === page
+                                    ? 'z-10 bg-primary border-primary text-primary-foreground'
+                                    : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                                }`}
+                              >
+                                {page}
+                              </button>
+                            </React.Fragment>
+                          );
+                        })}
+                      <button
+                        onClick={() => handlePageChange(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                        className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <span className="sr-only">Next</span>
+                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                    </nav>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

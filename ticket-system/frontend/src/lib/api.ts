@@ -215,7 +215,21 @@ export const userApi = {
     api.get('/users/me'),
 
   getAgents: () =>
-    api.get('/users/agents')
+    api.get('/users/agents'),
+
+  getAll: () =>
+    api.get('/users'),
+
+  update: (id: string, data: {
+    email?: string;
+    firstName?: string;
+    lastName?: string;
+    role?: 'USER' | 'AGENT' | 'ADMIN';
+  }) =>
+    api.patch(`/users/${id}`, data),
+
+  updateRole: (id: string, role: 'USER' | 'AGENT' | 'ADMIN') =>
+    api.patch(`/users/${id}/role`, { role })
 };
 
 // Settings API

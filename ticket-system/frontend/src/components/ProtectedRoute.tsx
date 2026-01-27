@@ -18,7 +18,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
     );
   }
 
-  const userRole = user?.publicMetadata?.role as string;
+  // Default to 'USER' role if no role is set (new users)
+  const userRole = (user?.publicMetadata?.role as string) || 'USER';
 
   if (!allowedRoles.includes(userRole)) {
     // Redirect to appropriate dashboard based on role

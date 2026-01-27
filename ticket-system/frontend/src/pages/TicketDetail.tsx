@@ -16,11 +16,13 @@ const TicketDetail: React.FC = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { currentView } = useView();
-  const userRole = user?.publicMetadata?.role as string;
+  // Default to 'USER' role if no role is set (new users)
+  const userRole = (user?.publicMetadata?.role as string) || 'USER';
 
   const [replyBody, setReplyBody] = useState('');
   const [isInternal, setIsInternal] = useState(false);
   const [macroFilter, setMacroFilter] = useState('');
+  const [showAssignDropdown, setShowAssignDropdown] = useState(false);
 
   const { data: ticket, isLoading } = useQuery({
     queryKey: ['ticket', id],
@@ -47,6 +49,16 @@ const TicketDetail: React.FC = () => {
     queryFn: async () => {
       const response = await macroApi.getAll();
       return response.data as Macro[];
+    },
+    enabled: userRole === 'AGENT' || userRole === 'ADMIN'
+  });
+
+  // Fetch all agents for assignment dropdown
+  const { data: agents } = useQuery({
+    queryKey: ['agents'],
+    queryFn: async () => {
+      const response = await userApi.getAgents();
+      return response.data;
     },
     enabled: userRole === 'AGENT' || userRole === 'ADMIN'
   });
@@ -121,6 +133,22 @@ const TicketDetail: React.FC = () => {
     onSuccess: () => {
       toast.success('Ticket assigned to you');
       queryClient.invalidateQueries({ queryKey: ['ticket', id] });
+    },
+    onError: (error: any) => {
+      const errorMessage = error?.response?.data?.error || 'Failed to assign ticket';
+      toast.error(errorMessage);
+    }
+  });
+
+  const assignToAgentMutation = useMutation({
+    mutationFn: async (assigneeId: string | null) => {
+      const response = await ticketApi.update(id!, { assigneeId });
+      return response.data;
+    },
+    onSuccess: () => {
+      toast.success('Ticket assignment updated');
+      queryClient.invalidateQueries({ queryKey: ['ticket', id] });
+      setShowAssignDropdown(false);
     },
     onError: (error: any) => {
       const errorMessage = error?.response?.data?.error || 'Failed to assign ticket';
@@ -334,6 +362,72 @@ const TicketDetail: React.FC = () => {
                       Assign to Me
                     </button>
                   )}
+                  {/* Assign to Agent dropdown */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowAssignDropdown(!showAssignDropdown)}
+                      className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-primary transition-colors flex items-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                      Assign
+                      <svg className={`w-4 h-4 transition-transform ${showAssignDropdown ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    {showAssignDropdown && (
+                      <>
+                        {/* Backdrop to close dropdown */}
+                        <div
+                          className="fixed inset-0 z-10"
+                          onClick={() => setShowAssignDropdown(false)}
+                        />
+                        <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-lg z-20 max-h-64 overflow-y-auto">
+                          {/* Unassign option */}
+                          {ticket.assignee && (
+                            <button
+                              onClick={() => assignToAgentMutation.mutate(null)}
+                              disabled={assignToAgentMutation.isPending}
+                              className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700 border-b border-gray-200 dark:border-gray-700 disabled:opacity-50"
+                            >
+                              Unassign
+                            </button>
+                          )}
+                          {/* Agent list */}
+                          {agents && agents.length > 0 ? (
+                            agents.map((agent: any) => (
+                              <button
+                                key={agent.id}
+                                onClick={() => assignToAgentMutation.mutate(agent.id)}
+                                disabled={assignToAgentMutation.isPending || ticket.assigneeId === agent.id}
+                                className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 flex items-center justify-between ${
+                                  ticket.assigneeId === agent.id
+                                    ? 'bg-primary/10 dark:bg-primary/20 text-primary'
+                                    : 'text-gray-900 dark:text-white'
+                                }`}
+                              >
+                                <span>
+                                  {agent.firstName || agent.lastName
+                                    ? `${agent.firstName || ''} ${agent.lastName || ''}`.trim()
+                                    : agent.email}
+                                </span>
+                                {ticket.assigneeId === agent.id && (
+                                  <svg className="w-4 h-4 text-primary" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                  </svg>
+                                )}
+                              </button>
+                            ))
+                          ) : (
+                            <div className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
+                              No agents available
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
                   <select
                     value={ticket.status}
                     onChange={handleStatusChange}
@@ -645,7 +739,7 @@ const TicketDetail: React.FC = () => {
                       </span>
                     </div>
                     <div
-                      className="text-sm text-gray-700 dark:text-gray-300 prose prose-sm dark:prose-invert max-w-none"
+                      className="text-sm text-gray-700 dark:text-gray-300 prose prose-sm dark:prose-invert max-w-none break-words overflow-hidden"
                       dangerouslySetInnerHTML={{ __html: comment.body || comment.bodyPlain }}
                     />
                   </div>
