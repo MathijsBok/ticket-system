@@ -186,3 +186,43 @@ export interface TicketStats {
     solved: number;
   };
 }
+
+// Macro - Pre-built reply templates for agents
+export interface Macro {
+  id: string;
+  name: string;
+  content: string;
+  category?: string;
+  isActive: boolean;
+  order: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Email template types
+export type EmailTemplateType =
+  | 'TICKET_CREATED'
+  | 'NEW_REPLY'
+  | 'TICKET_RESOLVED'
+  | 'PENDING_REMINDER_24H'
+  | 'PENDING_REMINDER_48H';
+
+// Email template for notifications
+export interface EmailTemplate {
+  id: string;
+  type: EmailTemplateType;
+  name: string;
+  subject: string;
+  bodyHtml: string;
+  bodyPlain: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Email preview result
+export interface EmailPreview {
+  subject: string;
+  bodyHtml: string;
+  bodyPlain: string;
+}

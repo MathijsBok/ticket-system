@@ -1,36 +1,12 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useClerk } from '@clerk/clerk-react';
-import { analyticsApi, ticketApi, adminAnalyticsApi, sessionApi } from '../lib/api';
+import { adminAnalyticsApi, sessionApi } from '../lib/api';
 import Layout from '../components/Layout';
-import { format } from 'date-fns';
-import { useNotification } from '../contexts/NotificationContext';
-import { useTicketNotifications } from '../hooks/useTicketNotifications';
-import toast from 'react-hot-toast';
-
-type SortField = 'ticketNumber' | 'subject' | 'requester' | 'status' | 'priority' | 'assignee' | 'updatedAt';
-type SortDirection = 'asc' | 'desc';
 
 const AdminDashboard: React.FC = () => {
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const clerk = useClerk();
-  const [activeTab, setActiveTab] = useState<'analytics' | 'tickets' | 'performance'>('analytics');
-  const [statusFilter, setStatusFilter] = useState<string>('');
-  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-  const [selectedTickets, setSelectedTickets] = useState<string[]>([]);
-  const [bulkStatus, setBulkStatus] = useState<string>('');
-  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-  const [sortField, setSortField] = useState<SortField>('updatedAt');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
-
-  const { permission, requestPermission, isSupported } = useNotification();
-  const { newTicketCount, isPolling } = useTicketNotifications({
-    enabled: notificationsEnabled,
-    pollingInterval: 30000
-  });
 
   // Function to end the current session
   const endCurrentSession = useCallback(async (sessionId: string) => {
@@ -64,7 +40,6 @@ const AdminDashboard: React.FC = () => {
     if (!activeSessionId) return;
 
     const handleBeforeUnload = async () => {
-      // Use fetch with keepalive flag for reliable delivery during page unload
       try {
         const token = await window.Clerk?.session?.getToken();
         if (token) {
@@ -97,7 +72,6 @@ const AdminDashboard: React.FC = () => {
       }
     };
 
-    // Listen for sign-out events
     const originalSignOut = clerk.signOut;
     clerk.signOut = async (options?: any) => {
       await handleSignOut();
@@ -117,208 +91,14 @@ const AdminDashboard: React.FC = () => {
       }
     };
   }, [activeSessionId, endCurrentSession]);
-  const { data: agentStats, isLoading: loadingAgents } = useQuery({
-    queryKey: ['agentAnalytics'],
-    queryFn: async () => {
-      const response = await analyticsApi.getAgentStats();
-      return response.data;
-    },
-    enabled: activeTab === 'analytics'
-  });
-
-  const { data: systemStats } = useQuery({
-    queryKey: ['systemStats'],
-    queryFn: async () => {
-      const response = await analyticsApi.getSystemStats();
-      return response.data;
-    },
-    enabled: activeTab === 'analytics'
-  });
-
-  const { data: tickets, isLoading: loadingTickets } = useQuery({
-    queryKey: ['adminTickets', statusFilter],
-    queryFn: async () => {
-      const response = await ticketApi.getAll(
-        statusFilter ? { status: statusFilter } : undefined
-      );
-      return response.data;
-    },
-    enabled: activeTab === 'tickets'
-  });
-
-  const { data: ticketStats } = useQuery({
-    queryKey: ['ticketStats'],
-    queryFn: async () => {
-      const response = await ticketApi.getStats();
-      return response.data;
-    },
-    enabled: activeTab === 'tickets'
-  });
 
   const { data: agentPerformance, isLoading: loadingPerformance } = useQuery({
     queryKey: ['agentPerformance'],
     queryFn: async () => {
       const response = await adminAnalyticsApi.getAgentPerformance();
       return response.data;
-    },
-    enabled: activeTab === 'performance'
-  });
-
-  const handleSort = (field: SortField) => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortDirection('asc');
-    }
-  };
-
-  const sortedTickets = useMemo(() => {
-    if (!tickets) return [];
-
-    return [...tickets].sort((a, b) => {
-      let aValue: any;
-      let bValue: any;
-
-      switch (sortField) {
-        case 'ticketNumber':
-          aValue = a.ticketNumber;
-          bValue = b.ticketNumber;
-          break;
-        case 'subject':
-          aValue = a.subject.toLowerCase();
-          bValue = b.subject.toLowerCase();
-          break;
-        case 'requester':
-          aValue = a.requester.email.toLowerCase();
-          bValue = b.requester.email.toLowerCase();
-          break;
-        case 'status':
-          aValue = a.status;
-          bValue = b.status;
-          break;
-        case 'priority':
-          const priorityOrder = { LOW: 0, NORMAL: 1, HIGH: 2, URGENT: 3 };
-          aValue = priorityOrder[a.priority as keyof typeof priorityOrder];
-          bValue = priorityOrder[b.priority as keyof typeof priorityOrder];
-          break;
-        case 'assignee':
-          aValue = a.assignee ? a.assignee.email.toLowerCase() : '';
-          bValue = b.assignee ? b.assignee.email.toLowerCase() : '';
-          break;
-        case 'updatedAt':
-          aValue = new Date(a.updatedAt).getTime();
-          bValue = new Date(b.updatedAt).getTime();
-          break;
-        default:
-          return 0;
-      }
-
-      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
-      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
-      return 0;
-    });
-  }, [tickets, sortField, sortDirection]);
-
-  const bulkUpdateMutation = useMutation({
-    mutationFn: async (data: { ticketIds: string[]; status?: string }) => {
-      return await ticketApi.bulkUpdate(data);
-    },
-    onSuccess: () => {
-      toast.success('Tickets updated successfully');
-      setSelectedTickets([]);
-      setBulkStatus('');
-      queryClient.invalidateQueries({ queryKey: ['adminTickets'] });
-      queryClient.invalidateQueries({ queryKey: ['ticketStats'] });
-    },
-    onError: () => {
-      toast.error('Failed to update tickets');
     }
   });
-
-  const bulkDeleteMutation = useMutation({
-    mutationFn: async (ticketIds: string[]) => {
-      return await ticketApi.bulkDelete(ticketIds);
-    },
-    onSuccess: () => {
-      toast.success('Tickets deleted successfully');
-      setSelectedTickets([]);
-      queryClient.invalidateQueries({ queryKey: ['adminTickets'] });
-      queryClient.invalidateQueries({ queryKey: ['ticketStats'] });
-    },
-    onError: () => {
-      toast.error('Failed to delete tickets');
-    }
-  });
-
-  const cleanupOldSessionsMutation = useMutation({
-    mutationFn: async () => {
-      return await sessionApi.cleanupOld();
-    },
-    onSuccess: (response) => {
-      const data = response.data;
-      toast.success(data.message);
-      queryClient.invalidateQueries({ queryKey: ['agentAnalytics'] });
-    },
-    onError: () => {
-      toast.error('Failed to cleanup old sessions');
-    }
-  });
-
-  const handleSelectAll = () => {
-    if (selectedTickets.length === sortedTickets?.length) {
-      setSelectedTickets([]);
-    } else {
-      setSelectedTickets(sortedTickets?.map((t: any) => t.id) || []);
-    }
-  };
-
-  const handleSelectTicket = (ticketId: string, event: React.MouseEvent) => {
-    event.stopPropagation();
-    setSelectedTickets(prev =>
-      prev.includes(ticketId)
-        ? prev.filter(id => id !== ticketId)
-        : [...prev, ticketId]
-    );
-  };
-
-  const handleBulkStatusChange = () => {
-    if (!bulkStatus || selectedTickets.length === 0) return;
-    bulkUpdateMutation.mutate({ ticketIds: selectedTickets, status: bulkStatus });
-  };
-
-  const handleBulkDelete = () => {
-    if (selectedTickets.length === 0) return;
-    if (window.confirm(`Are you sure you want to delete ${selectedTickets.length} ticket(s)?`)) {
-      bulkDeleteMutation.mutate(selectedTickets);
-    }
-  };
-
-  const handleMarkAsSpam = () => {
-    if (selectedTickets.length === 0) return;
-    if (window.confirm(`Mark ${selectedTickets.length} ticket(s) as spam and close them?`)) {
-      bulkUpdateMutation.mutate({ ticketIds: selectedTickets, status: 'SOLVED' });
-    }
-  };
-
-  const SortIcon: React.FC<{ field: SortField }> = ({ field }) => {
-    if (sortField !== field) {
-      return (
-        <svg className="w-4 h-4 ml-1 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
-        </svg>
-      );
-    }
-    return sortDirection === 'asc' ? (
-      <svg className="w-4 h-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-      </svg>
-    ) : (
-      <svg className="w-4 h-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-      </svg>
-    );
-  };
 
   const formatDuration = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
@@ -326,268 +106,39 @@ const AdminDashboard: React.FC = () => {
     return `${hours}h ${minutes}m`;
   };
 
-  const getStatusColor = (status: string) => {
-    const colors: Record<string, string> = {
-      NEW: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-      OPEN: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-      PENDING: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
-      ON_HOLD: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
-      SOLVED: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-      CLOSED: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
-    };
-    return colors[status] || colors.NEW;
-  };
-
-  const handleToggleNotifications = async () => {
-    if (!isSupported) return;
-
-    if (permission === 'granted') {
-      setNotificationsEnabled(!notificationsEnabled);
-    } else if (permission === 'default') {
-      await requestPermission();
-      if (Notification.permission === 'granted') {
-        setNotificationsEnabled(true);
-      }
-    }
-  };
-
-  const statusFilters = [
-    { value: '', label: 'All Tickets' },
-    { value: 'NEW', label: 'New' },
-    { value: 'OPEN', label: 'Open' },
-    { value: 'PENDING', label: 'Pending' },
-    { value: 'ON_HOLD', label: 'On Hold' },
-    { value: 'SOLVED', label: 'Solved' },
-    { value: 'CLOSED', label: 'Closed' }
-  ];
-
-  // Helper to get the correct stats key for a status value
-  const getStatsKey = (status: string): string => {
-    if (status === 'ON_HOLD') return 'onHold';
-    return status.toLowerCase();
-  };
-
   return (
     <Layout>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Admin Dashboard</h1>
-            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-              {activeTab === 'analytics'
-                ? 'System analytics and agent performance metrics'
-                : activeTab === 'performance'
-                ? 'Detailed agent contributions and solve rates based on time and replies'
-                : 'Manage and respond to tickets'}
-            </p>
-          </div>
-
-          {/* Notification Settings */}
-          {isSupported && activeTab === 'tickets' && (
-            <div className="flex items-center gap-3">
-              {isPolling && (
-                <div className="flex items-center gap-2 px-3 py-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md">
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                  <span className="text-sm text-green-700 dark:text-green-300">
-                    {newTicketCount > 0 ? `${newTicketCount} new` : 'Monitoring'}
-                  </span>
-                </div>
-              )}
-              <button
-                onClick={handleToggleNotifications}
-                className={`relative inline-flex items-center px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  notificationsEnabled
-                    ? 'bg-primary text-primary-foreground hover:opacity-90'
-                    : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
-                }`}
-                disabled={permission === 'denied'}
-              >
-                <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d={
-                      notificationsEnabled
-                        ? 'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9'
-                        : 'M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z'
-                    }
-                  />
-                  {!notificationsEnabled && (
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3l18 18" />
-                  )}
-                </svg>
-                {notificationsEnabled ? 'Notifications On' : 'Enable Notifications'}
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Tabs */}
-        <div className="border-b border-gray-200 dark:border-gray-700">
-          <nav className="-mb-px flex gap-6">
-            <button
-              onClick={() => setActiveTab('analytics')}
-              className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
-                activeTab === 'analytics'
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
-              }`}
-            >
-              Analytics
-            </button>
-            <button
-              onClick={() => setActiveTab('performance')}
-              className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
-                activeTab === 'performance'
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
-              }`}
-            >
-              Agent Performance
-            </button>
-            <button
-              onClick={() => setActiveTab('tickets')}
-              className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
-                activeTab === 'tickets'
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
-              }`}
-            >
-              Tickets
-              {ticketStats && (
-                <span className="ml-2 px-2 py-0.5 bg-primary/10 text-primary rounded-full text-xs">
-                  {ticketStats.total}
-                </span>
-              )}
-            </button>
-          </nav>
-        </div>
-
-        {/* Analytics Tab */}
-        {activeTab === 'analytics' && systemStats && (
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">System Overview</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* Total Tickets Card */}
-              <div className="group relative overflow-hidden bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
-                <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                <div className="relative p-6 text-white">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="bg-white/20 backdrop-blur-sm rounded-xl p-3">
-                      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-                      </svg>
-                    </div>
-                    <div className="text-xs font-medium text-blue-100">System Wide</div>
-                  </div>
-                  <p className="text-sm font-medium text-blue-100 mb-1">Total Tickets</p>
-                  <p className="text-4xl font-bold">{systemStats.overview.totalTickets}</p>
-                </div>
-              </div>
-
-              {/* Total Users Card */}
-              <div className="group relative overflow-hidden bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
-                <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                <div className="relative p-6 text-white">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="bg-white/20 backdrop-blur-sm rounded-xl p-3">
-                      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                      </svg>
-                    </div>
-                    <div className="text-xs font-medium text-purple-100">Registered</div>
-                  </div>
-                  <p className="text-sm font-medium text-purple-100 mb-1">Total Users</p>
-                  <p className="text-4xl font-bold">{systemStats.overview.totalUsers}</p>
-                </div>
-              </div>
-
-              {/* Total Agents Card */}
-              <div className="group relative overflow-hidden bg-gradient-to-br from-green-500 to-green-600 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
-                <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                <div className="relative p-6 text-white">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="bg-white/20 backdrop-blur-sm rounded-xl p-3">
-                      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                      </svg>
-                    </div>
-                    <div className="text-xs font-medium text-green-100">Support Team</div>
-                  </div>
-                  <p className="text-sm font-medium text-green-100 mb-1">Total Agents</p>
-                  <p className="text-4xl font-bold">{systemStats.overview.totalAgents}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Ticket status breakdown */}
-            <div className="mt-6 bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 border border-gray-100 dark:border-gray-700">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl flex items-center justify-center">
-                  <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                  </svg>
-                </div>
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white">Tickets by Status</h3>
-              </div>
-              <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
-                {(['NEW', 'OPEN', 'PENDING', 'ON_HOLD', 'SOLVED', 'CLOSED'] as const).map((status) => {
-                  const statusColors: Record<string, { bg: string, text: string, border: string }> = {
-                    NEW: { bg: 'bg-blue-50 dark:bg-blue-900/20', text: 'text-blue-700 dark:text-blue-300', border: 'border-blue-200 dark:border-blue-800' },
-                    OPEN: { bg: 'bg-green-50 dark:bg-green-900/20', text: 'text-green-700 dark:text-green-300', border: 'border-green-200 dark:border-green-800' },
-                    PENDING: { bg: 'bg-yellow-50 dark:bg-yellow-900/20', text: 'text-yellow-700 dark:text-yellow-300', border: 'border-yellow-200 dark:border-yellow-800' },
-                    ON_HOLD: { bg: 'bg-orange-50 dark:bg-orange-900/20', text: 'text-orange-700 dark:text-orange-300', border: 'border-orange-200 dark:border-orange-800' },
-                    SOLVED: { bg: 'bg-purple-50 dark:bg-purple-900/20', text: 'text-purple-700 dark:text-purple-300', border: 'border-purple-200 dark:border-purple-800' },
-                    CLOSED: { bg: 'bg-gray-50 dark:bg-gray-900/20', text: 'text-gray-700 dark:text-gray-300', border: 'border-gray-200 dark:border-gray-700' }
-                  };
-                  const colors = statusColors[status];
-                  const statusKey = status === 'ON_HOLD' ? 'onHold' : status.toLowerCase();
-                  const count = (systemStats.tickets.byStatus as Record<string, number>)[statusKey] || 0;
-
-                  return (
-                    <div key={status} className={`${colors.bg} ${colors.border} border rounded-xl p-3 text-center transition-transform hover:scale-105`}>
-                      <div className={`text-2xl font-bold ${colors.text} mb-1`}>{count}</div>
-                      <div className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase">{status.replace('_', ' ')}</div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Agent Performance */}
-        {activeTab === 'analytics' && (
         <div>
-          <div className="flex justify-between items-center mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-xl flex items-center justify-center">
-                <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-              </div>
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Agent Performance</h2>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Admin Dashboard</h1>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+            Detailed agent contributions and solve rates based on time and replies
+          </p>
+        </div>
+
+        {/* Agent Performance Content */}
+        <div className="space-y-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-xl flex items-center justify-center">
+              <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+              </svg>
             </div>
-            <button
-              onClick={() => cleanupOldSessionsMutation.mutate()}
-              disabled={cleanupOldSessionsMutation.isPending}
-              className="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg hover:from-orange-600 hover:to-orange-700 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-md hover:shadow-lg"
-              title="Close sessions that have been open for more than 24 hours without logout"
-            >
-              {cleanupOldSessionsMutation.isPending ? 'Cleaning up...' : 'Cleanup Old Sessions'}
-            </button>
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Agent Performance & Contributions</h2>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Detailed metrics based on time tracking and replies</p>
+            </div>
           </div>
 
-          {loadingAgents && (
+          {loadingPerformance && (
             <div className="text-center py-12">
-              <div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-gray-200 border-t-primary rounded-full"></div>
-              <p className="mt-3 text-gray-600 dark:text-gray-400">Loading agent performance...</p>
+              <div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-gray-200 border-t-primary"></div>
+              <p className="mt-3 text-gray-600 dark:text-gray-400">Loading performance data...</p>
             </div>
           )}
 
-          {agentStats && agentStats.length > 0 && (
+          {agentPerformance && agentPerformance.agents && agentPerformance.agents.length > 0 && (
             <div className="bg-white dark:bg-gray-800 shadow-lg rounded-2xl border border-gray-100 dark:border-gray-700 overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
@@ -597,76 +148,51 @@ const AdminDashboard: React.FC = () => {
                         Agent
                       </th>
                       <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th className="px-6 py-4 text-center text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                        Sessions
+                        Total Tickets
                       </th>
                       <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                        Avg Duration
-                      </th>
-                      <th className="px-6 py-4 text-center text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                        Replies
-                      </th>
-                      <th className="px-6 py-4 text-center text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                        Assigned
-                      </th>
-                      <th className="px-6 py-4 text-center text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                        Solved
+                        Solved Tickets
                       </th>
                       <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
                         Solve Rate
                       </th>
                       <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                        Last Active
+                        Total Time Spent
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                        Avg Time/Ticket
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                        Total Replies
                       </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                    {agentStats.map((stat: any) => (
-                      <tr key={stat.agent.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                    {agentPerformance.agents.map((perf: any, index: number) => (
+                      <tr key={perf.agent.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                              {stat.agent.name.charAt(0).toUpperCase()}
+                            <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                              {index + 1}
                             </div>
                             <div>
-                              <div className="text-sm font-semibold text-gray-900 dark:text-white">{stat.agent.name}</div>
-                              <div className="text-xs text-gray-500 dark:text-gray-400">{stat.agent.email}</div>
+                              <div className="text-sm font-semibold text-gray-900 dark:text-white">
+                                {perf.agent.firstName && perf.agent.lastName
+                                  ? `${perf.agent.firstName} ${perf.agent.lastName}`
+                                  : perf.agent.email}
+                              </div>
+                              <div className="text-xs text-gray-500 dark:text-gray-400">{perf.agent.email}</div>
                             </div>
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold rounded-full ${
-                            stat.sessions.isOnline
-                              ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                              : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                          }`}>
-                            <span className={`w-2 h-2 rounded-full ${stat.sessions.isOnline ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`}></span>
-                            {stat.sessions.isOnline ? 'Online' : 'Offline'}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center">
                           <span className="inline-flex items-center px-3 py-1 rounded-md text-sm font-semibold bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
-                            {stat.sessions.total}
+                            {perf.totalTickets}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                          {formatDuration(stat.sessions.avgDuration)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center">
-                          <span className="inline-flex items-center px-3 py-1 rounded-md text-sm font-semibold bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
-                            {stat.replies.total}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center">
-                          <span className="inline-flex items-center px-3 py-1 rounded-md text-sm font-semibold bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300">
-                            {stat.tickets.assigned}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                        <td className="px-6 py-4 whitespace-nowrap">
                           <span className="inline-flex items-center px-3 py-1 rounded-md text-sm font-semibold bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300">
-                            {stat.tickets.solved}
+                            {perf.solvedTickets}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -674,18 +200,28 @@ const AdminDashboard: React.FC = () => {
                             <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2 w-24">
                               <div
                                 className="bg-gradient-to-r from-green-500 to-emerald-500 h-2 rounded-full transition-all duration-500"
-                                style={{ width: `${stat.tickets.solveRate}%` }}
+                                style={{ width: `${perf.solveRate}%` }}
                               ></div>
                             </div>
                             <span className="text-sm font-bold text-gray-900 dark:text-white min-w-[3rem] text-right">
-                              {stat.tickets.solveRate.toFixed(1)}%
+                              {perf.solveRate}%
                             </span>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                          {stat.sessions.lastLogin ? format(new Date(stat.sessions.lastLogin), 'MMM d, HH:mm') : (
-                            <span className="text-gray-400 dark:text-gray-500 italic">Never</span>
-                          )}
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="inline-flex items-center px-3 py-1 rounded-md text-sm font-semibold bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
+                            {formatDuration(perf.totalTimeSpent)}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="inline-flex items-center px-3 py-1 rounded-md text-sm font-semibold bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300">
+                            {formatDuration(perf.avgTimePerTicket)}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="inline-flex items-center px-3 py-1 rounded-md text-sm font-semibold bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300">
+                            {perf.totalReplies}
+                          </span>
                         </td>
                       </tr>
                     ))}
@@ -695,495 +231,18 @@ const AdminDashboard: React.FC = () => {
             </div>
           )}
 
-          {agentStats && agentStats.length === 0 && (
+          {agentPerformance && agentPerformance.agents && agentPerformance.agents.length === 0 && (
             <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-lg">
               <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
                 <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                 </svg>
               </div>
-              <p className="text-gray-600 dark:text-gray-400 font-medium">No agent data available</p>
-              <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">Agent performance metrics will appear here</p>
+              <p className="text-gray-600 dark:text-gray-400 font-medium">No agent performance data available</p>
+              <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">Performance metrics will appear when agents start tracking time</p>
             </div>
           )}
         </div>
-        )}
-
-        {/* Agent Performance Tab */}
-        {activeTab === 'performance' && (
-          <div className="space-y-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-xl flex items-center justify-center">
-                <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                </svg>
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Agent Performance & Contributions</h2>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Detailed metrics based on time tracking and replies</p>
-              </div>
-            </div>
-
-            {loadingPerformance && (
-              <div className="text-center py-12">
-                <div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-gray-200 border-t-primary rounded-full"></div>
-                <p className="mt-3 text-gray-600 dark:text-gray-400">Loading performance data...</p>
-              </div>
-            )}
-
-            {agentPerformance && agentPerformance.agents && agentPerformance.agents.length > 0 && (
-              <div className="bg-white dark:bg-gray-800 shadow-lg rounded-2xl border border-gray-100 dark:border-gray-700 overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                    <thead className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
-                      <tr>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                          Agent
-                        </th>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                          Total Tickets
-                        </th>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                          Solved Tickets
-                        </th>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                          Solve Rate
-                        </th>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                          Total Time Spent
-                        </th>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                          Avg Time/Ticket
-                        </th>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                          Total Replies
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                      {agentPerformance.agents.map((perf: any, index: number) => (
-                        <tr key={perf.agent.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                                {index + 1}
-                              </div>
-                              <div>
-                                <div className="text-sm font-semibold text-gray-900 dark:text-white">
-                                  {perf.agent.firstName && perf.agent.lastName
-                                    ? `${perf.agent.firstName} ${perf.agent.lastName}`
-                                    : perf.agent.email}
-                                </div>
-                                <div className="text-xs text-gray-500 dark:text-gray-400">{perf.agent.email}</div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="inline-flex items-center px-3 py-1 rounded-md text-sm font-semibold bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
-                              {perf.totalTickets}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="inline-flex items-center px-3 py-1 rounded-md text-sm font-semibold bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300">
-                              {perf.solvedTickets}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center gap-3">
-                              <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2 w-24">
-                                <div
-                                  className="bg-gradient-to-r from-green-500 to-emerald-500 h-2 rounded-full transition-all duration-500"
-                                  style={{ width: `${perf.solveRate}%` }}
-                                ></div>
-                              </div>
-                              <span className="text-sm font-bold text-gray-900 dark:text-white min-w-[3rem] text-right">
-                                {perf.solveRate}%
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="inline-flex items-center px-3 py-1 rounded-md text-sm font-semibold bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
-                              {formatDuration(perf.totalTimeSpent)}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="inline-flex items-center px-3 py-1 rounded-md text-sm font-semibold bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300">
-                              {formatDuration(perf.avgTimePerTicket)}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="inline-flex items-center px-3 py-1 rounded-md text-sm font-semibold bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300">
-                              {perf.totalReplies}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {agentPerformance && agentPerformance.agents && agentPerformance.agents.length === 0 && (
-              <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-lg">
-                <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                  </svg>
-                </div>
-                <p className="text-gray-600 dark:text-gray-400 font-medium">No agent performance data available</p>
-                <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">Performance metrics will appear when agents start tracking time</p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Tickets Tab */}
-        {activeTab === 'tickets' && (
-          <div className="space-y-6">
-            {/* Statistics Cards */}
-            {ticketStats && (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <button
-                  onClick={() => setStatusFilter('NEW')}
-                  className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                >
-                  <div className="text-sm font-medium text-gray-600 dark:text-gray-400">New</div>
-                  <div className="mt-1 text-2xl font-bold text-blue-600 dark:text-blue-400">{ticketStats.byStatus.new || 0}</div>
-                </button>
-                <button
-                  onClick={() => setStatusFilter('OPEN')}
-                  className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                >
-                  <div className="text-sm font-medium text-gray-600 dark:text-gray-400">Open</div>
-                  <div className="mt-1 text-2xl font-bold text-green-600 dark:text-green-400">{ticketStats.byStatus.open || 0}</div>
-                </button>
-                <button
-                  onClick={() => setStatusFilter('PENDING')}
-                  className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                >
-                  <div className="text-sm font-medium text-gray-600 dark:text-gray-400">Pending</div>
-                  <div className="mt-1 text-2xl font-bold text-yellow-600 dark:text-yellow-400">{ticketStats.byStatus.pending || 0}</div>
-                </button>
-                <button
-                  onClick={() => setStatusFilter('ON_HOLD')}
-                  className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                >
-                  <div className="text-sm font-medium text-gray-600 dark:text-gray-400">On Hold</div>
-                  <div className="mt-1 text-2xl font-bold text-orange-600 dark:text-orange-400">{ticketStats.byStatus.onHold || 0}</div>
-                </button>
-              </div>
-            )}
-
-            {/* Status Filters */}
-            <div className="flex gap-2 flex-wrap">
-              {statusFilters.map((filter) => (
-                <button
-                  key={filter.value}
-                  onClick={() => setStatusFilter(filter.value)}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                    statusFilter === filter.value
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
-                  }`}
-                >
-                  {filter.label}
-                  {ticketStats && filter.value && (
-                    <span className="ml-2 px-2 py-0.5 rounded-full bg-white/20 text-xs">
-                      {ticketStats.byStatus[getStatsKey(filter.value)] || 0}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-
-            {/* Bulk Actions Toolbar - Fixed at bottom */}
-            {selectedTickets.length > 0 && (
-              <div className="fixed bottom-0 left-0 right-0 z-50 bg-blue-500 dark:bg-blue-600 border-t-2 border-blue-600 dark:border-blue-500 shadow-lg p-4">
-                <div className="max-w-7xl mx-auto flex items-center gap-4 flex-wrap">
-                  <span className="text-sm font-medium text-white">
-                    {selectedTickets.length} ticket(s) selected
-                  </span>
-
-                  <div className="flex items-center gap-2 relative">
-                    <div className="relative">
-                      <button
-                        onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                        className="px-3 py-2 border border-blue-500 dark:border-blue-800 rounded-md shadow-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-white flex items-center gap-2 min-w-[160px] justify-between"
-                      >
-                        <span>{bulkStatus ? bulkStatus.replace('_', ' ') : 'Change Status...'}</span>
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </button>
-
-                      {showStatusDropdown && (
-                        <>
-                          <div
-                            className="fixed inset-0 z-10"
-                            onClick={() => setShowStatusDropdown(false)}
-                          />
-                          <div className="absolute bottom-full left-0 mb-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg z-20">
-                            <button
-                              onClick={() => {
-                                setBulkStatus('');
-                                setShowStatusDropdown(false);
-                              }}
-                              className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 first:rounded-t-md"
-                            >
-                              Change Status...
-                            </button>
-                            <button
-                              onClick={() => {
-                                setBulkStatus('NEW');
-                                setShowStatusDropdown(false);
-                              }}
-                              className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                            >
-                              New
-                            </button>
-                            <button
-                              onClick={() => {
-                                setBulkStatus('OPEN');
-                                setShowStatusDropdown(false);
-                              }}
-                              className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                            >
-                              Open
-                            </button>
-                            <button
-                              onClick={() => {
-                                setBulkStatus('PENDING');
-                                setShowStatusDropdown(false);
-                              }}
-                              className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                            >
-                              Pending
-                            </button>
-                            <button
-                              onClick={() => {
-                                setBulkStatus('ON_HOLD');
-                                setShowStatusDropdown(false);
-                              }}
-                              className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                            >
-                              On Hold
-                            </button>
-                            <button
-                              onClick={() => {
-                                setBulkStatus('SOLVED');
-                                setShowStatusDropdown(false);
-                              }}
-                              className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 last:rounded-b-md"
-                            >
-                              Solved
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                    <button
-                      onClick={handleBulkStatusChange}
-                      disabled={!bulkStatus || bulkUpdateMutation.isPending}
-                      className="px-4 py-2 bg-white text-blue-600 rounded-md hover:bg-gray-100 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                      Apply
-                    </button>
-                  </div>
-
-                  <button
-                    onClick={handleMarkAsSpam}
-                    disabled={bulkUpdateMutation.isPending}
-                    className="px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Mark as Spam
-                  </button>
-
-                  <button
-                    onClick={handleBulkDelete}
-                    disabled={bulkDeleteMutation.isPending}
-                    className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Delete
-                  </button>
-
-                  <button
-                    onClick={() => setSelectedTickets([])}
-                    className="ml-auto px-4 py-2 text-white hover:text-gray-200 text-sm font-medium transition-colors"
-                  >
-                    Clear Selection
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Loading state */}
-            {loadingTickets && (
-              <div className="text-center py-12">
-                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                <p className="mt-2 text-gray-600 dark:text-gray-400">Loading tickets...</p>
-              </div>
-            )}
-
-            {/* Tickets table */}
-            {sortedTickets && sortedTickets.length > 0 && (
-              <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                  <thead className="bg-gray-50 dark:bg-gray-900">
-                    <tr>
-                      <th className="px-6 py-3 text-left">
-                        <input
-                          type="checkbox"
-                          checked={selectedTickets.length === sortedTickets.length}
-                          onChange={handleSelectAll}
-                          className="rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-primary"
-                        />
-                      </th>
-                      <th
-                        onClick={() => handleSort('ticketNumber')}
-                        className="w-32 px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                      >
-                        <div className="flex items-center">
-                          Ticket #
-                          <SortIcon field="ticketNumber" />
-                        </div>
-                      </th>
-                      <th
-                        onClick={() => handleSort('status')}
-                        className="w-40 px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                      >
-                        <div className="flex items-center">
-                          Status
-                          <SortIcon field="status" />
-                        </div>
-                      </th>
-                      <th
-                        onClick={() => handleSort('subject')}
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                      >
-                        <div className="flex items-center">
-                          Subject
-                          <SortIcon field="subject" />
-                        </div>
-                      </th>
-                      <th
-                        onClick={() => handleSort('requester')}
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                      >
-                        <div className="flex items-center">
-                          Requester
-                          <SortIcon field="requester" />
-                        </div>
-                      </th>
-                      <th
-                        onClick={() => handleSort('priority')}
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                      >
-                        <div className="flex items-center">
-                          Priority
-                          <SortIcon field="priority" />
-                        </div>
-                      </th>
-                      <th
-                        onClick={() => handleSort('assignee')}
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                      >
-                        <div className="flex items-center">
-                          Assignee
-                          <SortIcon field="assignee" />
-                        </div>
-                      </th>
-                      <th
-                        onClick={() => handleSort('updatedAt')}
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                      >
-                        <div className="flex items-center">
-                          Updated
-                          <SortIcon field="updatedAt" />
-                        </div>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                    {sortedTickets.map((ticket: any) => (
-                      <tr
-                        key={ticket.id}
-                        className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                      >
-                        <td className="px-6 py-2 whitespace-nowrap">
-                          <input
-                            type="checkbox"
-                            checked={selectedTickets.includes(ticket.id)}
-                            onChange={(e) => handleSelectTicket(ticket.id, e as any)}
-                            onClick={(e) => e.stopPropagation()}
-                            className="rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-primary"
-                          />
-                        </td>
-                        <td
-                          onClick={() => navigate(`/tickets/${ticket.id}`)}
-                          className="px-6 py-2 whitespace-nowrap text-sm font-medium text-primary cursor-pointer"
-                        >
-                          #{ticket.ticketNumber}
-                        </td>
-                        <td
-                          onClick={() => navigate(`/tickets/${ticket.id}`)}
-                          className="px-6 py-2 whitespace-nowrap cursor-pointer"
-                        >
-                          <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(ticket.status)}`}>
-                            {ticket.status.replace('_', ' ')}
-                          </span>
-                        </td>
-                        <td
-                          onClick={() => navigate(`/tickets/${ticket.id}`)}
-                          className="px-6 py-2 text-sm text-gray-900 dark:text-white cursor-pointer"
-                        >
-                          {ticket.subject}
-                        </td>
-                        <td
-                          onClick={() => navigate(`/tickets/${ticket.id}`)}
-                          className="px-6 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 cursor-pointer"
-                        >
-                          {ticket.requester.name || ticket.requester.email}
-                        </td>
-                        <td
-                          onClick={() => navigate(`/tickets/${ticket.id}`)}
-                          className="px-6 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-white capitalize cursor-pointer"
-                        >
-                          {ticket.priority.toLowerCase()}
-                        </td>
-                        <td
-                          onClick={() => navigate(`/tickets/${ticket.id}`)}
-                          className="px-6 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 cursor-pointer"
-                        >
-                          {ticket.assignee ? ticket.assignee.email : 'Unassigned'}
-                        </td>
-                        <td
-                          onClick={() => navigate(`/tickets/${ticket.id}`)}
-                          className="px-6 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 cursor-pointer"
-                        >
-                          {format(new Date(ticket.updatedAt), 'MMM d, HH:mm')}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            {/* Empty state */}
-            {sortedTickets && sortedTickets.length === 0 && (
-              <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-                </svg>
-                <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">No tickets found</h3>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  {statusFilter ? `No ${statusFilter.toLowerCase().replace('_', ' ')} tickets at the moment.` : 'No tickets in the system.'}
-                </p>
-              </div>
-            )}
-          </div>
-        )}
       </div>
     </Layout>
   );

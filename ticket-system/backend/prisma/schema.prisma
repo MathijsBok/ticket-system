@@ -309,3 +309,42 @@ model Settings {
   createdAt                   DateTime @default(now())
   updatedAt                   DateTime @updatedAt
 }
+
+// Email Template Types
+enum EmailTemplateType {
+  TICKET_CREATED
+  NEW_REPLY
+  TICKET_RESOLVED
+  PENDING_REMINDER_24H
+  PENDING_REMINDER_48H
+}
+
+// Email Templates for notifications
+model EmailTemplate {
+  id        String            @id @default(uuid()) @db.Uuid
+  type      EmailTemplateType @unique
+  name      String            @db.VarChar(255)
+  subject   String            @db.VarChar(500)
+  bodyHtml  String            @db.Text
+  bodyPlain String            @db.Text
+  isActive  Boolean           @default(true)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  @@index([type])
+}
+
+// Macros - Pre-built reply templates for agents
+model Macro {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @db.VarChar(255)
+  content   String   @db.Text
+  category  String?  @db.VarChar(100)
+  isActive  Boolean  @default(true)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category])
+  @@index([order])
+}

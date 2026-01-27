@@ -240,3 +240,56 @@ export const zendeskApi = {
     });
   }
 };
+
+// Macro API
+export const macroApi = {
+  getAll: (category?: string) =>
+    api.get('/macros', { params: category ? { category } : {} }),
+
+  getById: (id: string) =>
+    api.get(`/macros/${id}`),
+
+  create: (data: {
+    name: string;
+    content: string;
+    category?: string;
+  }) =>
+    api.post('/macros', data),
+
+  update: (id: string, data: {
+    name?: string;
+    content?: string;
+    category?: string;
+    isActive?: boolean;
+  }) =>
+    api.patch(`/macros/${id}`, data),
+
+  reorder: (macroIds: string[]) =>
+    api.patch('/macros/reorder', { macroIds }),
+
+  delete: (id: string) =>
+    api.delete(`/macros/${id}`)
+};
+
+// Email Template API
+export const emailTemplateApi = {
+  getAll: () =>
+    api.get('/email-templates'),
+
+  getById: (id: string) =>
+    api.get(`/email-templates/${id}`),
+
+  update: (id: string, data: {
+    subject?: string;
+    bodyHtml?: string;
+    bodyPlain?: string;
+    isActive?: boolean;
+  }) =>
+    api.patch(`/email-templates/${id}`, data),
+
+  preview: (id: string) =>
+    api.post(`/email-templates/${id}/preview`),
+
+  reset: (id: string) =>
+    api.post(`/email-templates/${id}/reset`)
+};
