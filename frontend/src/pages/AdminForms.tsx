@@ -151,7 +151,8 @@ const AdminForms: React.FC = () => {
     // Create a custom drag image with solid background
     const target = e.currentTarget as HTMLElement;
     const clone = target.cloneNode(true) as HTMLElement;
-    clone.style.backgroundColor = 'rgb(219, 234, 254)';
+    clone.style.backgroundColor = 'hsl(var(--primary))';
+    clone.style.color = 'hsl(var(--primary-foreground))';
     clone.style.opacity = '1';
     clone.style.position = 'absolute';
     clone.style.top = '-9999px';
@@ -162,10 +163,6 @@ const AdminForms: React.FC = () => {
 
     // Remove clone after a short delay
     setTimeout(() => document.body.removeChild(clone), 0);
-
-    // Also set styles on original element for visual feedback
-    target.style.backgroundColor = 'rgb(219, 234, 254)';
-    target.style.opacity = '1';
   };
 
   const handleDragOver = (e: React.DragEvent, index: number) => {
@@ -185,10 +182,6 @@ const AdminForms: React.FC = () => {
   };
 
   const handleDragEnd = (e: React.DragEvent) => {
-    // Clear inline styles
-    const target = e.currentTarget as HTMLElement;
-    target.style.backgroundColor = '';
-    target.style.opacity = '';
     setDraggedIndex(null);
   };
 
@@ -199,7 +192,8 @@ const AdminForms: React.FC = () => {
     // Create a custom drag image with solid background
     const target = e.currentTarget as HTMLElement;
     const clone = target.cloneNode(true) as HTMLElement;
-    clone.style.backgroundColor = 'rgb(219, 234, 254)';
+    clone.style.backgroundColor = 'hsl(var(--primary))';
+    clone.style.color = 'hsl(var(--primary-foreground))';
     clone.style.opacity = '1';
     clone.style.position = 'absolute';
     clone.style.top = '-9999px';
@@ -210,10 +204,6 @@ const AdminForms: React.FC = () => {
 
     // Remove clone after a short delay
     setTimeout(() => document.body.removeChild(clone), 0);
-
-    // Also set styles on original element for visual feedback
-    target.style.backgroundColor = 'rgb(219, 234, 254)';
-    target.style.opacity = '1';
   };
 
   const handleFormDragOver = (e: React.DragEvent, index: number) => {
@@ -239,10 +229,6 @@ const AdminForms: React.FC = () => {
       const formIds = forms.map(form => form.id);
       reorderMutation.mutate(formIds);
     }
-    // Clear inline styles
-    const target = e.currentTarget as HTMLElement;
-    target.style.backgroundColor = '';
-    target.style.opacity = '';
     setDraggedFormIndex(null);
   };
 
@@ -405,27 +391,51 @@ const AdminForms: React.FC = () => {
                           <div
                             key={field.id}
                             draggable
-                            onDragStart={() => handleDragStart(index)}
+                            onDragStart={(e) => handleDragStart(e, index)}
                             onDragOver={(e) => handleDragOver(e, index)}
-                            onDragEnd={handleDragEnd}
-                            className={`flex items-center gap-2 p-3 cursor-move transition-all ${
+                            onDragEnd={(e) => handleDragEnd(e)}
+                            className={`flex items-center cursor-move transition-all ${
                               draggedIndex === index
-                                ? 'bg-blue-100 dark:bg-blue-100 border-2 border-blue-500 dark:border-blue-500 scale-105 shadow-lg opacity-100'
-                                : 'hover:bg-gray-50 dark:hover:bg-gray-600/50 border-2 border-transparent'
+                                ? 'bg-primary text-primary-foreground border-2 border-primary scale-105 shadow-lg opacity-100'
+                                : 'hover:bg-gray-50 dark:hover:bg-gray-600/50 border-2 border-transparent opacity-100'
                             }`}
+                            style={{
+                              paddingLeft: '12px',
+                              paddingRight: '12px',
+                              paddingTop: '12px',
+                              paddingBottom: '12px',
+                              gap: '8px'
+                            }}
                           >
                             {/* Drag handle icon */}
-                            <div className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
-                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
+                            <div style={{
+                              flexShrink: 0,
+                              width: '20px',
+                              minWidth: '20px',
+                              height: '20px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}>
+                              <svg
+                                width="20"
+                                height="20"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke={draggedIndex === index ? "#ffffff" : "#4B5563"}
+                                strokeWidth={2}
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <path d="M4 8h16M4 16h16" />
                               </svg>
                             </div>
-                            <div className="flex flex-col gap-1">
+                            <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '4px' }}>
                               <button
                                 type="button"
                                 onClick={() => handleMoveFieldUp(index)}
                                 disabled={index === 0}
-                                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                                className={draggedIndex === index ? "text-primary-foreground disabled:opacity-30 disabled:cursor-not-allowed" : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"}
                               >
                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
@@ -435,24 +445,24 @@ const AdminForms: React.FC = () => {
                                 type="button"
                                 onClick={() => handleMoveFieldDown(index)}
                                 disabled={index === selectedFieldsWithDetails.length - 1}
-                                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                                className={draggedIndex === index ? "text-primary-foreground disabled:opacity-30 disabled:cursor-not-allowed" : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"}
                               >
                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                                 </svg>
                               </button>
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span className={`text-sm font-medium ${draggedIndex === index ? "text-primary-foreground/70" : "text-gray-500 dark:text-gray-400"}`}>
                                   {index + 1}.
                                 </span>
-                                <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                <div className={`text-sm font-medium truncate ${draggedIndex === index ? "text-primary-foreground" : "text-gray-900 dark:text-white"}`}>
                                   {field.label}
                                 </div>
                               </div>
                               <div className="flex items-center gap-2 mt-1">
-                                <span className="px-2 py-0.5 text-xs font-semibold rounded bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                                <span className={`px-2 py-0.5 text-xs font-semibold rounded ${draggedIndex === index ? "bg-primary-foreground/20 text-primary-foreground" : "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"}`}>
                                   {field.fieldType}
                                 </span>
                                 <label className="flex items-center gap-1 cursor-pointer" onClick={(e) => e.stopPropagation()}>
@@ -462,14 +472,15 @@ const AdminForms: React.FC = () => {
                                     onChange={() => handleToggleRequired(field.id)}
                                     className="rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-primary"
                                   />
-                                  <span className="text-xs text-gray-700 dark:text-gray-300">Required</span>
+                                  <span className={`text-xs ${draggedIndex === index ? "text-primary-foreground" : "text-gray-700 dark:text-gray-300"}`}>Required</span>
                                 </label>
                               </div>
                             </div>
                             <button
                               type="button"
                               onClick={() => handleRemoveField(field.id)}
-                              className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                              style={{ flexShrink: 0 }}
+                              className={draggedIndex === index ? "text-primary-foreground hover:text-primary-foreground/80" : "text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"}
                             >
                               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -563,42 +574,62 @@ const AdminForms: React.FC = () => {
                     onDragEnd={handleFormDragEnd}
                     className={`cursor-move transition-all ${
                       draggedFormIndex === index
-                        ? 'bg-blue-100 dark:bg-blue-100 scale-105 shadow-lg opacity-100'
-                        : 'hover:bg-gray-50 dark:hover:bg-gray-700/50 bg-white dark:bg-gray-800'
+                        ? 'bg-primary text-primary-foreground scale-105 shadow-lg opacity-100'
+                        : 'hover:bg-gray-50 dark:hover:bg-gray-700/50 bg-white dark:bg-gray-800 opacity-100'
                     }`}
                   >
                     <td className="px-3 py-4">
-                      <div className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
+                      <div className="flex-shrink-0" style={{
+                        width: '20px',
+                        height: '20px',
+                        position: 'relative'
+                      }}>
+                        <svg
+                          width="20"
+                          height="20"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke={draggedFormIndex === index ? "#ffffff" : "#4B5563"}
+                          strokeWidth={2}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0
+                          }}
+                        >
+                          <path d="M4 8h16M4 16h16" />
                         </svg>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                    <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${draggedFormIndex === index ? "text-primary-foreground" : "text-gray-900 dark:text-white"}`}>
                       {form.name}
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
+                    <td className={`px-6 py-4 text-sm ${draggedFormIndex === index ? "text-primary-foreground/80" : "text-gray-500 dark:text-gray-400"}`}>
                       {form.description || '-'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${draggedFormIndex === index ? "text-primary-foreground" : "text-gray-900 dark:text-white"}`}>
                       {form.formFields?.length || 0} fields
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                        form.isActive
+                        draggedFormIndex === index
+                          ? 'bg-primary-foreground/20 text-primary-foreground'
+                          : form.isActive
                           ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
                           : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
                       }`}>
                         {form.isActive ? 'Active' : 'Inactive'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${draggedFormIndex === index ? "text-primary-foreground/80" : "text-gray-500 dark:text-gray-400"}`}>
                       {format(new Date(form.createdAt), 'MMM d, yyyy')}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
                       <button
                         onClick={() => handleEdit(form)}
-                        className="text-primary hover:text-primary-dark dark:hover:text-primary-light"
+                        className={draggedFormIndex === index ? "text-primary-foreground hover:text-primary-foreground/80" : "text-primary hover:text-primary-dark dark:hover:text-primary-light"}
                       >
                         Edit
                       </button>
@@ -608,7 +639,7 @@ const AdminForms: React.FC = () => {
                             deleteMutation.mutate(form.id);
                           }
                         }}
-                        className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                        className={draggedFormIndex === index ? "text-primary-foreground hover:text-primary-foreground/80" : "text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"}
                       >
                         Delete
                       </button>

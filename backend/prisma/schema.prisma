@@ -19,6 +19,7 @@ enum TicketStatus {
   PENDING
   ON_HOLD
   SOLVED
+  CLOSED
 }
 
 enum TicketPriority {
@@ -91,24 +92,28 @@ model Ticket {
   organizationId  String?        @db.Uuid
   formId          String?        @db.Uuid
   categoryId      String?        @db.Uuid
+  relatedTicketId String?        @db.Uuid
   country         String?        @db.VarChar(100)
   ipAddress       String?        @db.VarChar(50)
   dueAt           DateTime?
   firstResponseAt DateTime?
   solvedAt        DateTime?
+  closedAt        DateTime?
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
-  requester     User              @relation("TicketRequester", fields: [requesterId], references: [id])
-  assignee      User?             @relation("TicketAssignee", fields: [assigneeId], references: [id])
-  organization  Organization?     @relation(fields: [organizationId], references: [id])
-  form          Form?             @relation(fields: [formId], references: [id])
-  category      Category?         @relation(fields: [categoryId], references: [id])
-  comments      Comment[]
-  attachments   Attachment[]
-  activities    TicketActivity[]
-  timeEntries   TicketTimeEntry[]
-  formResponses FormResponse[]
+  requester       User              @relation("TicketRequester", fields: [requesterId], references: [id])
+  assignee        User?             @relation("TicketAssignee", fields: [assigneeId], references: [id])
+  organization    Organization?     @relation(fields: [organizationId], references: [id])
+  form            Form?             @relation(fields: [formId], references: [id])
+  category        Category?         @relation(fields: [categoryId], references: [id])
+  relatedTicket   Ticket?           @relation("RelatedTickets", fields: [relatedTicketId], references: [id])
+  followUpTickets Ticket[]          @relation("RelatedTickets")
+  comments        Comment[]
+  attachments     Attachment[]
+  activities      TicketActivity[]
+  timeEntries     TicketTimeEntry[]
+  formResponses   FormResponse[]
 
   @@index([ticketNumber], name: "idx_tickets_number")
   @@index([status], name: "idx_tickets_status")
@@ -116,6 +121,7 @@ model Ticket {
   @@index([assigneeId], name: "idx_tickets_assignee")
   @@index([createdAt], name: "idx_tickets_created")
   @@index([status, assigneeId], name: "idx_tickets_status_assignee")
+  @@index([relatedTicketId], name: "idx_tickets_related")
 }
 
 model Comment {
@@ -277,4 +283,29 @@ model FormResponse {
 
   @@index([ticketId])
   @@index([fieldId])
+}
+
+model Settings {
+  id                          String   @id @default(uuid()) @db.Uuid
+  // Email Settings
+  sendTicketCreatedEmail      Boolean  @default(true)
+  sendTicketAssignedEmail     Boolean  @default(true)
+  sendTicketResolvedEmail     Boolean  @default(true)
+  sendPendingTicketReminder   Boolean  @default(false)
+  pendingTicketReminderHours  Int      @default(24) // Hours after agent reply to remind user
+
+  // Auto-close Settings
+  autoCloseEnabled            Boolean  @default(false)
+  autoCloseHours              Int      @default(48) // Hours after solved to auto-close
+
+  // Auto-solve Settings
+  autoSolveEnabled            Boolean  @default(false)
+  autoSolveHours              Int      @default(48) // Hours of no user reply to auto-solve
+
+  // General Settings
+  defaultTicketPriority       String   @default("NORMAL")
+  allowCustomerReopenClosed   Boolean  @default(false)
+
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
 }

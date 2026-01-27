@@ -99,6 +99,23 @@ router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
           include: {
             field: true
           }
+        },
+        relatedTicket: {
+          select: {
+            id: true,
+            ticketNumber: true,
+            subject: true,
+            status: true
+          }
+        },
+        followUpTickets: {
+          select: {
+            id: true,
+            ticketNumber: true,
+            subject: true,
+            status: true,
+            createdAt: true
+          }
         }
       }
     });
@@ -128,6 +145,7 @@ router.post('/',
     body('priority').optional().isIn(['LOW', 'NORMAL', 'HIGH', 'URGENT']),
     body('categoryId').optional().isUUID(),
     body('formId').optional().isUUID(),
+    body('relatedTicketId').optional().isUUID(),
     body('description').isString().notEmpty(),
     body('formResponses').optional().isArray(),
     body('formResponses.*.fieldId').optional().isUUID(),
@@ -140,7 +158,7 @@ router.post('/',
     }
 
     try {
-      const { subject, channel, priority, categoryId, formId, description, formResponses } = req.body;
+      const { subject, channel, priority, categoryId, formId, relatedTicketId, description, formResponses } = req.body;
       const userId = req.userId!;
 
       // Get IP address from request
@@ -163,6 +181,7 @@ router.post('/',
             requesterId: userId,
             categoryId: categoryId || null,
             formId: formId || null,
+            relatedTicketId: relatedTicketId || null,
             country,
             ipAddress,
             comments: {

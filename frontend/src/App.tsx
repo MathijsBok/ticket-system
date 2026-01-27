@@ -18,6 +18,7 @@ import TicketDetail from './pages/TicketDetail';
 import CreateTicket from './pages/CreateTicket';
 import AdminForms from './pages/AdminForms';
 import AdminFieldLibrary from './pages/AdminFieldLibrary';
+import AdminSettings from './pages/AdminSettings';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -109,6 +110,14 @@ function App() {
                       element={
                         <ProtectedRoute allowedRoles={['ADMIN']}>
                           <AdminFieldLibrary />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/admin/settings"
+                      element={
+                        <ProtectedRoute allowedRoles={['ADMIN']}>
+                          <AdminSettings />
                         </ProtectedRoute>
                       }
                     />

@@ -217,3 +217,26 @@ export const userApi = {
   getAgents: () =>
     api.get('/users/agents')
 };
+
+// Settings API
+export const settingsApi = {
+  get: () =>
+    api.get('/settings'),
+
+  update: (id: string, data: any) =>
+    api.patch(`/settings/${id}`, data)
+};
+
+// Zendesk Import API
+export const zendeskApi = {
+  import: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    return api.post('/zendesk/import', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+  }
+};

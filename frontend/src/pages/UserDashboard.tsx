@@ -12,6 +12,9 @@ const UserDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [sortField, setSortField] = useState<SortField>('createdAt');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [openExpanded, setOpenExpanded] = useState(false);
+  const [solvedExpanded, setSolvedExpanded] = useState(false);
+  const [closedExpanded, setClosedExpanded] = useState(false);
 
   const { data: tickets, isLoading, error } = useQuery({
     queryKey: ['userTickets'],
@@ -73,13 +76,30 @@ const UserDashboard: React.FC = () => {
     });
   }, [tickets, sortField, sortDirection]);
 
-  const unsolvedTickets = useMemo(() => {
-    return sortedTickets.filter((ticket: any) => ticket.status !== 'SOLVED');
+  const openTickets = useMemo(() => {
+    return sortedTickets.filter((ticket: any) => ticket.status !== 'SOLVED' && ticket.status !== 'CLOSED');
   }, [sortedTickets]);
 
   const solvedTickets = useMemo(() => {
     return sortedTickets.filter((ticket: any) => ticket.status === 'SOLVED');
   }, [sortedTickets]);
+
+  const closedTickets = useMemo(() => {
+    return sortedTickets.filter((ticket: any) => ticket.status === 'CLOSED');
+  }, [sortedTickets]);
+
+  // Display arrays (limited to 10 unless expanded)
+  const displayOpenTickets = useMemo(() => {
+    return openExpanded ? openTickets : openTickets.slice(0, 10);
+  }, [openTickets, openExpanded]);
+
+  const displaySolvedTickets = useMemo(() => {
+    return solvedExpanded ? solvedTickets : solvedTickets.slice(0, 10);
+  }, [solvedTickets, solvedExpanded]);
+
+  const displayClosedTickets = useMemo(() => {
+    return closedExpanded ? closedTickets : closedTickets.slice(0, 10);
+  }, [closedTickets, closedExpanded]);
 
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
@@ -87,7 +107,8 @@ const UserDashboard: React.FC = () => {
       OPEN: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
       PENDING: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
       ON_HOLD: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
-      SOLVED: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
+      SOLVED: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
+      CLOSED: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
     };
     return colors[status] || colors.NEW;
   };
@@ -172,12 +193,12 @@ const UserDashboard: React.FC = () => {
         {sortedTickets && sortedTickets.length > 0 && (
           <>
             {/* Open Tickets Section */}
-            {unsolvedTickets.length > 0 && (
+            {openTickets.length > 0 && (
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
                   <h2 className="text-xl font-bold text-gray-900 dark:text-white">Open Tickets</h2>
                   <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-sm font-semibold rounded-full">
-                    {unsolvedTickets.length}
+                    {openTickets.length}
                   </span>
                 </div>
                 <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
@@ -186,7 +207,7 @@ const UserDashboard: React.FC = () => {
                       <tr>
                         <th
                           onClick={() => handleSort('ticketNumber')}
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                          className="w-32 px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                         >
                           <div className="flex items-center">
                             Ticket #
@@ -203,17 +224,8 @@ const UserDashboard: React.FC = () => {
                           </div>
                         </th>
                         <th
-                          onClick={() => handleSort('status')}
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                        >
-                          <div className="flex items-center">
-                            Status
-                            <SortIcon field="status" />
-                          </div>
-                        </th>
-                        <th
                           onClick={() => handleSort('priority')}
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                          className="w-40 px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                         >
                           <div className="flex items-center">
                             Priority
@@ -222,16 +234,19 @@ const UserDashboard: React.FC = () => {
                         </th>
                         <th
                           onClick={() => handleSort('createdAt')}
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                          className="w-52 px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                         >
                           <div className="flex items-center">
                             Created
                             <SortIcon field="createdAt" />
                           </div>
                         </th>
+                        <th className="w-52 px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                          Status
+                        </th>
                         <th
                           onClick={() => handleSort('comments')}
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                          className="w-32 px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                         >
                           <div className="flex items-center">
                             Replies
@@ -241,7 +256,7 @@ const UserDashboard: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                      {unsolvedTickets.map((ticket: any) => (
+                      {displayOpenTickets.map((ticket: any) => (
                         <tr
                           key={ticket.id}
                           onClick={() => navigate(`/tickets/${ticket.id}`)}
@@ -253,16 +268,16 @@ const UserDashboard: React.FC = () => {
                           <td className="px-6 py-2 text-sm text-gray-900 dark:text-white">
                             {ticket.subject}
                           </td>
-                          <td className="px-6 py-2 whitespace-nowrap">
-                            <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(ticket.status)}`}>
-                              {ticket.status.replace('_', ' ')}
-                            </span>
-                          </td>
                           <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-white capitalize">
                             {ticket.priority.toLowerCase()}
                           </td>
                           <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                             {format(new Date(ticket.createdAt), 'MMM d, yyyy')}
+                          </td>
+                          <td className="px-6 py-2 whitespace-nowrap">
+                            <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(ticket.status)}`}>
+                              {ticket.status.replace('_', ' ')}
+                            </span>
                           </td>
                           <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                             {ticket._count.comments}
@@ -272,6 +287,30 @@ const UserDashboard: React.FC = () => {
                     </tbody>
                   </table>
                 </div>
+                {openTickets.length > 10 && (
+                  <div className="flex justify-center">
+                    <button
+                      onClick={() => setOpenExpanded(!openExpanded)}
+                      className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors"
+                    >
+                      {openExpanded ? (
+                        <>
+                          <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                          </svg>
+                          Show Less
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                          Show {openTickets.length - 10} More
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
@@ -290,7 +329,7 @@ const UserDashboard: React.FC = () => {
                       <tr>
                         <th
                           onClick={() => handleSort('ticketNumber')}
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                          className="w-32 px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                         >
                           <div className="flex items-center">
                             Ticket #
@@ -308,7 +347,7 @@ const UserDashboard: React.FC = () => {
                         </th>
                         <th
                           onClick={() => handleSort('priority')}
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                          className="w-40 px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                         >
                           <div className="flex items-center">
                             Priority
@@ -317,19 +356,19 @@ const UserDashboard: React.FC = () => {
                         </th>
                         <th
                           onClick={() => handleSort('createdAt')}
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                          className="w-52 px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                         >
                           <div className="flex items-center">
                             Created
                             <SortIcon field="createdAt" />
                           </div>
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        <th className="w-52 px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                           Solved
                         </th>
                         <th
                           onClick={() => handleSort('comments')}
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                          className="w-32 px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                         >
                           <div className="flex items-center">
                             Replies
@@ -339,7 +378,7 @@ const UserDashboard: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                      {solvedTickets.map((ticket: any) => (
+                      {displaySolvedTickets.map((ticket: any) => (
                         <tr
                           key={ticket.id}
                           onClick={() => navigate(`/tickets/${ticket.id}`)}
@@ -368,6 +407,150 @@ const UserDashboard: React.FC = () => {
                     </tbody>
                   </table>
                 </div>
+                {solvedTickets.length > 10 && (
+                  <div className="flex justify-center">
+                    <button
+                      onClick={() => setSolvedExpanded(!solvedExpanded)}
+                      className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors"
+                    >
+                      {solvedExpanded ? (
+                        <>
+                          <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                          </svg>
+                          Show Less
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                          Show {solvedTickets.length - 10} More
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Closed Tickets Section */}
+            {closedTickets.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">Closed Tickets</h2>
+                  <span className="px-3 py-1 bg-gray-100 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300 text-sm font-semibold rounded-full">
+                    {closedTickets.length}
+                  </span>
+                </div>
+                <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                    <thead className="bg-gray-50 dark:bg-gray-900">
+                      <tr>
+                        <th
+                          onClick={() => handleSort('ticketNumber')}
+                          className="w-32 px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                        >
+                          <div className="flex items-center">
+                            Ticket #
+                            <SortIcon field="ticketNumber" />
+                          </div>
+                        </th>
+                        <th
+                          onClick={() => handleSort('subject')}
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                        >
+                          <div className="flex items-center">
+                            Subject
+                            <SortIcon field="subject" />
+                          </div>
+                        </th>
+                        <th
+                          onClick={() => handleSort('priority')}
+                          className="w-40 px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                        >
+                          <div className="flex items-center">
+                            Priority
+                            <SortIcon field="priority" />
+                          </div>
+                        </th>
+                        <th
+                          onClick={() => handleSort('createdAt')}
+                          className="w-52 px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                        >
+                          <div className="flex items-center">
+                            Created
+                            <SortIcon field="createdAt" />
+                          </div>
+                        </th>
+                        <th className="w-52 px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                          Closed
+                        </th>
+                        <th
+                          onClick={() => handleSort('comments')}
+                          className="w-32 px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                        >
+                          <div className="flex items-center">
+                            Replies
+                            <SortIcon field="comments" />
+                          </div>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                      {displayClosedTickets.map((ticket: any) => (
+                        <tr
+                          key={ticket.id}
+                          onClick={() => navigate(`/tickets/${ticket.id}`)}
+                          className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer"
+                        >
+                          <td className="px-6 py-2 whitespace-nowrap text-sm font-medium text-primary">
+                            #{ticket.ticketNumber}
+                          </td>
+                          <td className="px-6 py-2 text-sm text-gray-900 dark:text-white">
+                            {ticket.subject}
+                          </td>
+                          <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-white capitalize">
+                            {ticket.priority.toLowerCase()}
+                          </td>
+                          <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                            {format(new Date(ticket.createdAt), 'MMM d, yyyy')}
+                          </td>
+                          <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                            {ticket.closedAt ? format(new Date(ticket.closedAt), 'MMM d, yyyy') : '-'}
+                          </td>
+                          <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                            {ticket._count.comments}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {closedTickets.length > 10 && (
+                  <div className="flex justify-center">
+                    <button
+                      onClick={() => setClosedExpanded(!closedExpanded)}
+                      className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors"
+                    >
+                      {closedExpanded ? (
+                        <>
+                          <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                          </svg>
+                          Show Less
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                          Show {closedTickets.length - 10} More
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </>

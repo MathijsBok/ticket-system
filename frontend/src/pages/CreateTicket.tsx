@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { ticketApi, formApi } from '../lib/api';
@@ -9,6 +9,8 @@ import { Form } from '../types';
 
 const CreateTicket: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const relatedTicketId = searchParams.get('relatedTicketId');
   const [priority, setPriority] = useState('NORMAL');
   const [categoryId, _setCategoryId] = useState('');
   const [selectedFormId, setSelectedFormId] = useState<string | null>(null);
@@ -34,6 +36,32 @@ const CreateTicket: React.FC = () => {
     },
     enabled: !!selectedFormId
   });
+
+  // Fetch related ticket if creating a follow-up
+  const { data: relatedTicket } = useQuery({
+    queryKey: ['relatedTicket', relatedTicketId],
+    queryFn: async () => {
+      if (!relatedTicketId) return null;
+      const response = await ticketApi.getById(relatedTicketId);
+      return response.data;
+    },
+    enabled: !!relatedTicketId
+  });
+
+  // Auto-fill subject when related ticket is loaded
+  useEffect(() => {
+    if (relatedTicket && selectedForm) {
+      const subjectField = selectedForm.formFields?.find(ff =>
+        ff.field.label.toLowerCase() === 'subject'
+      );
+      if (subjectField && !formValues[subjectField.fieldId]) {
+        setFormValues(prev => ({
+          ...prev,
+          [subjectField.fieldId]: `Follow-up: ${relatedTicket.subject}`
+        }));
+      }
+    }
+  }, [relatedTicket, selectedForm, formValues]);
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -122,7 +150,8 @@ const CreateTicket: React.FC = () => {
       priority,
       categoryId: categoryId || undefined,
       formId: selectedFormId || undefined,
-      formResponses
+      formResponses,
+      relatedTicketId: relatedTicketId || undefined
     });
   };
 
@@ -147,6 +176,31 @@ const CreateTicket: React.FC = () => {
             Submit a support request and our team will get back to you.
           </p>
         </div>
+
+        {/* Related Ticket Info */}
+        {relatedTicket && (
+          <div className="mb-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <svg className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-300 mb-1">
+                  Creating Follow-up Ticket
+                </h3>
+                <p className="text-sm text-blue-800 dark:text-blue-300">
+                  This ticket will be created as a follow-up to:{' '}
+                  <Link
+                    to={`/tickets/${relatedTicket.id}`}
+                    className="font-medium underline hover:no-underline"
+                  >
+                    #{relatedTicket.ticketNumber} - {relatedTicket.subject}
+                  </Link>
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Form Selection - REQUIRED */}

@@ -17,6 +17,11 @@ import sessionRoutes from './routes/sessions';
 import timeTrackingRoutes from './routes/timeTracking';
 import webhookRoutes from './routes/webhooks';
 import userRoutes from './routes/users';
+import settingsRoutes from './routes/settings';
+import zendeskImportRoutes from './routes/zendesk-import';
+
+// Import automation jobs
+import { initializeTicketAutomation } from './jobs/ticketAutomation';
 
 dotenv.config();
 
@@ -51,6 +56,8 @@ app.use('/api/admin-analytics', adminAnalyticsRoutes);
 app.use('/api/sessions', sessionRoutes);
 app.use('/api/time-tracking', timeTrackingRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/settings', settingsRoutes);
+app.use('/api/zendesk', zendeskImportRoutes);
 
 // Health check
 app.get('/health', (_req, res) => {
@@ -70,6 +77,9 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
+
+  // Initialize ticket automation jobs
+  initializeTicketAutomation();
 });
 
 export default app;

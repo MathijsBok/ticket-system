@@ -20,7 +20,7 @@ const AdminFieldLibrary: React.FC = () => {
   const [defaultValue, setDefaultValue] = useState('');
   const [options, setOptions] = useState<string[]>([]);
   const [optionInput, setOptionInput] = useState('');
-  const [draggedOptionIndex, setDraggedOptionIndex] = useState<number | null>(null);
+  const [editingOptionIndex, setEditingOptionIndex] = useState<number | null>(null);
 
   const { data: fields, isLoading } = useQuery({
     queryKey: ['fieldLibrary'],
@@ -107,52 +107,10 @@ const AdminFieldLibrary: React.FC = () => {
     setOptions(options.filter((_, i) => i !== index));
   };
 
-  // Drag and drop handlers for options
-  const handleOptionDragStart = (e: React.DragEvent, index: number) => {
-    setDraggedOptionIndex(index);
-
-    // Create a custom drag image with solid background
-    const target = e.currentTarget as HTMLElement;
-    const clone = target.cloneNode(true) as HTMLElement;
-    clone.style.backgroundColor = 'rgb(219, 234, 254)';
-    clone.style.opacity = '1';
-    clone.style.position = 'absolute';
-    clone.style.top = '-9999px';
-    clone.style.width = target.offsetWidth + 'px';
-    document.body.appendChild(clone);
-
-    e.dataTransfer.setDragImage(clone, 0, 0);
-
-    // Remove clone after a short delay
-    setTimeout(() => document.body.removeChild(clone), 0);
-
-    // Also set styles on original element for visual feedback
-    target.style.backgroundColor = 'rgb(219, 234, 254)';
-    target.style.opacity = '1';
-  };
-
-  const handleOptionDragOver = (e: React.DragEvent, index: number) => {
-    e.preventDefault();
-    if (draggedOptionIndex === null || draggedOptionIndex === index) return;
-
+  const handleEditOption = (index: number, newValue: string) => {
     const newOptions = [...options];
-    const draggedItem = newOptions[draggedOptionIndex];
-
-    // Remove from old position
-    newOptions.splice(draggedOptionIndex, 1);
-    // Insert at new position
-    newOptions.splice(index, 0, draggedItem);
-
+    newOptions[index] = newValue;
     setOptions(newOptions);
-    setDraggedOptionIndex(index);
-  };
-
-  const handleOptionDragEnd = (e: React.DragEvent) => {
-    // Clear inline styles
-    const target = e.currentTarget as HTMLElement;
-    target.style.backgroundColor = '';
-    target.style.opacity = '';
-    setDraggedOptionIndex(null);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -366,31 +324,41 @@ const AdminFieldLibrary: React.FC = () => {
                     </div>
 
                     {options.length > 0 && (
-                      <div className="space-y-1">
+                      <div className="space-y-2">
                         {options.map((option, index) => (
                           <div
                             key={index}
-                            draggable
-                            onDragStart={(e) => handleOptionDragStart(e, index)}
-                            onDragOver={(e) => handleOptionDragOver(e, index)}
-                            onDragEnd={handleOptionDragEnd}
-                            className={`flex items-center gap-2 p-2 rounded cursor-move transition-all ${
-                              draggedOptionIndex === index
-                                ? 'bg-blue-100 dark:bg-blue-100 border-2 border-blue-500 dark:border-blue-500 scale-105 shadow-lg opacity-100'
-                                : 'bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 border-2 border-transparent'
-                            }`}
+                            className="flex items-center gap-2"
                           >
-                            {/* Drag handle icon */}
-                            <div className="text-gray-400">
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
-                              </svg>
-                            </div>
-                            <span className="flex-1 text-sm text-gray-900 dark:text-white">{option}</span>
+                            <span className="text-sm text-gray-500 dark:text-gray-400 flex-shrink-0 w-6">
+                              {index + 1}.
+                            </span>
+                            {editingOptionIndex === index ? (
+                              <input
+                                type="text"
+                                value={option}
+                                onChange={(e) => handleEditOption(index, e.target.value)}
+                                onBlur={() => setEditingOptionIndex(null)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') setEditingOptionIndex(null);
+                                  if (e.key === 'Escape') setEditingOptionIndex(null);
+                                }}
+                                autoFocus
+                                className="flex-1 px-3 py-2 border border-primary rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
+                              />
+                            ) : (
+                              <div
+                                onClick={() => setEditingOptionIndex(index)}
+                                className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm cursor-pointer hover:border-gray-400 dark:hover:border-gray-500 transition-colors"
+                              >
+                                {option}
+                              </div>
+                            )}
                             <button
                               type="button"
                               onClick={() => handleRemoveOption(index)}
-                              className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                              className="flex-shrink-0 p-2 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                              title="Remove option"
                             >
                               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

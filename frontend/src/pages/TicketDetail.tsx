@@ -116,7 +116,8 @@ const TicketDetail: React.FC = () => {
       OPEN: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
       PENDING: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
       ON_HOLD: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
-      SOLVED: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
+      SOLVED: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
+      CLOSED: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
     };
     return colors[status] || colors.NEW;
   };
@@ -170,6 +171,12 @@ const TicketDetail: React.FC = () => {
         }
         return 'Category changed';
 
+      case 'ticket_auto_closed':
+        return 'Ticket Auto-closed';
+
+      case 'ticket_auto_solved':
+        return 'Ticket Auto-solved';
+
       default:
         return action.replace('_', ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
     }
@@ -200,12 +207,19 @@ const TicketDetail: React.FC = () => {
   const effectiveRole = userRole === 'ADMIN' ? currentView : userRole;
   const isAgent = effectiveRole === 'AGENT' || effectiveRole === 'ADMIN';
 
-  // Check if ticket is solved for more than 48 hours
+  // Check if ticket is closed (either CLOSED status or SOLVED for more than 48 hours)
   const isTicketClosedForReplies = () => {
-    if (ticket.status !== 'SOLVED' || !ticket.solvedAt) return false;
-    const solvedDate = new Date(ticket.solvedAt);
-    const hoursSinceSolved = (Date.now() - solvedDate.getTime()) / (1000 * 60 * 60);
-    return hoursSinceSolved > 48;
+    // If ticket status is CLOSED, it's closed for replies
+    if (ticket.status === 'CLOSED') return true;
+
+    // If ticket is SOLVED for more than 48 hours, it's closed for replies
+    if (ticket.status === 'SOLVED' && ticket.solvedAt) {
+      const solvedDate = new Date(ticket.solvedAt);
+      const hoursSinceSolved = (Date.now() - solvedDate.getTime()) / (1000 * 60 * 60);
+      return hoursSinceSolved > 48;
+    }
+
+    return false;
   };
 
   const ticketClosed = isTicketClosedForReplies();
@@ -278,24 +292,51 @@ const TicketDetail: React.FC = () => {
                     <option value="PENDING">Pending</option>
                     <option value="ON_HOLD">On Hold</option>
                     <option value="SOLVED">Solved</option>
+                    <option value="CLOSED">Closed</option>
                   </select>
                 </>
               )}
             </div>
           </div>
 
-          <h2 className="text-xl text-gray-700 dark:text-gray-300">{ticket.subject}</h2>
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl text-gray-700 dark:text-gray-300">{ticket.subject}</h2>
+
+            {/* Create Follow-up Ticket Button */}
+            {(ticket.status === 'SOLVED' || ticket.status === 'CLOSED') && (
+              <Link
+                to={`/tickets/new?relatedTicketId=${ticket.id}`}
+                className="inline-flex items-center px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors"
+              >
+                <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Create Follow-up Ticket
+              </Link>
+            )}
+          </div>
 
           {/* Closed ticket warning */}
           {ticketClosed && !isAgent && (
-            <div className="mt-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-3">
-              <div className="flex items-center gap-2">
-                <svg className="w-4 h-4 text-orange-600 dark:text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            <div className="mt-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <svg className="w-5 h-5 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
-                <span className="text-sm font-medium text-orange-800 dark:text-orange-300">
-                  This ticket is closed (solved for more than 48 hours)
-                </span>
+                <div className="flex-1">
+                  <h4 className="text-sm font-semibold text-orange-800 dark:text-orange-300 mb-1">
+                    This ticket has been {ticket.status === 'CLOSED' ? 'auto-closed' : 'closed'}
+                  </h4>
+                  <p className="text-sm text-orange-700 dark:text-orange-400 mb-2">
+                    {ticket.status === 'CLOSED'
+                      ? 'This ticket was automatically closed after being solved for more than 48 hours. You cannot add replies to closed tickets.'
+                      : 'This ticket has been solved for more than 48 hours and is closed for replies.'
+                    }
+                  </p>
+                  <p className="text-sm text-orange-700 dark:text-orange-400">
+                    If you need further assistance on the same subject, please create a follow-up ticket using the button above.
+                  </p>
+                </div>
               </div>
             </div>
           )}
@@ -324,6 +365,54 @@ const TicketDetail: React.FC = () => {
               </div>
             )}
           </div>
+
+          {/* Related Ticket Info */}
+          {ticket.relatedTicket && (
+            <div className="mt-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+              <div className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span className="text-sm text-blue-800 dark:text-blue-300">
+                  Created from previous ticket:{' '}
+                  <Link
+                    to={`/tickets/${ticket.relatedTicket.id}`}
+                    className="font-medium underline hover:no-underline"
+                  >
+                    #{ticket.relatedTicket.ticketNumber} - {ticket.relatedTicket.subject}
+                  </Link>
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Follow-up Tickets */}
+          {ticket.followUpTickets && ticket.followUpTickets.length > 0 && (
+            <div className="mt-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-3">
+              <div className="flex items-start gap-2">
+                <svg className="w-4 h-4 text-purple-600 dark:text-purple-400 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div className="flex-1">
+                  <span className="text-sm font-medium text-purple-800 dark:text-purple-300">
+                    Follow-up tickets created from this ticket:
+                  </span>
+                  <ul className="mt-1 space-y-1">
+                    {ticket.followUpTickets.map((followUp: any) => (
+                      <li key={followUp.id}>
+                        <Link
+                          to={`/tickets/${followUp.id}`}
+                          className="text-sm text-purple-700 dark:text-purple-300 hover:underline"
+                        >
+                          #{followUp.ticketNumber} - {followUp.subject} ({followUp.status})
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Form Responses */}
@@ -408,26 +497,29 @@ const TicketDetail: React.FC = () => {
                   </svg>
                   <div>
                     <h4 className="text-sm font-semibold text-orange-800 dark:text-orange-300 mb-1">
-                      This ticket is closed
+                      This ticket is {ticket.status === 'CLOSED' ? 'auto-closed' : 'closed'}
                     </h4>
                     <p className="text-sm text-orange-700 dark:text-orange-400">
-                      This ticket has been solved for more than 48 hours and is now closed. You cannot add replies to closed tickets.
+                      {ticket.status === 'CLOSED'
+                        ? 'This ticket was automatically closed after being solved for more than 48 hours. You cannot add replies to closed tickets.'
+                        : 'This ticket has been solved for more than 48 hours and is now closed. You cannot add replies to closed tickets.'
+                      }
                     </p>
                   </div>
                 </div>
               </div>
               <div className="text-center">
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                  Need further assistance? Create a new ticket.
+                  Need further assistance on the same subject? Create a follow-up ticket.
                 </p>
                 <Link
-                  to="/tickets/new"
+                  to={`/tickets/new?relatedTicketId=${ticket.id}`}
                   className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors"
                 >
                   <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                   </svg>
-                  Create New Ticket
+                  Create Follow-up Ticket
                 </Link>
               </div>
             </div>
