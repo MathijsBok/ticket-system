@@ -7,6 +7,7 @@ import { ticketApi, commentApi, userApi, macroApi } from '../lib/api';
 import { Macro } from '../types';
 import { useView } from '../contexts/ViewContext';
 import Layout from '../components/Layout';
+import RichTextEditor from '../components/RichTextEditor';
 import { format } from 'date-fns';
 
 const TicketDetail: React.FC = () => {
@@ -19,6 +20,7 @@ const TicketDetail: React.FC = () => {
 
   const [replyBody, setReplyBody] = useState('');
   const [isInternal, setIsInternal] = useState(false);
+  const [macroFilter, setMacroFilter] = useState('');
 
   const { data: ticket, isLoading } = useQuery({
     queryKey: ['ticket', id],
@@ -48,6 +50,33 @@ const TicketDetail: React.FC = () => {
     },
     enabled: userRole === 'AGENT' || userRole === 'ADMIN'
   });
+
+  // Replace placeholders in macro content with actual values
+  const replaceMacroPlaceholders = (content: string) => {
+    if (!ticket) return content;
+
+    const requesterName = ticket.requester.firstName || ticket.requester.lastName
+      ? `${ticket.requester.firstName || ''} ${ticket.requester.lastName || ''}`.trim()
+      : ticket.requester.email;
+
+    const agentName = currentUser?.firstName || currentUser?.lastName
+      ? `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim()
+      : currentUser?.email || 'Agent';
+
+    const ticketUrl = `${window.location.origin}/tickets/${ticket.id}`;
+
+    return content
+      .replace(/\{\{userName\}\}/g, requesterName)
+      .replace(/\{\{ticketNumber\}\}/g, ticket.ticketNumber?.toString() || '')
+      .replace(/\{\{ticketSubject\}\}/g, ticket.subject || '')
+      .replace(/\{\{ticketUrl\}\}/g, ticketUrl)
+      .replace(/\{\{agentName\}\}/g, agentName);
+  };
+
+  const handleMacroSelect = (macro: Macro) => {
+    const processedContent = replaceMacroPlaceholders(macro.content);
+    setReplyBody(processedContent);
+  };
 
   const replyMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -99,9 +128,22 @@ const TicketDetail: React.FC = () => {
     }
   });
 
+  // Helper to strip HTML and convert to plain text
+  const htmlToPlainText = (html: string): string => {
+    const temp = document.createElement('div');
+    temp.innerHTML = html;
+    return temp.textContent || temp.innerText || '';
+  };
+
+  // Check if HTML content is effectively empty
+  const isHtmlEmpty = (html: string): boolean => {
+    const plainText = htmlToPlainText(html);
+    return !plainText.trim();
+  };
+
   const handleReply = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!replyBody.trim()) {
+    if (isHtmlEmpty(replyBody)) {
       toast.error('Reply cannot be empty');
       return;
     }
@@ -109,7 +151,7 @@ const TicketDetail: React.FC = () => {
     replyMutation.mutate({
       ticketId: id!,
       body: replyBody,
-      bodyPlain: replyBody,
+      bodyPlain: htmlToPlainText(replyBody),
       isInternal
     });
   };
@@ -354,19 +396,35 @@ const TicketDetail: React.FC = () => {
             </div>
           )}
 
-          <div className="mt-4 flex gap-6 text-sm text-gray-600 dark:text-gray-400">
+          <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm text-gray-600 dark:text-gray-400">
             <div>
               <span className="font-medium">Created:</span> {format(new Date(ticket.createdAt), 'MMM d, yyyy HH:mm')}
             </div>
+            {ticket.updatedAt && ticket.updatedAt !== ticket.createdAt && (
+              <div>
+                <span className="font-medium">Updated:</span> {format(new Date(ticket.updatedAt), 'MMM d, yyyy HH:mm')}
+              </div>
+            )}
+            {ticket.solvedAt && (
+              <div>
+                <span className="font-medium">Solved:</span> {format(new Date(ticket.solvedAt), 'MMM d, yyyy HH:mm')}
+              </div>
+            )}
             <div>
               <span className="font-medium">Priority:</span> <span className="capitalize">{ticket.priority.toLowerCase()}</span>
             </div>
+            {ticket.category && (
+              <div>
+                <span className="font-medium">Category:</span> {ticket.category.name}
+              </div>
+            )}
             <div>
               <span className="font-medium">Requester:</span> {
                 ticket.requester.firstName || ticket.requester.lastName
                   ? `${ticket.requester.firstName || ''} ${ticket.requester.lastName || ''}`.trim()
                   : ticket.requester.email
               }
+              <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">({ticket.requester.email})</span>
             </div>
             {ticket.assignee && (
               <div>
@@ -428,193 +486,290 @@ const TicketDetail: React.FC = () => {
           )}
         </div>
 
-        {/* Form Responses */}
-        {ticket.formResponses && ticket.formResponses.length > 0 && (
-          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-              Form Submission Details
-            </h3>
-            <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {ticket.formResponses.map((response: any) => (
-                <div key={response.id} className="border-b border-gray-200 dark:border-gray-700 pb-3">
-                  <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
-                    {response.field.label}
-                    {response.field.required && <span className="text-red-500 ml-1">*</span>}
-                  </dt>
-                  <dd className="text-sm text-gray-900 dark:text-white break-words">
-                    {response.value || <span className="text-gray-400 dark:text-gray-500">-</span>}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          </div>
-        )}
+        {/* Two-column layout for desktop */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left Column - Form Details, Macros, Activity Log */}
+          <div className="lg:col-span-1 space-y-6">
+            {/* Form Responses */}
+            {ticket.formResponses && ticket.formResponses.length > 0 && (
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                  Form Submission Details
+                </h3>
+                <dl className="space-y-4">
+                  {ticket.formResponses.map((response: any) => (
+                    <div key={response.id} className="border-b border-gray-200 dark:border-gray-700 pb-3 last:border-b-0 last:pb-0">
+                      <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                        {response.field.label}
+                        {response.field.required && <span className="text-red-500 ml-1">*</span>}
+                      </dt>
+                      <dd className="text-sm text-gray-900 dark:text-white break-words">
+                        {response.value || <span className="text-gray-400 dark:text-gray-500">-</span>}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            )}
 
-        {/* Comments/Conversation */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Conversation</h3>
-          <div className="space-y-6">
-            {ticket.comments
-              .filter((comment: any) => isAgent || !comment.isInternal)
-              .reverse()
-              .map((comment: any) => (
-                <div
-                  key={comment.id}
-                  className={`p-4 rounded-lg ${
-                    comment.isInternal
-                      ? 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800'
-                      : 'bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600'
-                  }`}
-                >
-                <div className="flex justify-between items-start mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-gray-900 dark:text-white">
-                      {comment.author.firstName || comment.author.lastName
-                        ? `${comment.author.firstName || ''} ${comment.author.lastName || ''}`.trim()
-                        : comment.author.email}
-                    </span>
-                    {comment.isInternal && (
-                      <span className="px-2 py-0.5 bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 text-xs rounded-full">
-                        Internal
-                      </span>
-                    )}
-                    {comment.isSystem && (
-                      <span className="px-2 py-0.5 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 text-xs rounded-full">
-                        System
-                      </span>
+            {/* Macro selector for agents - Desktop only in left column (not shown for closed tickets) */}
+            {isAgent && macros && macros.length > 0 && !ticketClosed && (
+              <div className="hidden lg:block bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Quick Reply</h3>
+                <div>
+                  <div className="relative mb-2">
+                    <input
+                      type="text"
+                      value={macroFilter}
+                      onChange={(e) => setMacroFilter(e.target.value)}
+                      placeholder="Filter macros..."
+                      className="w-full px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+                    />
+                    {macroFilter && (
+                      <button
+                        type="button"
+                        onClick={() => setMacroFilter('')}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
                     )}
                   </div>
-                  <span className="text-xs text-gray-500 dark:text-gray-400">
-                    {format(new Date(comment.createdAt), 'MMM d, yyyy HH:mm')}
-                  </span>
-                </div>
-                <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-                  {comment.bodyPlain}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Reply form */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Add Reply</h3>
-
-          {/* Show closed message for non-agents when ticket is closed */}
-          {ticketClosed && !isAgent ? (
-            <div className="space-y-4">
-              <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
-                <div className="flex items-start gap-3">
-                  <svg className="w-5 h-5 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-                  <div>
-                    <h4 className="text-sm font-semibold text-orange-800 dark:text-orange-300 mb-1">
-                      This ticket is {ticket.status === 'CLOSED' ? 'auto-closed' : 'closed'}
-                    </h4>
-                    <p className="text-sm text-orange-700 dark:text-orange-400">
-                      {ticket.status === 'CLOSED'
-                        ? 'This ticket was automatically closed after being solved for more than 48 hours. You cannot add replies to closed tickets.'
-                        : 'This ticket has been solved for more than 48 hours and is now closed. You cannot add replies to closed tickets.'
-                      }
-                    </p>
+                  <div className="h-[176px] overflow-y-auto border border-gray-200 dark:border-gray-600 rounded-md">
+                    {macros
+                      .filter(macro =>
+                        !macroFilter ||
+                        macro.name.toLowerCase().includes(macroFilter.toLowerCase()) ||
+                        (macro.category && macro.category.toLowerCase().includes(macroFilter.toLowerCase()))
+                      )
+                      .map((macro, index, filteredArr) => (
+                        <button
+                          key={macro.id}
+                          type="button"
+                          onClick={() => handleMacroSelect(macro)}
+                          className={`w-full text-left px-3 py-2.5 text-sm hover:bg-primary/10 dark:hover:bg-primary/20 transition-colors ${
+                            index !== filteredArr.length - 1 ? 'border-b border-gray-100 dark:border-gray-700' : ''
+                          }`}
+                        >
+                          {macro.category && (
+                            <span className="text-xs text-gray-500 dark:text-gray-400 mr-1">[{macro.category}]</span>
+                          )}
+                          <span className="text-gray-900 dark:text-white">{macro.name}</span>
+                        </button>
+                      ))}
+                    {macros.filter(macro =>
+                      !macroFilter ||
+                      macro.name.toLowerCase().includes(macroFilter.toLowerCase()) ||
+                      (macro.category && macro.category.toLowerCase().includes(macroFilter.toLowerCase()))
+                    ).length === 0 && (
+                      <div className="px-3 py-4 text-sm text-gray-500 dark:text-gray-400 text-center">
+                        No macros found
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
-              {ticket.status === 'CLOSED' && (
-                <div className="text-center">
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                    Need further assistance on the same subject? Create a follow-up ticket.
-                  </p>
-                  <Link
-                    to={`/tickets/new?relatedTicketId=${ticket.id}`}
-                    className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors"
-                  >
-                    <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                    Create Follow-up Ticket
-                  </Link>
+            )}
+
+            {/* Activity Log - Desktop only (agents/admins only) */}
+            {isAgent && ticket.activities && ticket.activities.length > 0 && (
+              <div className="hidden lg:block bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Activity Log</h3>
+                <div className="space-y-3">
+                  {ticket.activities.map((activity: any) => (
+                    <div key={activity.id} className="flex items-start gap-3 text-sm">
+                      <div className="w-2 h-2 mt-1.5 rounded-full bg-primary flex-shrink-0"></div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-gray-700 dark:text-gray-300">
+                          {activity.user && (
+                            <span className="font-medium text-gray-900 dark:text-white">
+                              {activity.user.firstName || activity.user.lastName
+                                ? `${activity.user.firstName || ''} ${activity.user.lastName || ''}`.trim()
+                                : activity.user.email}
+                            </span>
+                          )}
+                          {activity.user ? ' - ' : ''}
+                          {formatActivityMessage(activity.action, activity.details)}
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                          {format(new Date(activity.createdAt), 'MMM d, yyyy HH:mm:ss')}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
+              </div>
+            )}
+          </div>
+
+          {/* Right Column - Conversation and Reply */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Comments/Conversation */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Conversation</h3>
+              <div className="space-y-6">
+                {ticket.comments
+                  .filter((comment: any) => isAgent || !comment.isInternal)
+                  .reverse()
+                  .map((comment: any) => (
+                    <div
+                      key={comment.id}
+                      className={`p-4 rounded-lg ${
+                        comment.isInternal
+                          ? 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800'
+                          : 'bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600'
+                      }`}
+                    >
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-gray-900 dark:text-white">
+                          {comment.author.firstName || comment.author.lastName
+                            ? `${comment.author.firstName || ''} ${comment.author.lastName || ''}`.trim()
+                            : comment.author.email}
+                        </span>
+                        {comment.isInternal && (
+                          <span className="px-2 py-0.5 bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 text-xs rounded-full">
+                            Internal
+                          </span>
+                        )}
+                        {comment.isSystem && (
+                          <span className="px-2 py-0.5 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 text-xs rounded-full">
+                            System
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        {format(new Date(comment.createdAt), 'MMM d, yyyy HH:mm')}
+                      </span>
+                    </div>
+                    <div
+                      className="text-sm text-gray-700 dark:text-gray-300 prose prose-sm dark:prose-invert max-w-none"
+                      dangerouslySetInnerHTML={{ __html: comment.body || comment.bodyPlain }}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Reply form */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Add Reply</h3>
+
+              {/* Show closed message when ticket status is CLOSED (for everyone) or when ticket is closed for replies (for users) */}
+              {ticket.status === 'CLOSED' || (ticketClosed && !isAgent) ? (
+                <div className="space-y-4">
+                  <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <svg className="w-5 h-5 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      <div>
+                        <h4 className="text-sm font-semibold text-orange-800 dark:text-orange-300 mb-1">
+                          This ticket is {ticket.status === 'CLOSED' ? 'closed' : 'closed for replies'}
+                        </h4>
+                        <p className="text-sm text-orange-700 dark:text-orange-400">
+                          {ticket.status === 'CLOSED'
+                            ? 'This ticket has been closed. You cannot add replies to closed tickets.'
+                            : 'This ticket has been solved for more than 48 hours and is now closed for replies.'
+                          }
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  {ticket.status === 'CLOSED' && (
+                    <div className="text-center">
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                        Need further assistance on the same subject? Create a follow-up ticket.
+                      </p>
+                      <Link
+                        to={`/tickets/new?relatedTicketId=${ticket.id}`}
+                        className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors"
+                      >
+                        <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        Create Follow-up Ticket
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <form onSubmit={handleReply} className="space-y-4">
+                  {/* Macro selector for agents - Mobile only (shown inline, not for closed tickets) */}
+                  {isAgent && macros && macros.length > 0 && !ticketClosed && (
+                    <div className="lg:hidden">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Select a Macro
+                      </label>
+                      <div className="max-h-40 overflow-y-auto border border-gray-200 dark:border-gray-600 rounded-md">
+                        {macros.map((macro, index) => (
+                          <button
+                            key={macro.id}
+                            type="button"
+                            onClick={() => handleMacroSelect(macro)}
+                            className={`w-full text-left px-3 py-2.5 text-sm hover:bg-primary/10 dark:hover:bg-primary/20 transition-colors ${
+                              index !== macros.length - 1 ? 'border-b border-gray-100 dark:border-gray-700' : ''
+                            }`}
+                          >
+                            {macro.category && (
+                              <span className="text-xs text-gray-500 dark:text-gray-400 mr-1">[{macro.category}]</span>
+                            )}
+                            <span className="text-gray-900 dark:text-white">{macro.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        Click a macro to fill the reply field.
+                      </p>
+                    </div>
+                  )}
+
+                  <RichTextEditor
+                    value={replyBody}
+                    onChange={setReplyBody}
+                    placeholder={isInternal ? "Type your internal note here..." : "Type your reply here..."}
+                    minHeight="240px"
+                    resizable
+                    isInternal={isInternal}
+                  />
+
+                  <div className="flex justify-between items-center">
+                    {isAgent && (
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={isInternal}
+                          onChange={(e) => setIsInternal(e.target.checked)}
+                          className="rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-primary"
+                        />
+                        <span className="text-sm text-gray-700 dark:text-gray-300">Internal note (not visible to customer)</span>
+                      </label>
+                    )}
+                    <button
+                      type="submit"
+                      disabled={replyMutation.isPending}
+                      className="ml-auto inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {replyMutation.isPending ? 'Sending...' : (isInternal ? 'Send Internal Note' : 'Send Reply')}
+                    </button>
+                  </div>
+                </form>
               )}
             </div>
-          ) : (
-            <form onSubmit={handleReply} className="space-y-4">
-              {/* Macro selector for agents */}
-              {isAgent && macros && macros.length > 0 && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Apply Macro
-                  </label>
-                  <select
-                    onChange={(e) => {
-                      const macro = macros.find(m => m.id === e.target.value);
-                      if (macro) {
-                        setReplyBody(macro.content);
-                      }
-                      e.target.value = '';
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                  >
-                    <option value="">Select a macro to insert...</option>
-                    {macros.map(macro => (
-                      <option key={macro.id} value={macro.id}>
-                        {macro.category ? `[${macro.category}] ` : ''}{macro.name}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    Selecting a macro will replace the reply text. You can edit it before sending.
-                  </p>
-                </div>
-              )}
-
-              <textarea
-                value={replyBody}
-                onChange={(e) => setReplyBody(e.target.value)}
-                rows={5}
-                className={`w-full px-3 py-2 border rounded-md shadow-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent ${
-                  isInternal
-                    ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700'
-                    : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600'
-                }`}
-                placeholder={isInternal ? "Type your internal note here..." : "Type your reply here..."}
-                required
-              />
-
-              <div className="flex justify-between items-center">
-                {isAgent && (
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={isInternal}
-                      onChange={(e) => setIsInternal(e.target.checked)}
-                      className="rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-primary"
-                    />
-                    <span className="text-sm text-gray-700 dark:text-gray-300">Internal note (not visible to customer)</span>
-                  </label>
-                )}
-                <button
-                  type="submit"
-                  disabled={replyMutation.isPending}
-                  className="ml-auto inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {replyMutation.isPending ? 'Sending...' : (isInternal ? 'Send Internal Note' : 'Send Reply')}
-                </button>
-              </div>
-            </form>
-          )}
+          </div>
         </div>
 
-        {/* Activity Log */}
-        {ticket.activities && ticket.activities.length > 0 && (
-          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+        {/* Activity Log - Mobile only (at bottom, agents/admins only) */}
+        {isAgent && ticket.activities && ticket.activities.length > 0 && (
+          <div className="lg:hidden bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Activity Log</h3>
             <div className="space-y-3">
               {ticket.activities.map((activity: any) => (
                 <div key={activity.id} className="flex items-start gap-3 text-sm">
-                  <div className="w-2 h-2 mt-1.5 rounded-full bg-primary"></div>
-                  <div className="flex-1">
+                  <div className="w-2 h-2 mt-1.5 rounded-full bg-primary flex-shrink-0"></div>
+                  <div className="flex-1 min-w-0">
                     <div className="text-gray-700 dark:text-gray-300">
                       {activity.user && (
                         <span className="font-medium text-gray-900 dark:text-white">

@@ -2,8 +2,17 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { macroApi } from '../lib/api';
 import Layout from '../components/Layout';
+import RichTextEditor from '../components/RichTextEditor';
 import toast from 'react-hot-toast';
 import { Macro } from '../types';
+
+const PLACEHOLDERS = [
+  { key: '{{userName}}', description: 'The name of the ticket requester' },
+  { key: '{{ticketNumber}}', description: 'The ticket number (e.g., 12345)' },
+  { key: '{{ticketSubject}}', description: 'The subject line of the ticket' },
+  { key: '{{ticketUrl}}', description: 'Direct link to view the ticket' },
+  { key: '{{agentName}}', description: 'The name of the assigned agent' },
+];
 
 const AdminMacros: React.FC = () => {
   const queryClient = useQueryClient();
@@ -14,6 +23,7 @@ const AdminMacros: React.FC = () => {
     content: '',
     category: ''
   });
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
 
   const { data: macros, isLoading } = useQuery({
     queryKey: ['macros'],
@@ -109,10 +119,31 @@ const AdminMacros: React.FC = () => {
     });
   };
 
+  const insertPlaceholder = (placeholder: string) => {
+    // For rich text editor, we append the placeholder to the content
+    // Remove trailing </p> tag if present to insert before it, or just append
+    let currentContent = formData.content;
+    if (currentContent.endsWith('</p>')) {
+      currentContent = currentContent.slice(0, -4) + placeholder + '</p>';
+    } else if (currentContent === '' || currentContent === '<p><br></p>') {
+      currentContent = `<p>${placeholder}</p>`;
+    } else {
+      currentContent = currentContent + placeholder;
+    }
+    setFormData({ ...formData, content: currentContent });
+  };
+
   // Get unique categories for display
   const categories = macros
-    ? [...new Set(macros.filter(m => m.category).map(m => m.category!))]
+    ? [...new Set(macros.filter(m => m.category).map(m => m.category!))].sort()
     : [];
+
+  // Filter macros by category
+  const filteredMacros = macros?.filter(macro => {
+    if (categoryFilter === 'all') return true;
+    if (categoryFilter === 'uncategorized') return !macro.category;
+    return macro.category === categoryFilter;
+  });
 
   return (
     <Layout>
@@ -184,13 +215,43 @@ const AdminMacros: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Content <span className="text-red-500">*</span>
                 </label>
-                <textarea
-                  value={formData.content}
-                  onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                  placeholder="Enter the macro content here. This text will be inserted into the reply field when an agent selects this macro."
-                  rows={8}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                />
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                  <div className="lg:col-span-2">
+                    <RichTextEditor
+                      value={formData.content}
+                      onChange={(value) => setFormData({ ...formData, content: value })}
+                      placeholder="Enter the macro content here. This text will be inserted into the reply field when an agent selects this macro."
+                      minHeight="200px"
+                    />
+                  </div>
+                  <div className="lg:col-span-1">
+                    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-md border border-gray-200 dark:border-gray-600 p-4">
+                      <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
+                        Available Placeholders
+                      </h4>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                        Click to insert into content
+                      </p>
+                      <div className="space-y-2">
+                        {PLACEHOLDERS.map((placeholder) => (
+                          <button
+                            key={placeholder.key}
+                            type="button"
+                            onClick={() => insertPlaceholder(placeholder.key)}
+                            className="w-full text-left p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors group"
+                          >
+                            <code className="text-xs font-mono text-primary group-hover:text-primary/80">
+                              {placeholder.key}
+                            </code>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                              {placeholder.description}
+                            </p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div className="flex justify-end gap-3">
@@ -217,55 +278,106 @@ const AdminMacros: React.FC = () => {
           </div>
         )}
 
+        {/* Category Tabs */}
+        {!isCreating && macros && macros.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setCategoryFilter('all')}
+              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                categoryFilter === 'all'
+                  ? 'bg-primary text-white'
+                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+              }`}
+            >
+              All ({macros.length})
+            </button>
+            {categories.map((category) => {
+              const count = macros.filter(m => m.category === category).length;
+              return (
+                <button
+                  key={category}
+                  onClick={() => setCategoryFilter(category)}
+                  className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                    categoryFilter === category
+                      ? 'bg-primary text-white'
+                      : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+                  }`}
+                >
+                  {category} ({count})
+                </button>
+              );
+            })}
+            {macros.some(m => !m.category) && (
+              <button
+                onClick={() => setCategoryFilter('uncategorized')}
+                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                  categoryFilter === 'uncategorized'
+                    ? 'bg-primary text-white'
+                    : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+                }`}
+              >
+                Uncategorized ({macros.filter(m => !m.category).length})
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Macros List */}
         {isLoading ? (
           <div className="text-center py-12">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
             <p className="mt-2 text-gray-600 dark:text-gray-400">Loading macros...</p>
           </div>
-        ) : macros && macros.length > 0 ? (
-          <div className="grid gap-4">
-            {macros.map((macro) => (
-              <div
-                key={macro.id}
-                className={`bg-white dark:bg-gray-800 rounded-lg border ${
-                  macro.isActive
-                    ? 'border-gray-200 dark:border-gray-700'
-                    : 'border-gray-200 dark:border-gray-700 opacity-60'
-                } p-4`}
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="text-lg font-medium text-gray-900 dark:text-white truncate">
-                        {macro.name}
-                      </h3>
-                      {macro.category && (
+        ) : filteredMacros && filteredMacros.length > 0 ? (
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div className="divide-y divide-gray-200 dark:divide-gray-700">
+              {filteredMacros.map((macro) => (
+                <div
+                  key={macro.id}
+                  onClick={() => handleEdit(macro)}
+                  className={`flex items-center justify-between px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer ${
+                    !macro.isActive ? 'opacity-60' : ''
+                  }`}
+                >
+                  <div className="flex items-center min-w-0 flex-1">
+                    <div className="w-28 flex-shrink-0">
+                      {macro.category ? (
                         <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
                           {macro.category}
                         </span>
-                      )}
-                      {!macro.isActive && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
-                          Inactive
-                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-400 dark:text-gray-500">—</span>
                       )}
                     </div>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 whitespace-pre-wrap">
-                      {macro.content}
-                    </p>
+                    <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                      {macro.name}
+                    </span>
+                    {!macro.isActive && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 flex-shrink-0 ml-2">
+                        Inactive
+                      </span>
+                    )}
                   </div>
-                  <div className="flex items-center gap-2 ml-4">
+                  <div className="flex items-center gap-1 ml-4 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={() => handleEdit(macro)}
+                      className="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md transition-colors"
+                      title="Edit"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    </button>
                     <button
                       onClick={() => handleToggleActive(macro)}
-                      className={`p-2 rounded-md transition-colors ${
+                      className={`p-1.5 rounded-md transition-colors ${
                         macro.isActive
                           ? 'text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20'
                           : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
                       }`}
                       title={macro.isActive ? 'Deactivate' : 'Activate'}
                     >
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         {macro.isActive ? (
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                         ) : (
@@ -274,27 +386,28 @@ const AdminMacros: React.FC = () => {
                       </svg>
                     </button>
                     <button
-                      onClick={() => handleEdit(macro)}
-                      className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md transition-colors"
-                      title="Edit"
-                    >
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                    </button>
-                    <button
                       onClick={() => handleDelete(macro)}
-                      className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                      className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
                       title="Delete"
                     >
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                       </svg>
                     </button>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+          </div>
+        ) : macros && macros.length > 0 && filteredMacros?.length === 0 ? (
+          <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">No macros in this category</h3>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              Try selecting a different category or create a new macro.
+            </p>
           </div>
         ) : (
           <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">

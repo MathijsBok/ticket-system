@@ -572,7 +572,8 @@ const AdminForms: React.FC = () => {
                     onDragStart={(e) => handleFormDragStart(e, index)}
                     onDragOver={(e) => handleFormDragOver(e, index)}
                     onDragEnd={handleFormDragEnd}
-                    className={`cursor-move transition-all ${
+                    onClick={() => handleEdit(form)}
+                    className={`cursor-pointer transition-all ${
                       draggedFormIndex === index
                         ? 'bg-primary text-primary-foreground scale-105 shadow-lg opacity-100'
                         : 'hover:bg-gray-50 dark:hover:bg-gray-700/50 bg-white dark:bg-gray-800 opacity-100'
@@ -626,23 +627,39 @@ const AdminForms: React.FC = () => {
                     <td className={`px-6 py-4 whitespace-nowrap text-sm ${draggedFormIndex === index ? "text-primary-foreground/80" : "text-gray-500 dark:text-gray-400"}`}>
                       {format(new Date(form.createdAt), 'MMM d, yyyy')}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
-                      <button
-                        onClick={() => handleEdit(form)}
-                        className={draggedFormIndex === index ? "text-primary-foreground hover:text-primary-foreground/80" : "text-primary hover:text-primary-dark dark:hover:text-primary-light"}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (window.confirm('Are you sure you want to delete this form?')) {
-                            deleteMutation.mutate(form.id);
-                          }
-                        }}
-                        className={draggedFormIndex === index ? "text-primary-foreground hover:text-primary-foreground/80" : "text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"}
-                      >
-                        Delete
-                      </button>
+                    <td className="px-6 py-4 whitespace-nowrap text-right" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => handleEdit(form)}
+                          className={`p-1.5 rounded-md transition-colors ${
+                            draggedFormIndex === index
+                              ? "text-primary-foreground hover:bg-primary-foreground/20"
+                              : "text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                          }`}
+                          title="Edit"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (window.confirm('Are you sure you want to delete this form?')) {
+                              deleteMutation.mutate(form.id);
+                            }
+                          }}
+                          className={`p-1.5 rounded-md transition-colors ${
+                            draggedFormIndex === index
+                              ? "text-primary-foreground hover:bg-primary-foreground/20"
+                              : "text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                          }`}
+                          title="Delete"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
