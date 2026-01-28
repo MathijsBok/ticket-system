@@ -183,12 +183,44 @@ async function autoSolvePendingTickets() {
 }
 
 /**
- * Run both automation tasks
+ * Clean up old read notifications (older than 5 days)
+ */
+async function cleanupOldNotifications() {
+  try {
+    const daysThreshold = 5;
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysThreshold);
+
+    console.log(`[Notification Cleanup] Deleting read notifications older than ${cutoffDate.toISOString()}`);
+
+    const result = await prisma.notification.deleteMany({
+      where: {
+        isRead: true,
+        readAt: {
+          lte: cutoffDate
+        }
+      }
+    });
+
+    if (result.count > 0) {
+      console.log(`[Notification Cleanup] Deleted ${result.count} old read notifications`);
+    } else {
+      console.log('[Notification Cleanup] No old notifications to delete');
+    }
+
+  } catch (error) {
+    console.error('[Notification Cleanup] Error cleaning up notifications:', error);
+  }
+}
+
+/**
+ * Run all automation tasks
  */
 async function runTicketAutomation() {
   console.log(`[Ticket Automation] Running at ${new Date().toISOString()}`);
   await autoSolvePendingTickets();
   await autoCloseTickets();
+  await cleanupOldNotifications();
   console.log('[Ticket Automation] Completed');
 }
 

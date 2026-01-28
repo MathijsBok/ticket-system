@@ -26,6 +26,7 @@ import settingsRoutes from './routes/settings';
 import zendeskImportRoutes from './routes/zendesk-import';
 import macroRoutes from './routes/macros';
 import emailTemplateRoutes from './routes/emailTemplates';
+import notificationRoutes from './routes/notifications';
 
 // Import automation jobs
 import { initializeTicketAutomation } from './jobs/ticketAutomation';
@@ -67,6 +68,7 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/zendesk', zendeskImportRoutes);
 app.use('/api/macros', macroRoutes);
 app.use('/api/email-templates', emailTemplateRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Health check
 app.get('/health', (_req, res) => {

@@ -12,7 +12,8 @@ router.post('/',
     body('ticketId').isUUID(),
     body('body').isString().notEmpty(),
     body('bodyPlain').isString().notEmpty(),
-    body('isInternal').optional().isBoolean()
+    body('isInternal').optional().isBoolean(),
+    body('mentionedUserIds').optional().isArray()
   ],
   async (req: AuthRequest, res: Response) => {
     const errors = validationResult(req);
@@ -21,7 +22,7 @@ router.post('/',
     }
 
     try {
-      const { ticketId, body: commentBody, bodyPlain, isInternal } = req.body;
+      const { ticketId, body: commentBody, bodyPlain, isInternal, mentionedUserIds } = req.body;
       const userId = req.userId!;
       const userRole = req.userRole!;
 
@@ -58,6 +59,48 @@ router.post('/',
           }
         }
       });
+
+      // Handle @mentions if provided
+      if (mentionedUserIds && mentionedUserIds.length > 0) {
+        console.log('[Mentions] Received mentionedUserIds:', mentionedUserIds);
+        console.log('[Mentions] Current userId (author):', userId);
+
+        // Filter out invalid UUIDs and the author themselves
+        const validMentionIds = mentionedUserIds.filter(
+          (id: string) => id !== userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+        );
+
+        console.log('[Mentions] Valid mention IDs after filtering:', validMentionIds);
+
+        // Create mentions
+        if (validMentionIds.length > 0) {
+          await prisma.mention.createMany({
+            data: validMentionIds.map((mentionedUserId: string) => ({
+              commentId: comment.id,
+              mentionedUserId
+            })),
+            skipDuplicates: true
+          });
+
+          // Get author name for notification
+          const authorName = comment.author.firstName || comment.author.lastName
+            ? `${comment.author.firstName || ''} ${comment.author.lastName || ''}`.trim()
+            : comment.author.email;
+
+          // Create notifications for mentioned users
+          const notificationResult = await prisma.notification.createMany({
+            data: validMentionIds.map((mentionedUserId: string) => ({
+              userId: mentionedUserId,
+              type: 'MENTION' as const,
+              title: `You were mentioned in ticket #${ticket.ticketNumber}`,
+              message: `${authorName} mentioned you in a comment on "${ticket.subject}"`,
+              ticketId: ticket.id,
+              commentId: comment.id
+            }))
+          });
+          console.log('[Mentions] Created notifications:', notificationResult);
+        }
+      }
 
       // Update ticket timestamps
       const updateData: any = { updatedAt: new Date() };

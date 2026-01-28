@@ -234,3 +234,29 @@ export interface EmailPreview {
   bodyHtml: string;
   bodyPlain: string;
 }
+
+// Notification types
+export type NotificationType = 'MENTION' | 'TICKET_ASSIGNED' | 'TICKET_UPDATED' | 'NEW_REPLY';
+
+// Notification for users
+export interface Notification {
+  id: string;
+  userId: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  ticketId?: string;
+  commentId?: string;
+  isRead: boolean;
+  readAt?: string;
+  createdAt: string;
+}
+
+// Agent for mention autocomplete
+export interface AgentForMention {
+  id: string;
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  role: UserRole;
+}

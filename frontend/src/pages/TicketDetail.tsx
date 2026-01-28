@@ -8,6 +8,7 @@ import { Macro } from '../types';
 import { useView } from '../contexts/ViewContext';
 import Layout from '../components/Layout';
 import RichTextEditor from '../components/RichTextEditor';
+import MentionableRichTextEditor from '../components/MentionableRichTextEditor';
 import { format } from 'date-fns';
 
 // Format form response values (handles Zendesk snake_case values)
@@ -61,6 +62,7 @@ const TicketDetail: React.FC = () => {
   const [isInternal, setIsInternal] = useState(false);
   const [macroFilter, setMacroFilter] = useState('');
   const [showAssignDropdown, setShowAssignDropdown] = useState(false);
+  const [mentionedUserIds, setMentionedUserIds] = useState<string[]>([]);
 
   const { data: ticket, isLoading } = useQuery({
     queryKey: ['ticket', id],
@@ -137,6 +139,7 @@ const TicketDetail: React.FC = () => {
       toast.success('Reply sent successfully');
       setReplyBody('');
       setIsInternal(false);
+      setMentionedUserIds([]);
       queryClient.invalidateQueries({ queryKey: ['ticket', id] });
     },
     onError: () => {
@@ -218,7 +221,8 @@ const TicketDetail: React.FC = () => {
       ticketId: id!,
       body: replyBody,
       bodyPlain: htmlToPlainText(replyBody),
-      isInternal
+      isInternal,
+      mentionedUserIds: mentionedUserIds.length > 0 ? mentionedUserIds : undefined
     });
   };
 
@@ -602,7 +606,7 @@ const TicketDetail: React.FC = () => {
         {/* Two-column layout for desktop */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
           {/* Left Column - Form Details, Macros, Activity Log (sticky on desktop) */}
-          <div className="lg:col-span-1 space-y-6 lg:sticky lg:top-8 lg:max-h-[calc(100vh-4rem)] lg:overflow-y-auto">
+          <div className="lg:col-span-1 space-y-6 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto lg:pb-4">
             {/* Form Responses */}
             {ticket.formResponses && ticket.formResponses.length > 0 && (
               <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
@@ -850,14 +854,26 @@ const TicketDetail: React.FC = () => {
                     </div>
                   )}
 
-                  <RichTextEditor
-                    value={replyBody}
-                    onChange={setReplyBody}
-                    placeholder={isInternal ? "Type your internal note here..." : "Type your reply here..."}
-                    minHeight="240px"
-                    resizable
-                    isInternal={isInternal}
-                  />
+                  {isAgent ? (
+                    <MentionableRichTextEditor
+                      value={replyBody}
+                      onChange={setReplyBody}
+                      onMentionsChange={setMentionedUserIds}
+                      placeholder={isInternal ? "Type your internal note here... (@ to mention)" : "Type your reply here... (@ to mention)"}
+                      minHeight="240px"
+                      resizable
+                      isInternal={isInternal}
+                      enableMentions={true}
+                    />
+                  ) : (
+                    <RichTextEditor
+                      value={replyBody}
+                      onChange={setReplyBody}
+                      placeholder="Type your reply here..."
+                      minHeight="240px"
+                      resizable
+                    />
+                  )}
 
                   <div className="flex justify-between items-center">
                     {isAgent && (

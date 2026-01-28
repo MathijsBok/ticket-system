@@ -59,6 +59,39 @@ router.get('/agents', requireAuth, async (_req: AuthRequest, res: Response) => {
   }
 });
 
+// Search agents for @mention autocomplete
+router.get('/agents/search', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { q } = req.query;
+    const searchQuery = (q as string || '').toLowerCase();
+
+    const agents = await prisma.user.findMany({
+      where: {
+        role: { in: ['AGENT', 'ADMIN'] },
+        OR: searchQuery ? [
+          { firstName: { contains: searchQuery, mode: 'insensitive' } },
+          { lastName: { contains: searchQuery, mode: 'insensitive' } },
+          { email: { contains: searchQuery, mode: 'insensitive' } }
+        ] : undefined
+      },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true
+      },
+      orderBy: { email: 'asc' },
+      take: 10 // Limit results for autocomplete
+    });
+
+    return res.json(agents);
+  } catch (error) {
+    console.error('Error searching agents:', error);
+    return res.status(500).json({ error: 'Failed to search agents' });
+  }
+});
+
 // Get all users (admin only)
 router.get('/', requireAuth, requireAdmin, async (_req: AuthRequest, res: Response) => {
   try {

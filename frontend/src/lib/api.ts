@@ -62,6 +62,7 @@ export const commentApi = {
     body: string;
     bodyPlain: string;
     isInternal?: boolean;
+    mentionedUserIds?: string[];
   }) =>
     api.post('/comments', data),
 
@@ -217,6 +218,9 @@ export const userApi = {
   getAgents: () =>
     api.get('/users/agents'),
 
+  searchAgents: (query: string) =>
+    api.get('/users/agents/search', { params: { q: query } }),
+
   getAll: () =>
     api.get('/users'),
 
@@ -319,4 +323,22 @@ export const emailTemplateApi = {
 
   reset: (id: string) =>
     api.post(`/email-templates/${id}/reset`)
+};
+
+// Notification API
+export const notificationApi = {
+  getAll: () =>
+    api.get('/notifications'),
+
+  getUnreadCount: () =>
+    api.get('/notifications/unread-count'),
+
+  markAsRead: (id: string) =>
+    api.patch(`/notifications/${id}/read`),
+
+  markAllAsRead: () =>
+    api.patch('/notifications/read-all'),
+
+  delete: (id: string) =>
+    api.delete(`/notifications/${id}`)
 };

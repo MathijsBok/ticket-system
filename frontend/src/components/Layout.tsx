@@ -3,6 +3,7 @@ import { useUser, UserButton } from '@clerk/clerk-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { useView } from '../contexts/ViewContext';
 import { Link, useLocation } from 'react-router-dom';
+import NotificationBell from './NotificationBell';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -106,6 +107,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                     <option value="ADMIN">Admin</option>
                   </select>
                 </div>
+              )}
+
+              {/* Notifications bell for agents and admins */}
+              {(userRole === 'AGENT' || userRole === 'ADMIN') && (
+                <NotificationBell />
               )}
 
               {/* Theme toggle */}
