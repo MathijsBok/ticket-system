@@ -54,7 +54,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       nav.push(
         { name: 'Dashboard', href: '/agent' },
         { name: 'Analytics', href: '/admin/analytics' },
-        { name: 'Agent Performance', href: '/admin' },
         { name: 'Forms', href: '/admin/forms' },
         { name: 'Field Library', href: '/admin/fields' },
         { name: 'Macros', href: '/admin/macros' },

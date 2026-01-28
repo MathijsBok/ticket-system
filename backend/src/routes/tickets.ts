@@ -68,7 +68,7 @@ router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
       where: { id },
       include: {
         requester: {
-          select: { id: true, email: true, firstName: true, lastName: true, isBlocked: true, blockedReason: true }
+          select: { id: true, email: true, firstName: true, lastName: true, isBlocked: true, blockedReason: true, timezone: true, timezoneOffset: true }
         },
         assignee: {
           select: { id: true, email: true, firstName: true, lastName: true }

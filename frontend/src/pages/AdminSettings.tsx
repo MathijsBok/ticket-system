@@ -2,11 +2,11 @@ import React, { useState, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { settingsApi, zendeskApi, exportApi, apiKeyApi } from '../lib/api';
+import { settingsApi, zendeskApi, exportApi, apiKeyApi, analyticsApi } from '../lib/api';
 import Layout from '../components/Layout';
 
-type TabType = 'notifications' | 'automation' | 'import' | 'export' | 'api';
-const validTabs: TabType[] = ['notifications', 'automation', 'import', 'export', 'api'];
+type TabType = 'notifications' | 'automation' | 'import' | 'export' | 'api' | 'maintenance';
+const validTabs: TabType[] = ['notifications', 'automation', 'import', 'export', 'api', 'maintenance'];
 
 interface ApiKey {
   id: string;
@@ -64,6 +64,22 @@ const AdminSettings: React.FC = () => {
   const [newKeyFormId, setNewKeyFormId] = useState('');
   const [createdKey, setCreatedKey] = useState<ApiKey | null>(null);
   const [copiedKey, setCopiedKey] = useState(false);
+  // Maintenance state - Countries
+  const [backfillLoading, setBackfillLoading] = useState(false);
+  const [backfillResult, setBackfillResult] = useState<{
+    message: string;
+    updatedCount: number;
+    countryBreakdown: Record<string, number>;
+  } | null>(null);
+  // Maintenance state - Forms
+  const [backfillFormsLoading, setBackfillFormsLoading] = useState(false);
+  const [backfillFormsResult, setBackfillFormsResult] = useState<{
+    message: string;
+    updatedCount: number;
+    formBreakdown: Record<string, number>;
+    skippedNoMatch: number;
+    skippedMultipleForms: number;
+  } | null>(null);
 
   const { data: settings, isLoading } = useQuery({
     queryKey: ['settings'],
@@ -154,6 +170,56 @@ const AdminSettings: React.FC = () => {
     setCopiedKey(true);
     setTimeout(() => setCopiedKey(false), 2000);
     toast.success('API key copied to clipboard');
+  };
+
+  const handleBackfillCountries = async () => {
+    setBackfillLoading(true);
+    setBackfillResult(null);
+    try {
+      const response = await analyticsApi.backfillCountries();
+      setBackfillResult(response.data);
+      if (response.data.updatedCount > 0) {
+        toast.success(`Updated ${response.data.updatedCount} tickets with country data`);
+      } else {
+        toast.success('No tickets needed updating');
+      }
+    } catch (error) {
+      console.error('Failed to backfill countries:', error);
+      toast.error('Failed to backfill countries');
+      setBackfillResult({
+        message: 'Failed to backfill countries. Check console for details.',
+        updatedCount: 0,
+        countryBreakdown: {}
+      });
+    } finally {
+      setBackfillLoading(false);
+    }
+  };
+
+  const handleBackfillForms = async () => {
+    setBackfillFormsLoading(true);
+    setBackfillFormsResult(null);
+    try {
+      const response = await analyticsApi.backfillForms();
+      setBackfillFormsResult(response.data);
+      if (response.data.updatedCount > 0) {
+        toast.success(`Updated ${response.data.updatedCount} tickets with form data`);
+      } else {
+        toast.success('No tickets needed updating');
+      }
+    } catch (error) {
+      console.error('Failed to backfill forms:', error);
+      toast.error('Failed to backfill forms');
+      setBackfillFormsResult({
+        message: 'Failed to backfill forms. Check console for details.',
+        updatedCount: 0,
+        formBreakdown: {},
+        skippedNoMatch: 0,
+        skippedMultipleForms: 0
+      });
+    } finally {
+      setBackfillFormsLoading(false);
+    }
   };
 
   const updateMutation = useMutation({
@@ -385,6 +451,12 @@ const AdminSettings: React.FC = () => {
     { id: 'api' as TabType, label: 'API', icon: (
       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+      </svg>
+    )},
+    { id: 'maintenance' as TabType, label: 'Maintenance', icon: (
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
       </svg>
     )}
   ];
@@ -1479,6 +1551,174 @@ const AdminSettings: React.FC = () => {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Maintenance Tab */}
+          {activeTab === 'maintenance' && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+                  Data Maintenance
+                </h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                  Tools for managing and updating ticket data
+                </p>
+              </div>
+
+              {/* Backfill Ticket Countries */}
+              <div className="p-6 border border-gray-200 dark:border-gray-700 rounded-lg">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
+                        <svg className="w-6 h-6 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      <h3 className="text-md font-medium text-gray-900 dark:text-white">Backfill Ticket Countries</h3>
+                    </div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                      Update tickets without country data based on the requester's timezone setting.
+                      This will map user timezones to their respective countries.
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleBackfillCountries}
+                    disabled={backfillLoading}
+                    className="ml-4 inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {backfillLoading ? (
+                      <>
+                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Run Backfill
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {backfillResult && (
+                  <div className={`mt-4 p-4 rounded-md ${
+                    backfillResult.updatedCount > 0
+                      ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
+                      : 'bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600'
+                  }`}>
+                    <p className={`text-sm font-medium ${
+                      backfillResult.updatedCount > 0
+                        ? 'text-green-800 dark:text-green-300'
+                        : 'text-gray-700 dark:text-gray-300'
+                    }`}>
+                      {backfillResult.message}
+                    </p>
+                    {backfillResult.updatedCount > 0 && Object.keys(backfillResult.countryBreakdown).length > 0 && (
+                      <div className="mt-3">
+                        <p className="text-xs font-semibold text-green-700 dark:text-green-400 mb-2">Countries updated:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {Object.entries(backfillResult.countryBreakdown)
+                            .sort(([, a], [, b]) => b - a)
+                            .map(([country, count]) => (
+                              <span key={country} className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-green-100 dark:bg-green-800/30 text-green-700 dark:text-green-300">
+                                {country}: {count}
+                              </span>
+                            ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Backfill Ticket Forms */}
+              <div className="p-6 border border-gray-200 dark:border-gray-700 rounded-lg">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                        <svg className="w-6 h-6 text-purple-600 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                      </div>
+                      <h3 className="text-md font-medium text-gray-900 dark:text-white">Backfill Ticket Forms</h3>
+                    </div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                      Analyze imported tickets and determine which form was used based on their form responses.
+                      This will set the formId for tickets that have form responses but no form assigned.
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleBackfillForms}
+                    disabled={backfillFormsLoading}
+                    className="ml-4 inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {backfillFormsLoading ? (
+                      <>
+                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Run Backfill
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {backfillFormsResult && (
+                  <div className={`mt-4 p-4 rounded-md ${
+                    backfillFormsResult.updatedCount > 0
+                      ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
+                      : 'bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600'
+                  }`}>
+                    <p className={`text-sm font-medium ${
+                      backfillFormsResult.updatedCount > 0
+                        ? 'text-green-800 dark:text-green-300'
+                        : 'text-gray-700 dark:text-gray-300'
+                    }`}>
+                      {backfillFormsResult.message}
+                    </p>
+                    {backfillFormsResult.updatedCount > 0 && Object.keys(backfillFormsResult.formBreakdown).length > 0 && (
+                      <div className="mt-3">
+                        <p className="text-xs font-semibold text-green-700 dark:text-green-400 mb-2">Forms assigned:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {Object.entries(backfillFormsResult.formBreakdown)
+                            .sort(([, a], [, b]) => b - a)
+                            .map(([form, count]) => (
+                              <span key={form} className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-purple-100 dark:bg-purple-800/30 text-purple-700 dark:text-purple-300">
+                                {form}: {count}
+                              </span>
+                            ))}
+                        </div>
+                      </div>
+                    )}
+                    {(backfillFormsResult.skippedNoMatch > 0 || backfillFormsResult.skippedMultipleForms > 0) && (
+                      <div className="mt-3 text-xs text-gray-600 dark:text-gray-400">
+                        {backfillFormsResult.skippedNoMatch > 0 && (
+                          <p>Skipped (no matching form): {backfillFormsResult.skippedNoMatch}</p>
+                        )}
+                        {backfillFormsResult.skippedMultipleForms > 0 && (
+                          <p>Skipped (ambiguous): {backfillFormsResult.skippedMultipleForms}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

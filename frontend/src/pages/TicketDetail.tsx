@@ -590,10 +590,10 @@ const TicketDetail: React.FC = () => {
           </div>
 
           {/* Device/Environment Information - Only visible to agents/admins */}
-          {isAgent && ticket.userAgent && (
+          {isAgent && (
             <div className="mt-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
               <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
-                {(() => {
+                {ticket.userAgent ? (() => {
                   const deviceInfo = parseUserAgent(ticket.userAgent);
                   return deviceInfo.deviceType === 'Mobile' ? (
                     <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -608,31 +608,40 @@ const TicketDetail: React.FC = () => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                     </svg>
                   );
-                })()}
+                })() : (
+                  <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                )}
                 User Environment
               </h4>
               {(() => {
-                const deviceInfo = parseUserAgent(ticket.userAgent);
+                const deviceInfo = ticket.userAgent ? parseUserAgent(ticket.userAgent) : null;
                 return (
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                     <div>
                       <span className="text-gray-500 dark:text-gray-400 block">Device</span>
-                      <span className="text-gray-900 dark:text-white font-medium">{deviceInfo.deviceType}</span>
+                      <span className="text-gray-900 dark:text-white font-medium">{deviceInfo?.deviceType || 'Unknown'}</span>
                     </div>
                     <div>
                       <span className="text-gray-500 dark:text-gray-400 block">Operating System</span>
-                      <span className="text-gray-900 dark:text-white font-medium">{deviceInfo.os}</span>
+                      <span className="text-gray-900 dark:text-white font-medium">{deviceInfo?.os || 'Unknown'}</span>
                     </div>
                     <div>
                       <span className="text-gray-500 dark:text-gray-400 block">Browser</span>
-                      <span className="text-gray-900 dark:text-white font-medium">{deviceInfo.browser}</span>
+                      <span className="text-gray-900 dark:text-white font-medium">{deviceInfo?.browser || 'Unknown'}</span>
                     </div>
-                    {ticket.country && (
-                      <div>
-                        <span className="text-gray-500 dark:text-gray-400 block">Country</span>
-                        <span className="text-gray-900 dark:text-white font-medium">{ticket.country}</span>
-                      </div>
-                    )}
+                    <div>
+                      <span className="text-gray-500 dark:text-gray-400 block">Country</span>
+                      <span className="text-gray-900 dark:text-white font-medium">
+                        {ticket.country || 'Unknown'}{' '}
+                        {ticket.requester?.timezoneOffset && (
+                          <span className="text-gray-500 dark:text-gray-400">
+                            {ticket.requester.timezoneOffset.replace('GMT', 'UTC')}
+                          </span>
+                        )}
+                      </span>
+                    </div>
                   </div>
                 );
               })()}

@@ -17,6 +17,7 @@ export interface User {
   role: UserRole;
   organizationId?: string;
   timezone?: string;
+  timezoneOffset?: string;
   lastSeenAt?: string;
   isBlocked?: boolean;
   blockedAt?: string;

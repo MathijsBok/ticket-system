@@ -129,7 +129,7 @@ router.get('/ticket-contributions', requireAuth, requireAdmin, async (_req: Auth
 // Get agent performance metrics
 router.get('/agent-performance', requireAuth, requireAdmin, async (_req: AuthRequest, res: Response) => {
   try {
-    // Get all agents
+    // Get all agents and admins
     const agents = await prisma.user.findMany({
       where: {
         OR: [
@@ -149,21 +149,7 @@ router.get('/agent-performance', requireAuth, requireAdmin, async (_req: AuthReq
     // Calculate performance metrics for each agent
     const agentPerformance = await Promise.all(
       agents.map(async (agent) => {
-        // Get all tickets where agent contributed (time or replies)
-        const timeEntries = await prisma.ticketTimeEntry.findMany({
-          where: { agentId: agent.id },
-          include: {
-            ticket: {
-              select: {
-                id: true,
-                ticketNumber: true,
-                status: true,
-                solvedAt: true
-              }
-            }
-          }
-        });
-
+        // Get all comments by this agent (excluding system comments)
         const comments = await prisma.comment.findMany({
           where: {
             authorId: agent.id,
@@ -172,57 +158,70 @@ router.get('/agent-performance', requireAuth, requireAdmin, async (_req: AuthReq
           include: {
             ticket: {
               select: {
-                id: true,
-                ticketNumber: true,
-                status: true,
-                solvedAt: true
+                id: true
               }
             }
           }
         });
 
-        // Calculate total time spent
-        const totalTimeSpent = timeEntries.reduce((sum, entry) => sum + (entry.duration || 0), 0);
-
-        // Calculate total replies
+        // Total replies (each comment counts individually)
         const totalReplies = comments.length;
 
         // Get unique tickets the agent worked on
-        const ticketIds = new Set<string>();
-        timeEntries.forEach(entry => ticketIds.add(entry.ticket.id));
-        comments.forEach(comment => ticketIds.add(comment.ticket.id));
+        const uniqueTicketIds = new Set<string>();
+        comments.forEach(comment => uniqueTicketIds.add(comment.ticket.id));
+        const totalTickets = uniqueTicketIds.size;
 
-        const totalTickets = ticketIds.size;
+        // Calculate average replies per ticket
+        const avgRepliesPerTicket = totalTickets > 0
+          ? (totalReplies / totalTickets).toFixed(1)
+          : '0.0';
 
-        // Calculate tickets where agent had significant contribution (>30%)
-        // For now, we'll count tickets where they replied or spent time
-        const solvedTickets = Array.from(ticketIds).filter(ticketId => {
-          const timeEntry = timeEntries.find(e => e.ticket.id === ticketId);
-          const comment = comments.find(c => c.ticket.id === ticketId);
-          const ticket = timeEntry?.ticket || comment?.ticket;
-          return ticket && ticket.status === 'SOLVED';
-        }).length;
+        // Calculate contribution: average contribution per ticket
+        // For each ticket: (agent's comments) / (total comments on ticket) × 100
+        // Then average across all tickets
+        let contribution = 0;
+        if (totalTickets > 0) {
+          const ticketContributions: number[] = [];
 
-        // Calculate solve rate
-        const solveRate = totalTickets > 0 ? Math.round((solvedTickets / totalTickets) * 100) : 0;
+          for (const ticketId of uniqueTicketIds) {
+            // Count agent's comments on this ticket
+            const agentCommentsOnTicket = comments.filter(c => c.ticket.id === ticketId).length;
 
-        // Calculate average time per ticket
-        const avgTimePerTicket = totalTickets > 0 ? Math.round(totalTimeSpent / totalTickets) : 0;
+            // Count total comments on this ticket (from all users, excluding system)
+            const totalCommentsOnTicket = await prisma.comment.count({
+              where: {
+                ticketId: ticketId,
+                isSystem: false
+              }
+            });
+
+            if (totalCommentsOnTicket > 0) {
+              const ticketContribution = (agentCommentsOnTicket / totalCommentsOnTicket) * 100;
+              ticketContributions.push(ticketContribution);
+            }
+          }
+
+          // Average contribution across all tickets
+          if (ticketContributions.length > 0) {
+            contribution = Math.round(
+              ticketContributions.reduce((sum, c) => sum + c, 0) / ticketContributions.length
+            );
+          }
+        }
 
         return {
           agent,
-          totalTimeSpent,
           totalReplies,
           totalTickets,
-          solvedTickets,
-          solveRate,
-          avgTimePerTicket
+          avgRepliesPerTicket,
+          contribution
         };
       })
     );
 
-    // Sort by total tickets descending
-    agentPerformance.sort((a, b) => b.totalTickets - a.totalTickets);
+    // Sort by total replies descending
+    agentPerformance.sort((a, b) => b.totalReplies - a.totalReplies);
 
     return res.json({
       agents: agentPerformance

@@ -165,6 +165,27 @@ export const analyticsApi = {
   getDashboard: () =>
     api.get('/analytics/dashboard'),
 
+  getSolvedByMonth: (year?: number) =>
+    api.get('/analytics/solved-by-month', {
+      params: { year }
+    }),
+
+  getCountriesByYear: (year?: number) =>
+    api.get('/analytics/countries-by-year', {
+      params: { year }
+    }),
+
+  getFormsByYear: (year?: number) =>
+    api.get('/analytics/forms-by-year', {
+      params: { year }
+    }),
+
+  backfillCountries: () =>
+    api.post('/analytics/backfill-countries'),
+
+  backfillForms: () =>
+    api.post('/analytics/backfill-forms'),
+
   getAgentSessions: (agentId: string, limit?: number) =>
     api.get(`/analytics/agents/${agentId}/sessions`, {
       params: { limit }

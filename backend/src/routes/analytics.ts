@@ -169,6 +169,666 @@ router.get('/agents/:agentId/sessions', requireAuth, requireAdmin, async (req: A
   }
 });
 
+// Get tickets solved per month for a specific year
+router.get('/solved-by-month', requireAuth, requireAdmin, async (req: AuthRequest, res: Response) => {
+  try {
+    const year = parseInt(req.query.year as string) || new Date().getFullYear();
+
+    // Get tickets solved in the specified year grouped by month
+    const solvedByMonth = await prisma.$queryRaw<Array<{ month: number; count: bigint }>>`
+      SELECT
+        EXTRACT(MONTH FROM "solvedAt") as month,
+        COUNT(*) as count
+      FROM "Ticket"
+      WHERE "solvedAt" IS NOT NULL
+        AND EXTRACT(YEAR FROM "solvedAt") = ${year}
+      GROUP BY EXTRACT(MONTH FROM "solvedAt")
+      ORDER BY month ASC
+    `;
+
+    // Get available years for the selector
+    const availableYears = await prisma.$queryRaw<Array<{ year: number }>>`
+      SELECT DISTINCT EXTRACT(YEAR FROM "solvedAt") as year
+      FROM "Ticket"
+      WHERE "solvedAt" IS NOT NULL
+      ORDER BY year DESC
+    `;
+
+    // Create array with all 12 months
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const monthlyData = monthNames.map((name, index) => {
+      const found = solvedByMonth.find((item) => Number(item.month) === index + 1);
+      return {
+        month: index + 1,
+        name,
+        count: found ? Number(found.count) : 0
+      };
+    });
+
+    return res.json({
+      year,
+      data: monthlyData,
+      availableYears: availableYears.map((y) => Number(y.year))
+    });
+  } catch (error) {
+    console.error('Error fetching solved by month:', error);
+    return res.status(500).json({ error: 'Failed to fetch solved by month data' });
+  }
+});
+
+// Timezone to country mapping
+const timezoneToCountry: Record<string, string> = {
+  // Europe - Western
+  'Europe/Amsterdam': 'Netherlands',
+  'Europe/London': 'United Kingdom',
+  'Europe/Paris': 'France',
+  'Europe/Berlin': 'Germany',
+  'Europe/Madrid': 'Spain',
+  'Europe/Rome': 'Italy',
+  'Europe/Brussels': 'Belgium',
+  'Europe/Vienna': 'Austria',
+  'Europe/Zurich': 'Switzerland',
+  'Europe/Luxembourg': 'Luxembourg',
+  'Europe/Monaco': 'Monaco',
+  'Europe/Andorra': 'Andorra',
+  'Europe/San_Marino': 'San Marino',
+  'Europe/Vatican': 'Vatican City',
+  'Europe/Gibraltar': 'Gibraltar',
+  // Europe - Nordic
+  'Europe/Stockholm': 'Sweden',
+  'Europe/Oslo': 'Norway',
+  'Europe/Copenhagen': 'Denmark',
+  'Europe/Helsinki': 'Finland',
+  'Europe/Reykjavik': 'Iceland',
+  'Atlantic/Faroe': 'Faroe Islands',
+  // Europe - Central & Eastern
+  'Europe/Warsaw': 'Poland',
+  'Europe/Prague': 'Czech Republic',
+  'Europe/Budapest': 'Hungary',
+  'Europe/Bratislava': 'Slovakia',
+  'Europe/Ljubljana': 'Slovenia',
+  'Europe/Zagreb': 'Croatia',
+  'Europe/Belgrade': 'Serbia',
+  'Europe/Sarajevo': 'Bosnia and Herzegovina',
+  'Europe/Podgorica': 'Montenegro',
+  'Europe/Skopje': 'North Macedonia',
+  'Europe/Tirana': 'Albania',
+  'Europe/Sofia': 'Bulgaria',
+  'Europe/Bucharest': 'Romania',
+  'Europe/Chisinau': 'Moldova',
+  'Europe/Kiev': 'Ukraine',
+  'Europe/Kyiv': 'Ukraine',
+  'Europe/Minsk': 'Belarus',
+  // Europe - Baltic
+  'Europe/Vilnius': 'Lithuania',
+  'Europe/Riga': 'Latvia',
+  'Europe/Tallinn': 'Estonia',
+  // Europe - Southern
+  'Europe/Athens': 'Greece',
+  'Europe/Lisbon': 'Portugal',
+  'Europe/Dublin': 'Ireland',
+  'Europe/Malta': 'Malta',
+  'Europe/Nicosia': 'Cyprus',
+  // Europe - Russia & Turkey
+  'Europe/Moscow': 'Russia',
+  'Europe/Kaliningrad': 'Russia',
+  'Europe/Samara': 'Russia',
+  'Europe/Istanbul': 'Turkey',
+  // Americas - United States
+  'America/New_York': 'United States',
+  'America/Los_Angeles': 'United States',
+  'America/Chicago': 'United States',
+  'America/Denver': 'United States',
+  'America/Phoenix': 'United States',
+  'America/Anchorage': 'United States',
+  'America/Honolulu': 'United States',
+  'America/Detroit': 'United States',
+  'America/Indiana/Indianapolis': 'United States',
+  'America/Boise': 'United States',
+  'America/Juneau': 'United States',
+  'Pacific/Honolulu': 'United States',
+  // Americas - Canada
+  'America/Toronto': 'Canada',
+  'America/Vancouver': 'Canada',
+  'America/Montreal': 'Canada',
+  'America/Edmonton': 'Canada',
+  'America/Winnipeg': 'Canada',
+  'America/Halifax': 'Canada',
+  'America/St_Johns': 'Canada',
+  'America/Regina': 'Canada',
+  // Americas - Mexico & Central America
+  'America/Mexico_City': 'Mexico',
+  'America/Cancun': 'Mexico',
+  'America/Tijuana': 'Mexico',
+  'America/Monterrey': 'Mexico',
+  'America/Guatemala': 'Guatemala',
+  'America/Belize': 'Belize',
+  'America/El_Salvador': 'El Salvador',
+  'America/Tegucigalpa': 'Honduras',
+  'America/Managua': 'Nicaragua',
+  'America/Costa_Rica': 'Costa Rica',
+  'America/Panama': 'Panama',
+  // Americas - Caribbean
+  'America/Havana': 'Cuba',
+  'America/Jamaica': 'Jamaica',
+  'America/Port-au-Prince': 'Haiti',
+  'America/Santo_Domingo': 'Dominican Republic',
+  'America/Puerto_Rico': 'Puerto Rico',
+  'America/Nassau': 'Bahamas',
+  'America/Barbados': 'Barbados',
+  'America/Trinidad': 'Trinidad and Tobago',
+  'America/Curacao': 'Curacao',
+  'America/Aruba': 'Aruba',
+  'America/Martinique': 'Martinique',
+  'America/Guadeloupe': 'Guadeloupe',
+  // Americas - South America
+  'America/Sao_Paulo': 'Brazil',
+  'America/Rio_Branco': 'Brazil',
+  'America/Manaus': 'Brazil',
+  'America/Fortaleza': 'Brazil',
+  'America/Recife': 'Brazil',
+  'America/Buenos_Aires': 'Argentina',
+  'America/Cordoba': 'Argentina',
+  'America/Mendoza': 'Argentina',
+  'America/Lima': 'Peru',
+  'America/Bogota': 'Colombia',
+  'America/Santiago': 'Chile',
+  'America/Caracas': 'Venezuela',
+  'America/Montevideo': 'Uruguay',
+  'America/Asuncion': 'Paraguay',
+  'America/La_Paz': 'Bolivia',
+  'America/Guayaquil': 'Ecuador',
+  'America/Guyana': 'Guyana',
+  'America/Paramaribo': 'Suriname',
+  'America/Cayenne': 'French Guiana',
+  // Asia - East
+  'Asia/Tokyo': 'Japan',
+  'Asia/Shanghai': 'China',
+  'Asia/Beijing': 'China',
+  'Asia/Chongqing': 'China',
+  'Asia/Hong_Kong': 'Hong Kong',
+  'Asia/Macau': 'Macau',
+  'Asia/Taipei': 'Taiwan',
+  'Asia/Seoul': 'South Korea',
+  'Asia/Pyongyang': 'North Korea',
+  'Asia/Ulaanbaatar': 'Mongolia',
+  // Asia - Southeast
+  'Asia/Singapore': 'Singapore',
+  'Asia/Bangkok': 'Thailand',
+  'Asia/Jakarta': 'Indonesia',
+  'Asia/Makassar': 'Indonesia',
+  'Asia/Jayapura': 'Indonesia',
+  'Asia/Manila': 'Philippines',
+  'Asia/Kuala_Lumpur': 'Malaysia',
+  'Asia/Kuching': 'Malaysia',
+  'Asia/Ho_Chi_Minh': 'Vietnam',
+  'Asia/Hanoi': 'Vietnam',
+  'Asia/Phnom_Penh': 'Cambodia',
+  'Asia/Vientiane': 'Laos',
+  'Asia/Yangon': 'Myanmar',
+  'Asia/Brunei': 'Brunei',
+  'Asia/Dili': 'Timor-Leste',
+  // Asia - South
+  'Asia/Kolkata': 'India',
+  'Asia/Mumbai': 'India',
+  'Asia/Calcutta': 'India',
+  'Asia/Chennai': 'India',
+  'Asia/Dhaka': 'Bangladesh',
+  'Asia/Colombo': 'Sri Lanka',
+  'Asia/Karachi': 'Pakistan',
+  'Asia/Kathmandu': 'Nepal',
+  'Asia/Thimphu': 'Bhutan',
+  'Indian/Maldives': 'Maldives',
+  // Asia - Central
+  'Asia/Almaty': 'Kazakhstan',
+  'Asia/Tashkent': 'Uzbekistan',
+  'Asia/Bishkek': 'Kyrgyzstan',
+  'Asia/Dushanbe': 'Tajikistan',
+  'Asia/Ashgabat': 'Turkmenistan',
+  'Asia/Kabul': 'Afghanistan',
+  // Asia - Middle East
+  'Asia/Dubai': 'United Arab Emirates',
+  'Asia/Riyadh': 'Saudi Arabia',
+  'Asia/Tel_Aviv': 'Israel',
+  'Asia/Jerusalem': 'Israel',
+  'Asia/Beirut': 'Lebanon',
+  'Asia/Damascus': 'Syria',
+  'Asia/Amman': 'Jordan',
+  'Asia/Baghdad': 'Iraq',
+  'Asia/Kuwait': 'Kuwait',
+  'Asia/Qatar': 'Qatar',
+  'Asia/Bahrain': 'Bahrain',
+  'Asia/Muscat': 'Oman',
+  'Asia/Aden': 'Yemen',
+  'Asia/Tehran': 'Iran',
+  'Asia/Baku': 'Azerbaijan',
+  'Asia/Tbilisi': 'Georgia',
+  'Asia/Yerevan': 'Armenia',
+  // Asia - Russia
+  'Asia/Vladivostok': 'Russia',
+  'Asia/Yekaterinburg': 'Russia',
+  'Asia/Novosibirsk': 'Russia',
+  'Asia/Krasnoyarsk': 'Russia',
+  'Asia/Irkutsk': 'Russia',
+  'Asia/Yakutsk': 'Russia',
+  'Asia/Magadan': 'Russia',
+  'Asia/Kamchatka': 'Russia',
+  // Oceania - Australia
+  'Australia/Sydney': 'Australia',
+  'Australia/Melbourne': 'Australia',
+  'Australia/Brisbane': 'Australia',
+  'Australia/Perth': 'Australia',
+  'Australia/Adelaide': 'Australia',
+  'Australia/Darwin': 'Australia',
+  'Australia/Hobart': 'Australia',
+  'Australia/Canberra': 'Australia',
+  // Oceania - Pacific
+  'Pacific/Auckland': 'New Zealand',
+  'Pacific/Wellington': 'New Zealand',
+  'Pacific/Chatham': 'New Zealand',
+  'Pacific/Fiji': 'Fiji',
+  'Pacific/Port_Moresby': 'Papua New Guinea',
+  'Pacific/Guam': 'Guam',
+  'Pacific/Noumea': 'New Caledonia',
+  'Pacific/Tahiti': 'French Polynesia',
+  'Pacific/Samoa': 'Samoa',
+  'Pacific/Tongatapu': 'Tonga',
+  'Pacific/Efate': 'Vanuatu',
+  'Pacific/Tarawa': 'Kiribati',
+  'Pacific/Majuro': 'Marshall Islands',
+  'Pacific/Palau': 'Palau',
+  // Africa - North
+  'Africa/Cairo': 'Egypt',
+  'Africa/Casablanca': 'Morocco',
+  'Africa/Tunis': 'Tunisia',
+  'Africa/Algiers': 'Algeria',
+  'Africa/Tripoli': 'Libya',
+  'Africa/Khartoum': 'Sudan',
+  // Africa - West
+  'Africa/Lagos': 'Nigeria',
+  'Africa/Accra': 'Ghana',
+  'Africa/Abidjan': 'Ivory Coast',
+  'Africa/Dakar': 'Senegal',
+  'Africa/Bamako': 'Mali',
+  'Africa/Ouagadougou': 'Burkina Faso',
+  'Africa/Niamey': 'Niger',
+  'Africa/Conakry': 'Guinea',
+  'Africa/Freetown': 'Sierra Leone',
+  'Africa/Monrovia': 'Liberia',
+  'Africa/Banjul': 'Gambia',
+  'Africa/Nouakchott': 'Mauritania',
+  'Africa/Bissau': 'Guinea-Bissau',
+  'Africa/Lome': 'Togo',
+  'Africa/Porto-Novo': 'Benin',
+  // Africa - East
+  'Africa/Nairobi': 'Kenya',
+  'Africa/Dar_es_Salaam': 'Tanzania',
+  'Africa/Kampala': 'Uganda',
+  'Africa/Addis_Ababa': 'Ethiopia',
+  'Africa/Mogadishu': 'Somalia',
+  'Africa/Djibouti': 'Djibouti',
+  'Africa/Asmara': 'Eritrea',
+  'Indian/Antananarivo': 'Madagascar',
+  'Indian/Mauritius': 'Mauritius',
+  'Indian/Reunion': 'Reunion',
+  'Indian/Mayotte': 'Mayotte',
+  'Indian/Comoro': 'Comoros',
+  // Africa - Central
+  'Africa/Kinshasa': 'Democratic Republic of the Congo',
+  'Africa/Lubumbashi': 'Democratic Republic of the Congo',
+  'Africa/Brazzaville': 'Republic of the Congo',
+  'Africa/Douala': 'Cameroon',
+  'Africa/Libreville': 'Gabon',
+  'Africa/Malabo': 'Equatorial Guinea',
+  'Africa/Bangui': 'Central African Republic',
+  'Africa/Ndjamena': 'Chad',
+  'Africa/Luanda': 'Angola',
+  // Africa - Southern
+  'Africa/Johannesburg': 'South Africa',
+  'Africa/Cape_Town': 'South Africa',
+  'Africa/Harare': 'Zimbabwe',
+  'Africa/Lusaka': 'Zambia',
+  'Africa/Maputo': 'Mozambique',
+  'Africa/Gaborone': 'Botswana',
+  'Africa/Windhoek': 'Namibia',
+  'Africa/Maseru': 'Lesotho',
+  'Africa/Mbabane': 'Eswatini',
+  'Africa/Blantyre': 'Malawi',
+  'Africa/Kigali': 'Rwanda',
+  'Africa/Bujumbura': 'Burundi',
+  // Atlantic
+  'Atlantic/Reykjavik': 'Iceland',
+  'Atlantic/Azores': 'Portugal',
+  'Atlantic/Madeira': 'Portugal',
+  'Atlantic/Canary': 'Spain',
+  'Atlantic/Bermuda': 'Bermuda',
+  'Atlantic/Cape_Verde': 'Cape Verde',
+  // UTC/Generic (can't determine specific country, but commonly used)
+  'Etc/UTC': 'Unknown',
+  'Etc/GMT': 'Unknown',
+  'UTC': 'Unknown'
+};
+
+// Helper function to extract country from timezone
+function getCountryFromTimezone(timezone: string | null): string | null {
+  if (!timezone) return null;
+
+  // Direct match
+  if (timezoneToCountry[timezone]) {
+    return timezoneToCountry[timezone];
+  }
+
+  // Try to match by region (e.g., "Europe/Amsterdam" -> check if starts with "Europe/")
+  const parts = timezone.split('/');
+  if (parts.length >= 2) {
+    // For US timezones like America/Indiana/Indianapolis
+    const baseTimezone = `${parts[0]}/${parts[1]}`;
+    if (timezoneToCountry[baseTimezone]) {
+      return timezoneToCountry[baseTimezone];
+    }
+  }
+
+  return null;
+}
+
+// Backfill ticket countries from user timezone
+// This looks up users by email (not requesterId) to handle imported tickets
+// where requesterId might point to a different user record than the one with timezone data
+router.post('/backfill-countries', requireAuth, requireAdmin, async (_req: AuthRequest, res: Response) => {
+  try {
+    // Get all tickets without country, including requester email
+    const ticketsToUpdate = await prisma.ticket.findMany({
+      where: {
+        country: null
+      },
+      include: {
+        requester: {
+          select: {
+            email: true,
+            timezone: true
+          }
+        }
+      }
+    });
+
+    let updatedCount = 0;
+    let skippedNoEmail = 0;
+    let skippedNoTimezone = 0;
+    let skippedNoCountryMapping = 0;
+    const countryUpdates: Record<string, number> = {};
+    const unmappedTimezones: Set<string> = new Set();
+    const sampleSkippedEmails: string[] = [];
+
+    for (const ticket of ticketsToUpdate) {
+      const requesterEmail = ticket.requester?.email;
+
+      if (!requesterEmail) {
+        skippedNoEmail++;
+        continue;
+      }
+
+      // Look up user by email to find the one with timezone data
+      // This handles cases where imported tickets have requesterId pointing to
+      // a zendesk-import user record, but the actual user (by email) has timezone
+      const userWithTimezone = await prisma.user.findFirst({
+        where: {
+          email: requesterEmail,
+          timezone: { not: null }
+        },
+        select: {
+          timezone: true
+        }
+      });
+
+      if (!userWithTimezone?.timezone) {
+        skippedNoTimezone++;
+        // Keep sample of first 10 emails that have no timezone
+        if (sampleSkippedEmails.length < 10) {
+          sampleSkippedEmails.push(requesterEmail);
+        }
+        continue;
+      }
+
+      const country = getCountryFromTimezone(userWithTimezone.timezone);
+      if (country) {
+        await prisma.ticket.update({
+          where: { id: ticket.id },
+          data: { country }
+        });
+        updatedCount++;
+        countryUpdates[country] = (countryUpdates[country] || 0) + 1;
+      } else {
+        // Timezone exists but couldn't be mapped to a country
+        skippedNoCountryMapping++;
+        unmappedTimezones.add(userWithTimezone.timezone);
+      }
+    }
+
+    return res.json({
+      message: `Updated ${updatedCount} tickets with country data`,
+      totalProcessed: ticketsToUpdate.length,
+      updatedCount,
+      skippedNoEmail,
+      skippedNoTimezone,
+      skippedNoCountryMapping,
+      countryBreakdown: countryUpdates,
+      unmappedTimezones: Array.from(unmappedTimezones),
+      sampleSkippedEmails
+    });
+  } catch (error) {
+    console.error('Error backfilling countries:', error);
+    return res.status(500).json({ error: 'Failed to backfill countries' });
+  }
+});
+
+// Backfill ticket forms based on form responses
+router.post('/backfill-forms', requireAuth, requireAdmin, async (_req: AuthRequest, res: Response) => {
+  try {
+    // Get all tickets without formId that have form responses
+    const ticketsWithoutForm = await prisma.ticket.findMany({
+      where: {
+        formId: null,
+        formResponses: {
+          some: {}
+        }
+      },
+      include: {
+        formResponses: {
+          select: {
+            fieldId: true
+          }
+        }
+      }
+    });
+
+    // Get all form-field mappings to determine which form contains which fields
+    const formFields = await prisma.formField.findMany({
+      include: {
+        form: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
+      }
+    });
+
+    // Create a map of fieldId -> formId (and form name for reporting)
+    const fieldToForm = new Map<string, { formId: string; formName: string }>();
+    for (const ff of formFields) {
+      fieldToForm.set(ff.fieldId, { formId: ff.formId, formName: ff.form.name });
+    }
+
+    let updatedCount = 0;
+    const formUpdates: Record<string, number> = {};
+    const skippedNoMatch: string[] = [];
+    const skippedMultipleForms: string[] = [];
+
+    for (const ticket of ticketsWithoutForm) {
+      // Find all forms that match the fields in this ticket's responses
+      const matchedForms = new Set<string>();
+      const matchedFormNames = new Map<string, string>();
+
+      for (const response of ticket.formResponses) {
+        const formInfo = fieldToForm.get(response.fieldId);
+        if (formInfo) {
+          matchedForms.add(formInfo.formId);
+          matchedFormNames.set(formInfo.formId, formInfo.formName);
+        }
+      }
+
+      if (matchedForms.size === 0) {
+        // No matching form found for this ticket's fields
+        skippedNoMatch.push(`#${ticket.ticketNumber}`);
+        continue;
+      }
+
+      if (matchedForms.size > 1) {
+        // Multiple forms match - pick the one with the most matching fields
+        const formFieldCounts = new Map<string, number>();
+        for (const response of ticket.formResponses) {
+          const formInfo = fieldToForm.get(response.fieldId);
+          if (formInfo) {
+            formFieldCounts.set(formInfo.formId, (formFieldCounts.get(formInfo.formId) || 0) + 1);
+          }
+        }
+
+        // Find form with most matches
+        let bestFormId = '';
+        let bestCount = 0;
+        for (const [formId, count] of formFieldCounts) {
+          if (count > bestCount) {
+            bestCount = count;
+            bestFormId = formId;
+          }
+        }
+
+        if (bestFormId) {
+          await prisma.ticket.update({
+            where: { id: ticket.id },
+            data: { formId: bestFormId }
+          });
+          const formName = matchedFormNames.get(bestFormId) || 'Unknown';
+          formUpdates[formName] = (formUpdates[formName] || 0) + 1;
+          updatedCount++;
+        } else {
+          skippedMultipleForms.push(`#${ticket.ticketNumber}`);
+        }
+        continue;
+      }
+
+      // Exactly one form matches
+      const formId = Array.from(matchedForms)[0];
+      await prisma.ticket.update({
+        where: { id: ticket.id },
+        data: { formId }
+      });
+      const formName = matchedFormNames.get(formId) || 'Unknown';
+      formUpdates[formName] = (formUpdates[formName] || 0) + 1;
+      updatedCount++;
+    }
+
+    return res.json({
+      message: `Updated ${updatedCount} tickets with form data`,
+      totalProcessed: ticketsWithoutForm.length,
+      updatedCount,
+      formBreakdown: formUpdates,
+      skippedNoMatch: skippedNoMatch.length,
+      skippedMultipleForms: skippedMultipleForms.length
+    });
+  } catch (error) {
+    console.error('Error backfilling forms:', error);
+    return res.status(500).json({ error: 'Failed to backfill forms' });
+  }
+});
+
+// Get tickets by country per year
+router.get('/countries-by-year', requireAuth, requireAdmin, async (req: AuthRequest, res: Response) => {
+  try {
+    const year = parseInt(req.query.year as string) || new Date().getFullYear();
+
+    // Get tickets by country for the specified year
+    const ticketsByCountry = await prisma.$queryRaw<Array<{ country: string; count: bigint }>>`
+      SELECT
+        COALESCE(country, 'Unknown') as country,
+        COUNT(*) as count
+      FROM "Ticket"
+      WHERE EXTRACT(YEAR FROM "createdAt") = ${year}
+        AND country IS NOT NULL
+      GROUP BY country
+      ORDER BY count DESC
+      LIMIT 15
+    `;
+
+    // Get available years (only from 2023 onwards as per user request)
+    const availableYears = await prisma.$queryRaw<Array<{ year: number }>>`
+      SELECT DISTINCT EXTRACT(YEAR FROM "createdAt") as year
+      FROM "Ticket"
+      WHERE EXTRACT(YEAR FROM "createdAt") >= 2023
+      ORDER BY year DESC
+    `;
+
+    const countryData = ticketsByCountry.map((item) => ({
+      name: item.country,
+      count: Number(item.count)
+    }));
+
+    return res.json({
+      year,
+      data: countryData,
+      availableYears: availableYears.map((y) => Number(y.year))
+    });
+  } catch (error) {
+    console.error('Error fetching countries by year:', error);
+    return res.status(500).json({ error: 'Failed to fetch countries by year data' });
+  }
+});
+
+// Get tickets by form per year
+router.get('/forms-by-year', requireAuth, requireAdmin, async (req: AuthRequest, res: Response) => {
+  try {
+    const year = parseInt(req.query.year as string) || new Date().getFullYear();
+
+    // Get tickets by form for the specified year
+    const ticketsByForm = await prisma.$queryRaw<Array<{ formId: string; name: string; count: bigint }>>`
+      SELECT
+        t."formId",
+        f.name,
+        COUNT(*) as count
+      FROM "Ticket" t
+      JOIN "Form" f ON t."formId" = f.id
+      WHERE EXTRACT(YEAR FROM t."createdAt") = ${year}
+        AND t."formId" IS NOT NULL
+      GROUP BY t."formId", f.name
+      ORDER BY count DESC
+      LIMIT 10
+    `;
+
+    // Get available years (only from 2023 onwards)
+    const availableYears = await prisma.$queryRaw<Array<{ year: number }>>`
+      SELECT DISTINCT EXTRACT(YEAR FROM "createdAt") as year
+      FROM "Ticket"
+      WHERE EXTRACT(YEAR FROM "createdAt") >= 2023
+        AND "formId" IS NOT NULL
+      ORDER BY year DESC
+    `;
+
+    const formData = ticketsByForm.map((item) => ({
+      name: item.name,
+      count: Number(item.count)
+    }));
+
+    return res.json({
+      year,
+      data: formData,
+      availableYears: availableYears.map((y) => Number(y.year))
+    });
+  } catch (error) {
+    console.error('Error fetching forms by year:', error);
+    return res.status(500).json({ error: 'Failed to fetch forms by year data' });
+  }
+});
+
 // Get dashboard analytics with detailed charts data (admin only)
 router.get('/dashboard', requireAuth, requireAdmin, async (_req: AuthRequest, res: Response) => {
   try {
@@ -176,6 +836,7 @@ router.get('/dashboard', requireAuth, requireAdmin, async (_req: AuthRequest, re
       totalTickets,
       openTickets,
       solvedTickets,
+      totalUsers,
       ticketsByStatus,
       ticketsByPriority,
       ticketsByCountry,
@@ -184,7 +845,7 @@ router.get('/dashboard', requireAuth, requireAdmin, async (_req: AuthRequest, re
       ticketTrend,
       ticketsByAgent,
       ticketsByCategory,
-      avgResolutionTime,
+      _avgResolutionTime,
       totalComments,
       hourlyDistribution,
       weekdayDistribution,
@@ -198,8 +859,11 @@ router.get('/dashboard', requireAuth, requireAdmin, async (_req: AuthRequest, re
         where: { status: { in: ['NEW', 'OPEN', 'PENDING', 'ON_HOLD'] } }
       }),
 
-      // Solved tickets
-      prisma.ticket.count({ where: { status: 'SOLVED' } }),
+      // Solved tickets (SOLVED or CLOSED)
+      prisma.ticket.count({ where: { status: { in: ['SOLVED', 'CLOSED'] } } }),
+
+      // Total users
+      prisma.user.count(),
 
       // Tickets by status
       prisma.ticket.groupBy({
@@ -234,15 +898,35 @@ router.get('/dashboard', requireAuth, requireAdmin, async (_req: AuthRequest, re
       }),
 
       // Ticket trend (last 30 days, grouped by day)
+      // Uses a CTE to get both created and solved counts per day
       prisma.$queryRaw`
+        WITH dates AS (
+          SELECT generate_series(
+            (NOW() - INTERVAL '30 days')::date,
+            NOW()::date,
+            '1 day'::interval
+          )::date AS date
+        ),
+        created AS (
+          SELECT DATE("createdAt") as date, COUNT(*) as count
+          FROM "Ticket"
+          WHERE "createdAt" >= NOW() - INTERVAL '30 days'
+          GROUP BY DATE("createdAt")
+        ),
+        solved AS (
+          SELECT DATE("solvedAt") as date, COUNT(*) as count
+          FROM "Ticket"
+          WHERE "solvedAt" >= NOW() - INTERVAL '30 days'
+          GROUP BY DATE("solvedAt")
+        )
         SELECT
-          DATE("createdAt") as date,
-          COUNT(*) as count,
-          COUNT(CASE WHEN status = 'SOLVED' THEN 1 END) as solved
-        FROM "Ticket"
-        WHERE "createdAt" >= NOW() - INTERVAL '30 days'
-        GROUP BY DATE("createdAt")
-        ORDER BY date ASC
+          d.date,
+          COALESCE(c.count, 0) as count,
+          COALESCE(s.count, 0) as solved
+        FROM dates d
+        LEFT JOIN created c ON d.date = c.date
+        LEFT JOIN solved s ON d.date = s.date
+        ORDER BY d.date ASC
       `,
 
       // Tickets by agent (assigned tickets)
@@ -395,11 +1079,6 @@ router.get('/dashboard', requireAuth, requireAdmin, async (_req: AuthRequest, re
     );
     const categoryData = categoryDataWithNames.filter(Boolean);
 
-    // Calculate average resolution time in hours
-    const avgResolutionHours = avgResolutionTime[0]?.avg_hours
-      ? Math.round(parseFloat(avgResolutionTime[0].avg_hours.toString()))
-      : 0;
-
     // Calculate average comments per ticket
     const avgCommentsPerTicket = totalTickets > 0 ? (totalComments / totalTickets).toFixed(1) : '0';
 
@@ -457,7 +1136,7 @@ router.get('/dashboard', requireAuth, requireAdmin, async (_req: AuthRequest, re
         totalTickets,
         openTickets,
         solvedTickets,
-        avgResolutionTime: avgResolutionHours,
+        totalUsers,
         solveRate: totalTickets > 0 ? ((solvedTickets / totalTickets) * 100).toFixed(1) : '0',
         totalComments,
         avgCommentsPerTicket,
@@ -480,6 +1159,91 @@ router.get('/dashboard', requireAuth, requireAdmin, async (_req: AuthRequest, re
   } catch (error) {
     console.error('Error fetching dashboard analytics:', error);
     return res.status(500).json({ error: 'Failed to fetch dashboard analytics' });
+  }
+});
+
+// Debug endpoint to investigate a specific ticket's country data issue
+router.get('/debug-ticket/:ticketNumber', requireAuth, requireAdmin, async (req: AuthRequest, res: Response) => {
+  try {
+    const ticketNumber = parseInt(req.params.ticketNumber);
+
+    // Get the ticket with requester info
+    const ticket = await prisma.ticket.findFirst({
+      where: { ticketNumber },
+      include: {
+        requester: {
+          select: {
+            id: true,
+            email: true,
+            timezone: true,
+            clerkId: true
+          }
+        }
+      }
+    });
+
+    if (!ticket) {
+      return res.status(404).json({ error: 'Ticket not found' });
+    }
+
+    // Look up ALL users with the same email as the requester
+    const usersWithSameEmail = ticket.requester?.email
+      ? await prisma.user.findMany({
+          where: { email: ticket.requester.email },
+          select: {
+            id: true,
+            email: true,
+            timezone: true,
+            clerkId: true
+          }
+        })
+      : [];
+
+    // Check if any user with this email has timezone
+    const userWithTimezone = ticket.requester?.email
+      ? await prisma.user.findFirst({
+          where: {
+            email: ticket.requester.email,
+            timezone: { not: null }
+          },
+          select: {
+            id: true,
+            email: true,
+            timezone: true,
+            clerkId: true
+          }
+        })
+      : null;
+
+    // Map timezone to country if available
+    const mappedCountry = userWithTimezone?.timezone
+      ? getCountryFromTimezone(userWithTimezone.timezone)
+      : null;
+
+    return res.json({
+      ticket: {
+        id: ticket.id,
+        ticketNumber: ticket.ticketNumber,
+        country: ticket.country,
+        requesterId: ticket.requesterId
+      },
+      requesterFromRelation: ticket.requester,
+      allUsersWithSameEmail: usersWithSameEmail,
+      userWithTimezone,
+      mappedCountry,
+      issue: ticket.country
+        ? 'Ticket already has country set'
+        : !ticket.requester?.email
+        ? 'Ticket has no requester email'
+        : !userWithTimezone
+        ? 'No user with this email has timezone set'
+        : !mappedCountry
+        ? `Timezone "${userWithTimezone.timezone}" could not be mapped to a country`
+        : 'Should be able to update country - run backfill again'
+    });
+  } catch (error) {
+    console.error('Error debugging ticket:', error);
+    return res.status(500).json({ error: 'Failed to debug ticket' });
   }
 });
 

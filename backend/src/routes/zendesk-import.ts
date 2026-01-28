@@ -531,7 +531,7 @@ interface ZendeskUserImport {
   iana_time_zone?: string;
 }
 
-// Convert IANA timezone to UTC offset string
+// Convert IANA timezone to UTC offset string (e.g., "Europe/Amsterdam" -> "GMT+1")
 const getTimezoneOffset = (ianaTimezone?: string): string | null => {
   if (!ianaTimezone) return null;
 
@@ -543,9 +543,9 @@ const getTimezoneOffset = (ianaTimezone?: string): string | null => {
     });
     const parts = formatter.formatToParts(now);
     const offsetPart = parts.find(p => p.type === 'timeZoneName');
-    return offsetPart?.value || ianaTimezone;
+    return offsetPart?.value || null;
   } catch {
-    return ianaTimezone; // Return original if conversion fails
+    return null;
   }
 };
 
@@ -623,8 +623,9 @@ router.post('/import-users', requireAuth, requireAdmin, upload.single('file'), a
         // Parse name into first and last
         const { firstName, lastName } = parseName(zendeskUser.name);
 
-        // Get timezone with UTC offset
-        const timezone = getTimezoneOffset(zendeskUser.iana_time_zone);
+        // Store IANA timezone (e.g., "Europe/Amsterdam") and UTC offset (e.g., "GMT+1")
+        const timezone = zendeskUser.iana_time_zone || null;
+        const timezoneOffset = getTimezoneOffset(zendeskUser.iana_time_zone);
 
         // Check if user already exists by email
         const existingUser = await prisma.user.findUnique({
@@ -632,13 +633,14 @@ router.post('/import-users', requireAuth, requireAdmin, upload.single('file'), a
         });
 
         if (existingUser) {
-          // Update existing user - only fill in missing fields
+          // Update existing user - fill in missing fields, always overwrite timezone
           await prisma.user.update({
             where: { email: zendeskUser.email },
             data: {
               firstName: existingUser.firstName || firstName,
               lastName: existingUser.lastName || lastName,
-              timezone: existingUser.timezone || timezone,
+              timezone: timezone || existingUser.timezone,
+              timezoneOffset: timezoneOffset || existingUser.timezoneOffset,
               lastSeenAt: existingUser.lastSeenAt || (zendeskUser.last_login_at ? new Date(zendeskUser.last_login_at) : undefined)
             }
           });
@@ -653,13 +655,14 @@ router.post('/import-users', requireAuth, requireAdmin, upload.single('file'), a
         });
 
         if (existingImportedUser) {
-          // Update existing imported user - only fill in missing fields
+          // Update existing imported user - fill in missing fields, always overwrite timezone
           await prisma.user.update({
             where: { clerkId: importClerkId },
             data: {
               firstName: existingImportedUser.firstName || firstName,
               lastName: existingImportedUser.lastName || lastName,
-              timezone: existingImportedUser.timezone || timezone,
+              timezone: timezone || existingImportedUser.timezone,
+              timezoneOffset: timezoneOffset || existingImportedUser.timezoneOffset,
               lastSeenAt: existingImportedUser.lastSeenAt || (zendeskUser.last_login_at ? new Date(zendeskUser.last_login_at) : undefined)
             }
           });
@@ -676,6 +679,7 @@ router.post('/import-users', requireAuth, requireAdmin, upload.single('file'), a
             lastName,
             role: mapUserRole(zendeskUser.role),
             timezone,
+            timezoneOffset,
             lastSeenAt: zendeskUser.last_login_at ? new Date(zendeskUser.last_login_at) : undefined,
             createdAt: zendeskUser.created_at ? new Date(zendeskUser.created_at) : undefined
           }

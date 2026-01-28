@@ -100,12 +100,6 @@ const AdminDashboard: React.FC = () => {
     }
   });
 
-  const formatDuration = (seconds: number) => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    return `${hours}h ${minutes}m`;
-  };
-
   return (
     <Layout>
       <div className="space-y-6">
@@ -113,7 +107,7 @@ const AdminDashboard: React.FC = () => {
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Admin Dashboard</h1>
           <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-            Detailed agent contributions and solve rates based on time and replies
+            Agent performance metrics based on ticket replies and contributions
           </p>
         </div>
 
@@ -127,8 +121,17 @@ const AdminDashboard: React.FC = () => {
             </div>
             <div>
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Agent Performance & Contributions</h2>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Detailed metrics based on time tracking and replies</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Metrics based on ticket replies</p>
             </div>
+          </div>
+
+          {/* Calculation Explanation */}
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
+            <h3 className="text-sm font-semibold text-blue-800 dark:text-blue-300 mb-2">How Contribution is calculated</h3>
+            <p className="text-sm text-blue-700 dark:text-blue-400">
+              For each ticket the agent replied to, we calculate: (Agent's replies on ticket / Total replies on ticket) × 100.
+              The Contribution % is the average of this across all tickets the agent touched.
+            </p>
           </div>
 
           {loadingPerformance && (
@@ -151,19 +154,13 @@ const AdminDashboard: React.FC = () => {
                         Total Tickets
                       </th>
                       <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                        Solved Tickets
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                        Solve Rate
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                        Total Time Spent
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                        Avg Time/Ticket
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
                         Total Replies
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                        Avg Replies/Ticket
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                        Contribution
                       </th>
                     </tr>
                   </thead>
@@ -187,12 +184,17 @@ const AdminDashboard: React.FC = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className="inline-flex items-center px-3 py-1 rounded-md text-sm font-semibold bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
-                            {perf.totalTickets}
+                            {perf.totalTickets.toLocaleString()}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="inline-flex items-center px-3 py-1 rounded-md text-sm font-semibold bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300">
-                            {perf.solvedTickets}
+                          <span className="inline-flex items-center px-3 py-1 rounded-md text-sm font-semibold bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
+                            {perf.totalReplies.toLocaleString()}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="inline-flex items-center px-3 py-1 rounded-md text-sm font-semibold bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300">
+                            {perf.avgRepliesPerTicket}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -200,28 +202,13 @@ const AdminDashboard: React.FC = () => {
                             <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2 w-24">
                               <div
                                 className="bg-gradient-to-r from-green-500 to-emerald-500 h-2 rounded-full transition-all duration-500"
-                                style={{ width: `${perf.solveRate}%` }}
+                                style={{ width: `${perf.contribution}%` }}
                               ></div>
                             </div>
                             <span className="text-sm font-bold text-gray-900 dark:text-white min-w-[3rem] text-right">
-                              {perf.solveRate}%
+                              {perf.contribution}%
                             </span>
                           </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="inline-flex items-center px-3 py-1 rounded-md text-sm font-semibold bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
-                            {formatDuration(perf.totalTimeSpent)}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="inline-flex items-center px-3 py-1 rounded-md text-sm font-semibold bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300">
-                            {formatDuration(perf.avgTimePerTicket)}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="inline-flex items-center px-3 py-1 rounded-md text-sm font-semibold bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300">
-                            {perf.totalReplies}
-                          </span>
                         </td>
                       </tr>
                     ))}
@@ -239,7 +226,7 @@ const AdminDashboard: React.FC = () => {
                 </svg>
               </div>
               <p className="text-gray-600 dark:text-gray-400 font-medium">No agent performance data available</p>
-              <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">Performance metrics will appear when agents start tracking time</p>
+              <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">Performance metrics will appear when agents reply to tickets</p>
             </div>
           )}
         </div>

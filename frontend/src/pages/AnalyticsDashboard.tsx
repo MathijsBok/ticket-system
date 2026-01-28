@@ -1,14 +1,29 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { analyticsApi } from '../lib/api';
+import { analyticsApi, adminAnalyticsApi } from '../lib/api';
 import Layout from '../components/Layout';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, LineChart, Line, XAxis, YAxis, CartesianGrid, BarChart, Bar, TooltipProps } from 'recharts';
+
+// Format label - handles ISO dates and other formats
+const formatLabel = (label: any): string => {
+  if (!label) return '';
+  const str = String(label);
+  // Check if it looks like an ISO date (e.g., "2026-01-14T00:00:00.000Z" or "2026-01-14")
+  if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+    const date = new Date(str);
+    if (!isNaN(date.getTime())) {
+      return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    }
+  }
+  return str;
+};
 
 // Custom Tooltip Component with proper dark mode support
 const CustomTooltip: React.FC<TooltipProps<any, any>> = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
     // Detect dark mode by checking if html element has 'dark' class
     const isDarkMode = document.documentElement.classList.contains('dark');
+    const formattedLabel = formatLabel(label);
 
     return (
       <div
@@ -20,9 +35,9 @@ const CustomTooltip: React.FC<TooltipProps<any, any>> = ({ active, payload, labe
           backdropFilter: 'blur(8px)'
         }}
       >
-        {label && (
+        {formattedLabel && (
           <p className="text-sm font-semibold mb-2 text-gray-900 dark:text-white">
-            {label}
+            {formattedLabel}
           </p>
         )}
         {payload.map((entry: any, index: number) => (
@@ -46,6 +61,10 @@ const CustomTooltip: React.FC<TooltipProps<any, any>> = ({ active, payload, labe
 };
 
 const AnalyticsDashboard: React.FC = () => {
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  const [countryYear, setCountryYear] = useState<number>(new Date().getFullYear());
+  const [formYear, setFormYear] = useState<number>(new Date().getFullYear());
+
   const { data: dashboardData, isLoading, error } = useQuery({
     queryKey: ['dashboardAnalytics'],
     queryFn: async () => {
@@ -55,15 +74,43 @@ const AnalyticsDashboard: React.FC = () => {
     refetchInterval: 60000 // Refresh every minute
   });
 
-  // Color schemes for different charts
-  const STATUS_COLORS = {
-    NEW: '#3B82F6',      // Blue
-    OPEN: '#10B981',     // Green
-    PENDING: '#F59E0B',  // Yellow
-    ON_HOLD: '#F97316',  // Orange
-    SOLVED: '#8B5CF6'    // Purple
-  };
+  const { data: agentPerformanceData } = useQuery({
+    queryKey: ['agentPerformance'],
+    queryFn: async () => {
+      const response = await adminAnalyticsApi.getAgentPerformance();
+      return response.data;
+    },
+    refetchInterval: 60000
+  });
 
+  const { data: solvedByMonthData } = useQuery({
+    queryKey: ['solvedByMonth', selectedYear],
+    queryFn: async () => {
+      const response = await analyticsApi.getSolvedByMonth(selectedYear);
+      return response.data;
+    },
+    refetchInterval: 60000
+  });
+
+  const { data: countriesByYearData } = useQuery({
+    queryKey: ['countriesByYear', countryYear],
+    queryFn: async () => {
+      const response = await analyticsApi.getCountriesByYear(countryYear);
+      return response.data;
+    },
+    refetchInterval: 60000
+  });
+
+  const { data: formsByYearData } = useQuery({
+    queryKey: ['formsByYear', formYear],
+    queryFn: async () => {
+      const response = await analyticsApi.getFormsByYear(formYear);
+      return response.data;
+    },
+    refetchInterval: 60000
+  });
+
+  // Color schemes for different charts
   const PRIORITY_COLORS = {
     LOW: '#10B981',      // Green
     NORMAL: '#3B82F6',   // Blue
@@ -148,180 +195,165 @@ const AnalyticsDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Overview Cards with hover effects */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="group relative overflow-hidden bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
+        {/* Overview Cards with hover effects - Compact */}
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-4">
+          <div className="group relative overflow-hidden bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
             <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            <div className="relative p-6 text-white">
-              <div className="flex items-center justify-between mb-4">
-                <div className="bg-white/20 backdrop-blur-sm rounded-xl p-3">
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="relative p-4 text-white">
+              <div className="flex items-center justify-between mb-2">
+                <div className="bg-white/20 backdrop-blur-sm rounded-lg p-2">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
                 </div>
-                <div className="text-xs font-medium text-blue-100">↗ 12%</div>
               </div>
-              <p className="text-sm font-medium text-blue-100 mb-1">Total Tickets</p>
-              <p className="text-4xl font-bold">{overview.totalTickets}</p>
+              <p className="text-xs font-medium text-blue-100 mb-0.5">Total Tickets</p>
+              <p className="text-2xl font-bold">{overview.totalTickets?.toLocaleString()}</p>
             </div>
           </div>
 
-          <div className="group relative overflow-hidden bg-gradient-to-br from-green-500 to-green-600 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
+          <div className="group relative overflow-hidden bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
             <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            <div className="relative p-6 text-white">
-              <div className="flex items-center justify-between mb-4">
-                <div className="bg-white/20 backdrop-blur-sm rounded-xl p-3">
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="relative p-4 text-white">
+              <div className="flex items-center justify-between mb-2">
+                <div className="bg-white/20 backdrop-blur-sm rounded-lg p-2">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                   </svg>
                 </div>
-                <div className="text-xs font-medium text-green-100">Active</div>
               </div>
-              <p className="text-sm font-medium text-green-100 mb-1">Open Tickets</p>
-              <p className="text-4xl font-bold">{overview.openTickets}</p>
+              <p className="text-xs font-medium text-green-100 mb-0.5">Open Tickets</p>
+              <p className="text-2xl font-bold">{overview.openTickets?.toLocaleString()}</p>
             </div>
           </div>
 
-          <div className="group relative overflow-hidden bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
+          <div className="group relative overflow-hidden bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
             <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            <div className="relative p-6 text-white">
-              <div className="flex items-center justify-between mb-4">
-                <div className="bg-white/20 backdrop-blur-sm rounded-xl p-3">
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="relative p-4 text-white">
+              <div className="flex items-center justify-between mb-2">
+                <div className="bg-white/20 backdrop-blur-sm rounded-lg p-2">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
-                <div className="text-xs font-medium text-purple-100">✓ Done</div>
               </div>
-              <p className="text-sm font-medium text-purple-100 mb-1">Solved Tickets</p>
-              <p className="text-4xl font-bold">{overview.solvedTickets}</p>
+              <p className="text-xs font-medium text-purple-100 mb-0.5">Solved Tickets</p>
+              <p className="text-2xl font-bold">{overview.solvedTickets?.toLocaleString()}</p>
             </div>
           </div>
 
-          <div className="group relative overflow-hidden bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
+          <div className="group relative overflow-hidden bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
             <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            <div className="relative p-6 text-white">
-              <div className="flex items-center justify-between mb-4">
-                <div className="bg-white/20 backdrop-blur-sm rounded-xl p-3">
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="relative p-4 text-white">
+              <div className="flex items-center justify-between mb-2">
+                <div className="bg-white/20 backdrop-blur-sm rounded-lg p-2">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                   </svg>
                 </div>
-                <div className="text-xs font-medium text-orange-100">Rate</div>
               </div>
-              <p className="text-sm font-medium text-orange-100 mb-1">Solve Rate</p>
-              <p className="text-4xl font-bold">{overview.solveRate}%</p>
+              <p className="text-xs font-medium text-orange-100 mb-0.5">Solve Rate</p>
+              <p className="text-2xl font-bold">{overview.solveRate}%</p>
             </div>
           </div>
 
-          <div className="group relative overflow-hidden bg-gradient-to-br from-pink-500 to-pink-600 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
+          <div className="group relative overflow-hidden bg-gradient-to-br from-pink-500 to-pink-600 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
             <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            <div className="relative p-6 text-white">
-              <div className="flex items-center justify-between mb-4">
-                <div className="bg-white/20 backdrop-blur-sm rounded-xl p-3">
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            <div className="relative p-4 text-white">
+              <div className="flex items-center justify-between mb-2">
+                <div className="bg-white/20 backdrop-blur-sm rounded-lg p-2">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                   </svg>
                 </div>
-                <div className="text-xs font-medium text-pink-100">Avg</div>
               </div>
-              <p className="text-sm font-medium text-pink-100 mb-1">Resolution Time</p>
-              <p className="text-4xl font-bold">{overview.avgResolutionTime || 0}<span className="text-2xl ml-1">h</span></p>
+              <p className="text-xs font-medium text-pink-100 mb-0.5">Total Users</p>
+              <p className="text-2xl font-bold">{overview.totalUsers?.toLocaleString() || 0}</p>
             </div>
           </div>
 
-          <div className="group relative overflow-hidden bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
+          <div className="group relative overflow-hidden bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
             <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            <div className="relative p-6 text-white">
-              <div className="flex items-center justify-between mb-4">
-                <div className="bg-white/20 backdrop-blur-sm rounded-xl p-3">
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="relative p-4 text-white">
+              <div className="flex items-center justify-between mb-2">
+                <div className="bg-white/20 backdrop-blur-sm rounded-lg p-2">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
                   </svg>
                 </div>
-                <div className="text-xs font-medium text-cyan-100">All</div>
               </div>
-              <p className="text-sm font-medium text-cyan-100 mb-1">Total Comments</p>
-              <p className="text-4xl font-bold">{overview.totalComments || 0}</p>
+              <p className="text-xs font-medium text-cyan-100 mb-0.5">Total Comments</p>
+              <p className="text-2xl font-bold">{overview.totalComments?.toLocaleString() || 0}</p>
             </div>
           </div>
 
-          <div className="group relative overflow-hidden bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
+          <div className="group relative overflow-hidden bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
             <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            <div className="relative p-6 text-white">
-              <div className="flex items-center justify-between mb-4">
-                <div className="bg-white/20 backdrop-blur-sm rounded-xl p-3">
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="relative p-4 text-white">
+              <div className="flex items-center justify-between mb-2">
+                <div className="bg-white/20 backdrop-blur-sm rounded-lg p-2">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
                   </svg>
                 </div>
-                <div className="text-xs font-medium text-indigo-100">Engagement</div>
               </div>
-              <p className="text-sm font-medium text-indigo-100 mb-1">Avg Comments/Ticket</p>
-              <p className="text-4xl font-bold">{overview.avgCommentsPerTicket || '0'}</p>
+              <p className="text-xs font-medium text-indigo-100 mb-0.5">Avg Comments/Ticket</p>
+              <p className="text-2xl font-bold">{overview.avgCommentsPerTicket || '0'}</p>
             </div>
           </div>
 
-          <div className="group relative overflow-hidden bg-gradient-to-br from-teal-500 to-teal-600 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
+          <div className="group relative overflow-hidden bg-gradient-to-br from-teal-500 to-teal-600 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
             <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            <div className="relative p-6 text-white">
-              <div className="flex items-center justify-between mb-4">
-                <div className="bg-white/20 backdrop-blur-sm rounded-xl p-3">
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002 2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+            <div className="relative p-4 text-white">
+              <div className="flex items-center justify-between mb-2">
+                <div className="bg-white/20 backdrop-blur-sm rounded-lg p-2">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
                   </svg>
                 </div>
-                <div className="text-xs font-medium text-teal-100">Collected</div>
               </div>
-              <p className="text-sm font-medium text-teal-100 mb-1">Form Responses</p>
-              <p className="text-4xl font-bold">{overview.totalFormResponses || 0}</p>
+              <p className="text-xs font-medium text-teal-100 mb-0.5">Form Responses</p>
+              <p className="text-2xl font-bold">{overview.totalFormResponses?.toLocaleString() || 0}</p>
             </div>
           </div>
         </div>
 
         {/* Charts Grid with modern cards */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Tickets by Status */}
+          {/* Tickets Solved per Month */}
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 border border-gray-100 dark:border-gray-700">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl flex items-center justify-center">
-                <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl flex items-center justify-center">
+                  <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white">Tickets Solved per Month</h3>
               </div>
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white">Tickets by Status</h3>
+              {/* Year Selector */}
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(Number(e.target.value))}
+                className="px-3 py-1.5 text-sm font-medium bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                {(solvedByMonthData?.availableYears || [new Date().getFullYear()]).map((year: number) => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
             </div>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={charts.status}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={renderCustomLabel}
-                  outerRadius={100}
-                  innerRadius={60}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
-                  {charts.status.map((entry: any, index: number) => (
-                    <Cell key={`cell-${index}`} fill={STATUS_COLORS[entry.name as keyof typeof STATUS_COLORS] || '#6B7280'} />
-                  ))}
-                </Pie>
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={solvedByMonthData?.data || []} margin={{ left: 0, right: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-700" />
+                <XAxis dataKey="name" className="text-xs" />
+                <YAxis className="text-xs" />
                 <Tooltip content={<CustomTooltip />} />
-                <Legend
-                  verticalAlign="bottom"
-                  height={36}
-                  formatter={(value) => {
-                    const entry = charts.status.find((s: any) => s.name === value);
-                    return entry?.label || value;
-                  }}
-                />
-              </PieChart>
+                <Bar dataKey="count" name="Solved" fill="#8B5CF6" radius={[8, 8, 0, 0]} label={{ position: 'top', fill: '#6B7280', fontSize: 10, fontWeight: 600 }} />
+              </BarChart>
             </ResponsiveContainer>
           </div>
 
-          {/* Tickets by Priority */}
+          {/* Tickets by Priority - Horizontal Bar Chart */}
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 border border-gray-100 dark:border-gray-700">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-red-500 rounded-xl flex items-center justify-center">
@@ -331,40 +363,29 @@ const AnalyticsDashboard: React.FC = () => {
               </div>
               <h3 className="text-xl font-bold text-gray-900 dark:text-white">Tickets by Priority</h3>
             </div>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={charts.priority}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={renderCustomLabel}
-                  outerRadius={100}
-                  innerRadius={60}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart
+                data={charts.priority.map((p: any) => ({ ...p, name: p.label || p.name }))}
+                layout="vertical"
+                margin={{ left: 20, right: 40 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-700" horizontal={false} />
+                <XAxis type="number" className="text-xs" />
+                <YAxis type="category" dataKey="name" className="text-xs" width={70} />
+                <Tooltip content={<CustomTooltip />} />
+                <Bar dataKey="value" radius={[0, 8, 8, 0]} label={{ position: 'right', fill: '#6B7280', fontSize: 12, fontWeight: 600 }}>
                   {charts.priority.map((entry: any, index: number) => (
                     <Cell key={`cell-${index}`} fill={PRIORITY_COLORS[entry.name as keyof typeof PRIORITY_COLORS] || '#6B7280'} />
                   ))}
-                </Pie>
-                <Tooltip content={<CustomTooltip />} />
-                <Legend
-                  verticalAlign="bottom"
-                  height={36}
-                  formatter={(value) => {
-                    const entry = charts.priority.find((p: any) => p.name === value);
-                    return entry?.label || value;
-                  }}
-                />
-              </PieChart>
+                </Bar>
+              </BarChart>
             </ResponsiveContainer>
           </div>
 
-          {/* Tickets by Country */}
-          {charts.country && charts.country.length > 0 && (
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 border border-gray-100 dark:border-gray-700">
-              <div className="flex items-center gap-3 mb-6">
+          {/* Top Countries per Year */}
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 border border-gray-100 dark:border-gray-700">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-teal-500 rounded-xl flex items-center justify-center">
                   <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -372,29 +393,37 @@ const AnalyticsDashboard: React.FC = () => {
                 </div>
                 <h3 className="text-xl font-bold text-gray-900 dark:text-white">Top Countries</h3>
               </div>
+              {/* Year Selector */}
+              <select
+                value={countryYear}
+                onChange={(e) => setCountryYear(Number(e.target.value))}
+                className="px-3 py-1.5 text-sm font-medium bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                {(countriesByYearData?.availableYears || [new Date().getFullYear()]).map((year: number) => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
+            </div>
+            {countriesByYearData?.data && countriesByYearData.data.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={charts.country}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={renderCustomLabel}
-                    outerRadius={100}
-                    innerRadius={60}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {charts.country.map((_entry: any, index: number) => (
+                <BarChart data={countriesByYearData.data} margin={{ left: 0, right: 20 }}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-700" />
+                  <XAxis dataKey="name" className="text-xs" angle={-45} textAnchor="end" height={80} interval={0} />
+                  <YAxis className="text-xs" />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Bar dataKey="count" name="Tickets" fill="#10B981" radius={[8, 8, 0, 0]} label={{ position: 'top', fill: '#6B7280', fontSize: 10, fontWeight: 600 }}>
+                    {countriesByYearData.data.map((_entry: any, index: number) => (
                       <Cell key={`cell-${index}`} fill={COUNTRY_COLORS[index % COUNTRY_COLORS.length]} />
                     ))}
-                  </Pie>
-                  <Tooltip content={<CustomTooltip />} />
-                  <Legend verticalAlign="bottom" height={36} />
-                </PieChart>
+                  </Bar>
+                </BarChart>
               </ResponsiveContainer>
-            </div>
-          )}
+            ) : (
+              <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+                No country data available for {countryYear}
+              </div>
+            )}
+          </div>
 
           {/* Tickets by Channel */}
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 border border-gray-100 dark:border-gray-700">
@@ -451,6 +480,35 @@ const AnalyticsDashboard: React.FC = () => {
                     <linearGradient id="colorGradient" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#3B82F6" stopOpacity={0.8}/>
                       <stop offset="100%" stopColor="#8B5CF6" stopOpacity={0.8}/>
+                    </linearGradient>
+                  </defs>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Tickets by Hour of Day */}
+          {charts.hourly && charts.hourly.length > 0 && (
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 border border-gray-100 dark:border-gray-700">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
+                  <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white">Tickets by Hour of Day</h3>
+              </div>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={charts.hourly}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-700" />
+                  <XAxis dataKey="label" className="text-xs" />
+                  <YAxis className="text-xs" />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Bar dataKey="count" fill="url(#colorGradient2)" radius={[8, 8, 0, 0]} />
+                  <defs>
+                    <linearGradient id="colorGradient2" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#8B5CF6" stopOpacity={0.8}/>
+                      <stop offset="100%" stopColor="#EC4899" stopOpacity={0.8}/>
                     </linearGradient>
                   </defs>
                 </BarChart>
@@ -519,93 +577,86 @@ const AnalyticsDashboard: React.FC = () => {
                   labelFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
                 />
                 <Legend />
-                <Line type="monotone" dataKey="count" stroke="#3B82F6" strokeWidth={3} name="Total Tickets" dot={{ fill: '#3B82F6', r: 4 }} activeDot={{ r: 6 }} />
+                <Line type="monotone" dataKey="count" stroke="#3B82F6" strokeWidth={3} name="Created Tickets" dot={{ fill: '#3B82F6', r: 4 }} activeDot={{ r: 6 }} />
                 <Line type="monotone" dataKey="solved" stroke="#10B981" strokeWidth={3} name="Solved" dot={{ fill: '#10B981', r: 4 }} activeDot={{ r: 6 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
         )}
 
-        {/* Hourly Distribution */}
-        {charts.hourly && charts.hourly.length > 0 && (
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 border border-gray-100 dark:border-gray-700">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
-                <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white">Tickets by Hour of Day</h3>
-            </div>
-            <ResponsiveContainer width="100%" height={350}>
-              <BarChart data={charts.hourly}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-700" />
-                <XAxis dataKey="label" className="text-xs" />
-                <YAxis className="text-xs" />
-                <Tooltip content={<CustomTooltip />} />
-                <Bar dataKey="count" fill="url(#colorGradient2)" radius={[8, 8, 0, 0]} />
-                <defs>
-                  <linearGradient id="colorGradient2" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#8B5CF6" stopOpacity={0.8}/>
-                    <stop offset="100%" stopColor="#EC4899" stopOpacity={0.8}/>
-                  </linearGradient>
-                </defs>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        )}
-
         {/* Agent Performance Table */}
-        {charts.agents && charts.agents.length > 0 && (
+        {agentPerformanceData && agentPerformanceData.agents && agentPerformanceData.agents.length > 0 && (
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 border border-gray-100 dark:border-gray-700">
-            <div className="flex items-center gap-3 mb-6">
+            <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 bg-gradient-to-br from-teal-500 to-green-500 rounded-xl flex items-center justify-center">
                 <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                 </svg>
               </div>
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white">Agent Performance</h3>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white">Agent Performance</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Metrics based on ticket replies</p>
+              </div>
+            </div>
+            {/* Calculation Explanation */}
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-3 mb-4">
+              <p className="text-xs text-blue-700 dark:text-blue-400">
+                <span className="font-semibold">Contribution:</span> For each ticket, (Agent's replies / Total replies) × 100, averaged across all tickets.
+              </p>
             </div>
             <div className="overflow-x-auto">
               <table className="min-w-full">
                 <thead>
                   <tr className="border-b border-gray-200 dark:border-gray-700">
                     <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900 dark:text-white">Agent</th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900 dark:text-white">Total Tickets</th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900 dark:text-white">Solved</th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900 dark:text-white">Solve Rate</th>
+                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900 dark:text-white">Tickets</th>
+                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900 dark:text-white">Replies</th>
+                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900 dark:text-white">Avg/Ticket</th>
+                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900 dark:text-white">Contribution</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {charts.agents.map((agent: any, index: number) => (
-                    <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                  {agentPerformanceData.agents.map((perf: any, index: number) => (
+                    <tr key={perf.agent.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-gradient-to-br from-primary to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
-                            {agent.name.charAt(0).toUpperCase()}
+                          <div className="w-8 h-8 bg-gradient-to-br from-teal-500 to-green-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
+                            {index + 1}
                           </div>
-                          <span className="text-sm font-medium text-gray-900 dark:text-white">{agent.name}</span>
+                          <div>
+                            <span className="text-sm font-medium text-gray-900 dark:text-white block">
+                              {perf.agent.firstName && perf.agent.lastName
+                                ? `${perf.agent.firstName} ${perf.agent.lastName}`
+                                : perf.agent.email}
+                            </span>
+                            <span className="text-xs text-gray-500 dark:text-gray-400">{perf.agent.email}</span>
+                          </div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200">
-                          {agent.total}
+                          {perf.totalTickets.toLocaleString()}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200">
-                          {agent.solved}
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200">
+                          {perf.totalReplies.toLocaleString()}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200">
+                          {perf.avgRepliesPerTicket}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-3">
-                          <span className="text-sm font-semibold text-gray-900 dark:text-white min-w-[3rem]">{agent.solveRate}%</span>
                           <div className="flex-1 min-w-[100px] bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 overflow-hidden">
                             <div
                               className="bg-gradient-to-r from-green-500 to-emerald-500 h-2.5 rounded-full transition-all duration-500"
-                              style={{ width: `${agent.solveRate}%` }}
+                              style={{ width: `${perf.contribution}%` }}
                             ></div>
                           </div>
+                          <span className="text-sm font-semibold text-gray-900 dark:text-white min-w-[3rem]">{perf.contribution}%</span>
                         </div>
                       </td>
                     </tr>
@@ -617,9 +668,9 @@ const AnalyticsDashboard: React.FC = () => {
         )}
 
         {/* Most Used Forms */}
-        {charts.forms && charts.forms.length > 0 && (
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 border border-gray-100 dark:border-gray-700">
-            <div className="flex items-center gap-3 mb-6">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 border border-gray-100 dark:border-gray-700">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-gradient-to-br from-rose-500 to-pink-500 rounded-xl flex items-center justify-center">
                 <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -627,16 +678,28 @@ const AnalyticsDashboard: React.FC = () => {
               </div>
               <h3 className="text-xl font-bold text-gray-900 dark:text-white">Most Used Forms</h3>
             </div>
+            {/* Year Selector */}
+            <select
+              value={formYear}
+              onChange={(e) => setFormYear(Number(e.target.value))}
+              className="px-3 py-1.5 text-sm font-medium bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              {(formsByYearData?.availableYears || [new Date().getFullYear()]).map((year: number) => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
+          </div>
+          {formsByYearData?.data && formsByYearData.data.length > 0 ? (
             <div className="space-y-4">
-              {charts.forms.map((form: any, index: number) => {
-                const maxValue = Math.max(...charts.forms.map((f: any) => f.value));
-                const percentage = (form.value / maxValue) * 100;
+              {formsByYearData.data.map((form: any, index: number) => {
+                const maxValue = Math.max(...formsByYearData.data.map((f: any) => f.count));
+                const percentage = (form.count / maxValue) * 100;
 
                 return (
                   <div key={index} className="group">
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-sm font-semibold text-gray-900 dark:text-white group-hover:text-primary transition-colors">{form.name}</span>
-                      <span className="text-sm font-bold text-gray-900 dark:text-white">{form.value}</span>
+                      <span className="text-sm font-bold text-gray-900 dark:text-white">{form.count}</span>
                     </div>
                     <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
                       <div
@@ -648,8 +711,12 @@ const AnalyticsDashboard: React.FC = () => {
                 );
               })}
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+              No form data available for {formYear}
+            </div>
+          )}
+        </div>
 
         {/* Most Used Form Fields */}
         {charts.fieldUsage && charts.fieldUsage.length > 0 && (

@@ -53,7 +53,8 @@ model User {
   lastName       String?
   role           UserRole  @default(USER)
   organizationId String?   @db.Uuid
-  timezone       String?
+  timezone       String?   // IANA timezone (e.g., "Europe/Amsterdam")
+  timezoneOffset String?   // UTC offset (e.g., "GMT+1")
   lastSeenAt     DateTime?
   isBlocked      Boolean   @default(false)
   blockedAt      DateTime?
