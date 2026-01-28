@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { fieldLibraryApi } from '../lib/api';
 import Layout from '../components/Layout';
@@ -8,8 +9,14 @@ import { FormFieldLibrary } from '../types';
 
 const AdminFieldLibrary: React.FC = () => {
   const queryClient = useQueryClient();
-  const [isCreating, setIsCreating] = useState(false);
-  const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { id: urlFieldId } = useParams<{ id: string }>();
+
+  // Determine mode from URL
+  const isCreating = location.pathname === '/admin/fields/new';
+  const editingFieldId = urlFieldId || null;
+
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('all');
 
@@ -38,8 +45,8 @@ const AdminFieldLibrary: React.FC = () => {
     },
     onSuccess: () => {
       toast.success('Field created successfully');
-      resetForm();
       queryClient.invalidateQueries({ queryKey: ['fieldLibrary'] });
+      navigate('/admin/fields');
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.error || 'Failed to create field');
@@ -53,8 +60,8 @@ const AdminFieldLibrary: React.FC = () => {
     },
     onSuccess: () => {
       toast.success('Field updated successfully');
-      resetForm();
       queryClient.invalidateQueries({ queryKey: ['fieldLibrary'] });
+      navigate('/admin/fields');
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.error || 'Failed to update field');
@@ -74,28 +81,35 @@ const AdminFieldLibrary: React.FC = () => {
     }
   });
 
-  const resetForm = () => {
-    setIsCreating(false);
-    setEditingFieldId(null);
-    setLabel('');
-    setFieldType('text');
-    setRequired(false);
-    setPlaceholder('');
-    setDefaultValue('');
-    setOptions([]);
-    setOptionInput('');
-  };
 
   const handleEdit = (field: FormFieldLibrary) => {
-    setEditingFieldId(field.id);
-    setLabel(field.label);
-    setFieldType(field.fieldType);
-    setRequired(field.required);
-    setPlaceholder(field.placeholder || '');
-    setDefaultValue(field.defaultValue || '');
-    setOptions(field.options || []);
-    setIsCreating(false);
+    // Navigate to the edit URL
+    navigate(`/admin/fields/${field.id}`);
   };
+
+  // Populate form when editing a field (URL changes to /admin/fields/:id)
+  useEffect(() => {
+    if (editingFieldId && fields) {
+      const field = fields.find(f => f.id === editingFieldId);
+      if (field) {
+        setLabel(field.label);
+        setFieldType(field.fieldType);
+        setRequired(field.required);
+        setPlaceholder(field.placeholder || '');
+        setDefaultValue(field.defaultValue || '');
+        setOptions(field.options || []);
+      }
+    } else if (!editingFieldId && !isCreating) {
+      // Reset form when back on list view
+      setLabel('');
+      setFieldType('text');
+      setRequired(false);
+      setPlaceholder('');
+      setDefaultValue('');
+      setOptions([]);
+      setOptionInput('');
+    }
+  }, [editingFieldId, isCreating, fields]);
 
   const handleAddOption = () => {
     if (optionInput.trim()) {
@@ -187,7 +201,7 @@ const AdminFieldLibrary: React.FC = () => {
           </div>
           {!isFormOpen && (
             <button
-              onClick={() => setIsCreating(true)}
+              onClick={() => navigate('/admin/fields/new')}
               className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors"
             >
               <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -251,7 +265,7 @@ const AdminFieldLibrary: React.FC = () => {
                 {editingFieldId ? 'Edit Field' : 'Create New Field'}
               </h2>
               <button
-                onClick={resetForm}
+                onClick={() => navigate(-1)}
                 className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white flex items-center gap-2"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -434,7 +448,7 @@ const AdminFieldLibrary: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={resetForm}
+                  onClick={() => navigate(-1)}
                   className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-sm font-medium transition-colors"
                 >
                   Cancel

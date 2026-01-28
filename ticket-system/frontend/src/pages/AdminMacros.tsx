@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { macroApi } from '../lib/api';
 import Layout from '../components/Layout';
 import RichTextEditor from '../components/RichTextEditor';
@@ -16,8 +17,14 @@ const PLACEHOLDERS = [
 
 const AdminMacros: React.FC = () => {
   const queryClient = useQueryClient();
-  const [isCreating, setIsCreating] = useState(false);
-  const [editingMacro, setEditingMacro] = useState<Macro | null>(null);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { id: urlMacroId } = useParams<{ id: string }>();
+
+  // Determine mode from URL
+  const isCreating = location.pathname === '/admin/macros/new' || urlMacroId !== undefined;
+  const editingMacroId = urlMacroId || null;
+
   const [formData, setFormData] = useState({
     name: '',
     content: '',
@@ -39,7 +46,7 @@ const AdminMacros: React.FC = () => {
     onSuccess: () => {
       toast.success('Macro created successfully');
       queryClient.invalidateQueries({ queryKey: ['macros'] });
-      resetForm();
+      navigate('/admin/macros');
     },
     onError: () => {
       toast.error('Failed to create macro');
@@ -52,7 +59,7 @@ const AdminMacros: React.FC = () => {
     onSuccess: () => {
       toast.success('Macro updated successfully');
       queryClient.invalidateQueries({ queryKey: ['macros'] });
-      resetForm();
+      navigate('/admin/macros');
     },
     onError: () => {
       toast.error('Failed to update macro');
@@ -70,12 +77,6 @@ const AdminMacros: React.FC = () => {
     }
   });
 
-  const resetForm = () => {
-    setFormData({ name: '', content: '', category: '' });
-    setIsCreating(false);
-    setEditingMacro(null);
-  };
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim() || !formData.content.trim()) {
@@ -89,22 +90,34 @@ const AdminMacros: React.FC = () => {
       category: formData.category.trim() || undefined
     };
 
-    if (editingMacro) {
-      updateMutation.mutate({ id: editingMacro.id, data });
+    if (editingMacroId) {
+      updateMutation.mutate({ id: editingMacroId, data });
     } else {
       createMutation.mutate(data);
     }
   };
 
   const handleEdit = (macro: Macro) => {
-    setEditingMacro(macro);
-    setFormData({
-      name: macro.name,
-      content: macro.content,
-      category: macro.category || ''
-    });
-    setIsCreating(true);
+    // Navigate to the edit URL
+    navigate(`/admin/macros/${macro.id}`);
   };
+
+  // Populate form when editing (URL changes to /admin/macros/:id)
+  useEffect(() => {
+    if (editingMacroId && macros) {
+      const macro = macros.find(m => m.id === editingMacroId);
+      if (macro) {
+        setFormData({
+          name: macro.name,
+          content: macro.content,
+          category: macro.category || ''
+        });
+      }
+    } else if (!editingMacroId && location.pathname === '/admin/macros') {
+      // Reset form when back on list view
+      setFormData({ name: '', content: '', category: '' });
+    }
+  }, [editingMacroId, macros, location.pathname]);
 
   const handleDelete = (macro: Macro) => {
     if (window.confirm(`Are you sure you want to delete "${macro.name}"?`)) {
@@ -158,7 +171,7 @@ const AdminMacros: React.FC = () => {
           </div>
           {!isCreating && (
             <button
-              onClick={() => setIsCreating(true)}
+              onClick={() => navigate('/admin/macros/new')}
               className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
             >
               <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -173,7 +186,7 @@ const AdminMacros: React.FC = () => {
         {isCreating && (
           <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-              {editingMacro ? 'Edit Macro' : 'Create New Macro'}
+              {editingMacroId ? 'Edit Macro' : 'Create New Macro'}
             </h2>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
@@ -257,7 +270,7 @@ const AdminMacros: React.FC = () => {
               <div className="flex justify-end gap-3">
                 <button
                   type="button"
-                  onClick={resetForm}
+                  onClick={() => navigate(-1)}
                   className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
                 >
                   Cancel
@@ -269,7 +282,7 @@ const AdminMacros: React.FC = () => {
                 >
                   {createMutation.isPending || updateMutation.isPending
                     ? 'Saving...'
-                    : editingMacro
+                    : editingMacroId
                     ? 'Update Macro'
                     : 'Create Macro'}
                 </button>
@@ -419,7 +432,7 @@ const AdminMacros: React.FC = () => {
               Get started by creating a new macro.
             </p>
             <button
-              onClick={() => setIsCreating(true)}
+              onClick={() => navigate('/admin/macros/new')}
               className="mt-4 inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:opacity-90"
             >
               <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">

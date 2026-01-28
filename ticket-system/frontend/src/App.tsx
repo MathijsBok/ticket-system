@@ -38,15 +38,15 @@ if (!CLERK_PUBLISHABLE_KEY) {
   throw new Error('Missing Clerk Publishable Key');
 }
 
-// Role-based dashboard router
+// Role-based dashboard router - redirects to appropriate dashboard
 function DashboardRouter() {
   const { user } = useUser();
   // Default to 'USER' role if no role is set (new users)
   const userRole = (user?.publicMetadata?.role as string) || 'USER';
 
-  if (userRole === 'ADMIN') {
-    return <Navigate to="/agent" replace />;
-  } else if (userRole === 'AGENT') {
+  // Redirect to appropriate dashboard based on role
+  // Using replace to avoid `/` appearing in history (would cause redirect loops on back)
+  if (userRole === 'ADMIN' || userRole === 'AGENT') {
     return <Navigate to="/agent" replace />;
   }
   return <Navigate to="/user" replace />;
@@ -110,7 +110,39 @@ function App() {
                       }
                     />
                     <Route
+                      path="/admin/forms/new"
+                      element={
+                        <ProtectedRoute allowedRoles={['ADMIN']}>
+                          <AdminForms />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/admin/forms/:id"
+                      element={
+                        <ProtectedRoute allowedRoles={['ADMIN']}>
+                          <AdminForms />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
                       path="/admin/fields"
+                      element={
+                        <ProtectedRoute allowedRoles={['ADMIN']}>
+                          <AdminFieldLibrary />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/admin/fields/new"
+                      element={
+                        <ProtectedRoute allowedRoles={['ADMIN']}>
+                          <AdminFieldLibrary />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/admin/fields/:id"
                       element={
                         <ProtectedRoute allowedRoles={['ADMIN']}>
                           <AdminFieldLibrary />
@@ -134,7 +166,31 @@ function App() {
                       }
                     />
                     <Route
+                      path="/admin/macros/new"
+                      element={
+                        <ProtectedRoute allowedRoles={['AGENT', 'ADMIN']}>
+                          <AdminMacros />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/admin/macros/:id"
+                      element={
+                        <ProtectedRoute allowedRoles={['AGENT', 'ADMIN']}>
+                          <AdminMacros />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
                       path="/admin/email-templates"
+                      element={
+                        <ProtectedRoute allowedRoles={['AGENT', 'ADMIN']}>
+                          <AdminEmailTemplates />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/admin/email-templates/:id"
                       element={
                         <ProtectedRoute allowedRoles={['AGENT', 'ADMIN']}>
                           <AdminEmailTemplates />

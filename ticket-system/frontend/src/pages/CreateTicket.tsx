@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
+import { useUser } from '@clerk/clerk-react';
+import { useView } from '../contexts/ViewContext';
 import toast from 'react-hot-toast';
 import { ticketApi, formApi } from '../lib/api';
 import Layout from '../components/Layout';
@@ -10,6 +12,11 @@ import { Form } from '../types';
 const CreateTicket: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { user } = useUser();
+  const userRole = (user?.publicMetadata?.role as string) || 'USER';
+  const { currentView } = useView();
+  const effectiveRole = userRole === 'ADMIN' ? currentView : userRole;
+  const isAgentOrAdmin = effectiveRole === 'AGENT' || effectiveRole === 'ADMIN';
   const relatedTicketId = searchParams.get('relatedTicketId');
   const [priority, setPriority] = useState('NORMAL');
   const [categoryId, _setCategoryId] = useState('');
@@ -314,8 +321,8 @@ const CreateTicket: React.FC = () => {
             </div>
           )}
 
-          {/* Priority Selection (Only visible when form is selected) */}
-          {selectedFormId && (
+          {/* Priority Selection (Only visible for agents/admins when form is selected) */}
+          {selectedFormId && isAgentOrAdmin && (
             <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 p-6">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                 Priority Level
@@ -351,7 +358,7 @@ const CreateTicket: React.FC = () => {
               </button>
               <button
                 type="button"
-                onClick={() => navigate('/user')}
+                onClick={() => navigate(-1)}
                 className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors"
               >
                 Cancel

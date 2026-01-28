@@ -33,8 +33,8 @@ const SortIcon: React.FC<{ field: SortField; sortField: SortField; sortDirection
 const getRoleColor = (role: string) => {
   const colors: Record<string, string> = {
     ADMIN: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-    AGENT: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-    USER: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
+    AGENT: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
+    USER: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
   };
   return colors[role] || colors.USER;
 };
@@ -293,10 +293,10 @@ const UserTable: React.FC<UserTableProps> = ({
                     </button>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-4">
                     <button
                       onClick={() => handleEditUser(user)}
-                      className="text-primary hover:text-primary/80"
+                      className="text-primary hover:text-primary/80 p-1"
                       title="Edit user"
                     >
                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -307,7 +307,7 @@ const UserTable: React.FC<UserTableProps> = ({
                       <button
                         onClick={() => handleBlockUser(user)}
                         disabled={isBlocking}
-                        className={`${user.isBlocked
+                        className={`p-1 ${user.isBlocked
                           ? 'text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300'
                           : 'text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300'
                         } disabled:opacity-50`}
@@ -366,11 +366,13 @@ const AdminUsers: React.FC = () => {
   const [adminExpanded, setAdminExpanded] = useState(false);
   const [agentExpanded, setAgentExpanded] = useState(false);
   const [userExpanded, setUserExpanded] = useState(false);
+  const [blockedExpanded, setBlockedExpanded] = useState(false);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editingEmail, setEditingEmail] = useState('');
   const [editingFirstName, setEditingFirstName] = useState('');
   const [editingLastName, setEditingLastName] = useState('');
   const [selectedRole, setSelectedRole] = useState<UserRole>('USER');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const { data: users, isLoading, error } = useQuery({
     queryKey: ['allUsers'],
@@ -402,6 +404,7 @@ const AdminUsers: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['allUsers'] });
     },
     onError: (error: any) => {
+      console.error('Block user error:', error?.response?.status, error?.response?.data);
       const message = error?.response?.data?.error || 'Failed to update user status';
       toast.error(message);
     }
@@ -463,17 +466,41 @@ const AdminUsers: React.FC = () => {
     });
   }, [users, sortField, sortDirection]);
 
+  // Filter users based on search query
+  const filteredUsers = useMemo(() => {
+    if (!searchQuery.trim()) return sortedUsers;
+
+    const query = searchQuery.toLowerCase().trim();
+    return sortedUsers.filter((user) => {
+      const email = user.email.toLowerCase();
+      const firstName = (user.firstName || '').toLowerCase();
+      const lastName = (user.lastName || '').toLowerCase();
+      const fullName = `${firstName} ${lastName}`.trim();
+
+      return (
+        email.includes(query) ||
+        firstName.includes(query) ||
+        lastName.includes(query) ||
+        fullName.includes(query)
+      );
+    });
+  }, [sortedUsers, searchQuery]);
+
   const adminUsers = useMemo(() => {
-    return sortedUsers.filter((user) => user.role === 'ADMIN');
-  }, [sortedUsers]);
+    return filteredUsers.filter((user) => user.role === 'ADMIN' && !user.isBlocked);
+  }, [filteredUsers]);
 
   const agentUsers = useMemo(() => {
-    return sortedUsers.filter((user) => user.role === 'AGENT');
-  }, [sortedUsers]);
+    return filteredUsers.filter((user) => user.role === 'AGENT' && !user.isBlocked);
+  }, [filteredUsers]);
 
   const regularUsers = useMemo(() => {
-    return sortedUsers.filter((user) => user.role === 'USER');
-  }, [sortedUsers]);
+    return filteredUsers.filter((user) => user.role === 'USER' && !user.isBlocked);
+  }, [filteredUsers]);
+
+  const blockedUsers = useMemo(() => {
+    return filteredUsers.filter((user) => user.isBlocked);
+  }, [filteredUsers]);
 
   // Display arrays (limited to 10 unless expanded)
   const displayAdminUsers = useMemo(() => {
@@ -487,6 +514,10 @@ const AdminUsers: React.FC = () => {
   const displayRegularUsers = useMemo(() => {
     return userExpanded ? regularUsers : regularUsers.slice(0, 10);
   }, [regularUsers, userExpanded]);
+
+  const displayBlockedUsers = useMemo(() => {
+    return blockedExpanded ? blockedUsers : blockedUsers.slice(0, 10);
+  }, [blockedUsers, blockedExpanded]);
 
   const handleEditUser = useCallback((user: User) => {
     setEditingUserId(user.id);
@@ -524,12 +555,37 @@ const AdminUsers: React.FC = () => {
     <Layout>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">User Management</h1>
             <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
               Manage user roles and permissions
             </p>
+          </div>
+          {/* Search Input */}
+          <div className="relative w-full sm:w-auto">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search users..."
+              className="block w-full sm:w-64 pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary text-sm"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
           </div>
         </div>
 
@@ -561,7 +617,20 @@ const AdminUsers: React.FC = () => {
           </div>
         )}
 
-        {sortedUsers && sortedUsers.length > 0 && (
+        {/* No search results */}
+        {sortedUsers && sortedUsers.length > 0 && filteredUsers.length === 0 && !isLoading && (
+          <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">No users found</h3>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              No users match "{searchQuery}".
+            </p>
+          </div>
+        )}
+
+        {sortedUsers && sortedUsers.length > 0 && filteredUsers.length > 0 && (
           <>
             {/* Admin Users Section */}
             {adminUsers.length > 0 && (
@@ -635,6 +704,37 @@ const AdminUsers: React.FC = () => {
                 setExpanded={setUserExpanded}
                 totalCount={regularUsers.length}
                 badgeColor="bg-gray-100 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300"
+                sortField={sortField}
+                sortDirection={sortDirection}
+                handleSort={handleSort}
+                editingUserId={editingUserId}
+                editingEmail={editingEmail}
+                editingFirstName={editingFirstName}
+                editingLastName={editingLastName}
+                selectedRole={selectedRole}
+                setEditingEmail={setEditingEmail}
+                setEditingFirstName={setEditingFirstName}
+                setEditingLastName={setEditingLastName}
+                setSelectedRole={setSelectedRole}
+                handleEditUser={handleEditUser}
+                handleSaveUser={handleSaveUser}
+                handleCancelEdit={handleCancelEdit}
+                handleBlockUser={handleBlockUser}
+                isPending={updateUserMutation.isPending}
+                isBlocking={blockUserMutation.isPending}
+              />
+            )}
+
+            {/* Blocked Users Section */}
+            {blockedUsers.length > 0 && (
+              <UserTable
+                users={displayBlockedUsers}
+                title="Blocked Users"
+                count={blockedUsers.length}
+                expanded={blockedExpanded}
+                setExpanded={setBlockedExpanded}
+                totalCount={blockedUsers.length}
+                badgeColor="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300"
                 sortField={sortField}
                 sortDirection={sortDirection}
                 handleSort={handleSort}

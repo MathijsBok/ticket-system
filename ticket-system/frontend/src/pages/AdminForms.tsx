@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { formApi, fieldLibraryApi } from '../lib/api';
 import Layout from '../components/Layout';
@@ -8,8 +9,14 @@ import { Form, FormFieldLibrary } from '../types';
 
 const AdminForms: React.FC = () => {
   const queryClient = useQueryClient();
-  const [isCreating, setIsCreating] = useState(false);
-  const [editingFormId, setEditingFormId] = useState<string | null>(null);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { id: urlFormId } = useParams<{ id: string }>();
+
+  // Determine mode from URL
+  const isCreating = location.pathname === '/admin/forms/new';
+  const editingFormId = urlFormId || null;
+
   const [formName, setFormName] = useState('');
   const [formDescription, setFormDescription] = useState('');
   const [fieldConfigs, setFieldConfigs] = useState<Array<{ fieldId: string; required: boolean }>>([]);
@@ -38,8 +45,8 @@ const AdminForms: React.FC = () => {
     },
     onSuccess: () => {
       toast.success('Form created successfully');
-      resetForm();
       queryClient.invalidateQueries({ queryKey: ['adminForms'] });
+      navigate('/admin/forms');
     },
     onError: () => {
       toast.error('Failed to create form');
@@ -53,8 +60,8 @@ const AdminForms: React.FC = () => {
     },
     onSuccess: () => {
       toast.success('Form updated successfully');
-      resetForm();
       queryClient.invalidateQueries({ queryKey: ['adminForms'] });
+      navigate('/admin/forms');
     },
     onError: () => {
       toast.error('Failed to update form');
@@ -86,25 +93,31 @@ const AdminForms: React.FC = () => {
     }
   });
 
-  const resetForm = () => {
-    setIsCreating(false);
-    setEditingFormId(null);
-    setFormName('');
-    setFormDescription('');
-    setFieldConfigs([]);
+  const handleEdit = (form: Form) => {
+    // Navigate to the edit URL
+    navigate(`/admin/forms/${form.id}`);
   };
 
-  const handleEdit = (form: Form) => {
-    setEditingFormId(form.id);
-    setFormName(form.name);
-    setFormDescription(form.description || '');
-    // Extract field configurations in order from formFields
-    const configs = form.formFields
-      ?.sort((a, b) => a.order - b.order)
-      .map(ff => ({ fieldId: ff.fieldId, required: ff.required })) || [];
-    setFieldConfigs(configs);
-    setIsCreating(false);
-  };
+  // Populate form when editing (URL changes to /admin/forms/:id)
+  useEffect(() => {
+    if (editingFormId && forms) {
+      const form = forms.find(f => f.id === editingFormId);
+      if (form) {
+        setFormName(form.name);
+        setFormDescription(form.description || '');
+        // Extract field configurations in order from formFields
+        const configs = form.formFields
+          ?.sort((a, b) => a.order - b.order)
+          .map(ff => ({ fieldId: ff.fieldId, required: ff.required })) || [];
+        setFieldConfigs(configs);
+      }
+    } else if (!editingFormId && !isCreating) {
+      // Reset form when back on list view
+      setFormName('');
+      setFormDescription('');
+      setFieldConfigs([]);
+    }
+  }, [editingFormId, isCreating, forms]);
 
   const handleToggleField = (fieldId: string) => {
     if (fieldConfigs.some(config => config.fieldId === fieldId)) {
@@ -275,7 +288,7 @@ const AdminForms: React.FC = () => {
           </div>
           {!isFormOpen && (
             <button
-              onClick={() => setIsCreating(true)}
+              onClick={() => navigate('/admin/forms/new')}
               className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors"
             >
               <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -294,7 +307,7 @@ const AdminForms: React.FC = () => {
                 {editingFormId ? 'Edit Form' : 'Create New Form'}
               </h2>
               <button
-                onClick={resetForm}
+                onClick={() => navigate(-1)}
                 className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white flex items-center gap-2"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -511,7 +524,7 @@ const AdminForms: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={resetForm}
+                  onClick={() => navigate(-1)}
                   className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-sm font-medium transition-colors"
                 >
                   Cancel

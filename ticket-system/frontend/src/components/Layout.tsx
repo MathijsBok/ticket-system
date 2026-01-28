@@ -2,7 +2,7 @@ import React from 'react';
 import { useUser, UserButton } from '@clerk/clerk-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { useView } from '../contexts/ViewContext';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -13,7 +13,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { theme, toggleTheme } = useTheme();
   const { currentView, setCurrentView } = useView();
   const location = useLocation();
-  const navigate = useNavigate();
   // Default to 'USER' role if no role is set (new users)
   const userRole = (user?.publicMetadata?.role as string) || 'USER';
 
@@ -23,17 +22,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const handleViewChange = (view: string) => {
     const newView = view as 'USER' | 'AGENT' | 'ADMIN';
     setCurrentView(newView);
-    switch (newView) {
-      case 'USER':
-        navigate('/user');
-        break;
-      case 'AGENT':
-        navigate('/agent');
-        break;
-      case 'ADMIN':
-        navigate('/admin');
-        break;
-    }
+    // Don't navigate - just update the view context
+    // The menu will update and user can click where they want to go
   };
 
   // Use currentView for admins (respects "View as" switcher), userRole for others

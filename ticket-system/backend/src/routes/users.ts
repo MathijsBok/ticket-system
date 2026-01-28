@@ -2,7 +2,7 @@ import { Router, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import { clerkClient } from '@clerk/express';
 import { prisma } from '../lib/prisma';
-import { requireAuth, requireAdmin, AuthRequest } from '../middleware/auth';
+import { requireAuth, requireAdmin, requireAgent, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
@@ -268,19 +268,22 @@ router.patch(
   }
 );
 
-// Block/Unblock user (admin only)
+// Block/Unblock user (agents and admins)
 router.patch(
   '/:id/block',
   requireAuth,
-  requireAdmin,
+  requireAgent,
   [
     body('isBlocked').isBoolean().withMessage('isBlocked must be a boolean'),
     body('reason').optional().isString()
   ],
   async (req: AuthRequest, res: Response) => {
     try {
+      console.log('Block user request:', { id: req.params.id, body: req.body, userId: req.userId, userRole: req.userRole });
+
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
+        console.log('Validation errors:', errors.array());
         return res.status(400).json({ errors: errors.array() });
       }
 

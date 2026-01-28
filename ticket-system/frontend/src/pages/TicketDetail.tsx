@@ -10,6 +10,44 @@ import Layout from '../components/Layout';
 import RichTextEditor from '../components/RichTextEditor';
 import { format } from 'date-fns';
 
+// Format form response values (handles Zendesk snake_case values)
+// Tries to match against field options if available
+const formatFormValue = (value: string, options?: string[]): string => {
+  if (!value) return value;
+
+  // If we have options, try to find a matching one
+  if (options && options.length > 0) {
+    // Normalize the value for comparison
+    const normalizedValue = value
+      .replace(/_clone\d*$/i, '')
+      .replace(/_/g, ' ')
+      .toLowerCase();
+
+    // Try to find a matching option
+    for (const option of options) {
+      const normalizedOption = option.toLowerCase();
+      // Check if the normalized value contains key words from the option
+      const optionWords = normalizedOption.split(' ').filter(w => w.length > 2);
+      const valueWords = normalizedValue.split(' ').filter(w => w.length > 2);
+
+      // Check for word overlap (fuzzy match)
+      const matchingWords = optionWords.filter(ow =>
+        valueWords.some(vw => vw.includes(ow) || ow.includes(vw))
+      );
+
+      if (matchingWords.length >= Math.min(2, optionWords.length)) {
+        return option; // Return the proper label
+      }
+    }
+  }
+
+  // Fallback: format the raw value
+  let formatted = value.replace(/_clone\d*$/i, '');
+  formatted = formatted.replace(/_/g, ' ');
+  formatted = formatted.replace(/\b\w/g, l => l.toUpperCase());
+  return formatted;
+};
+
 const TicketDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const { user } = useUser();
@@ -310,26 +348,7 @@ const TicketDetail: React.FC = () => {
       <div className="space-y-6">
         {/* Back button */}
         <button
-          onClick={() => {
-            // Navigate back to the appropriate dashboard based on current view
-            if (userRole === 'ADMIN') {
-              switch (currentView) {
-                case 'USER':
-                  navigate('/user');
-                  break;
-                case 'AGENT':
-                  navigate('/agent');
-                  break;
-                case 'ADMIN':
-                  navigate('/admin');
-                  break;
-                default:
-                  navigate(-1);
-              }
-            } else {
-              navigate(-1);
-            }
-          }}
+          onClick={() => navigate(-1)}
           className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white flex items-center gap-2"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -581,9 +600,9 @@ const TicketDetail: React.FC = () => {
         </div>
 
         {/* Two-column layout for desktop */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column - Form Details, Macros, Activity Log */}
-          <div className="lg:col-span-1 space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+          {/* Left Column - Form Details, Macros, Activity Log (sticky on desktop) */}
+          <div className="lg:col-span-1 space-y-6 lg:sticky lg:top-8 lg:max-h-[calc(100vh-4rem)] lg:overflow-y-auto">
             {/* Form Responses */}
             {ticket.formResponses && ticket.formResponses.length > 0 && (
               <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
@@ -598,7 +617,7 @@ const TicketDetail: React.FC = () => {
                         {response.field.required && <span className="text-red-500 ml-1">*</span>}
                       </dt>
                       <dd className="text-sm text-gray-900 dark:text-white break-words">
-                        {response.value || <span className="text-gray-400 dark:text-gray-500">-</span>}
+                        {response.value ? formatFormValue(response.value, response.field.options) : <span className="text-gray-400 dark:text-gray-500">-</span>}
                       </dd>
                     </div>
                   ))}
@@ -707,14 +726,24 @@ const TicketDetail: React.FC = () => {
                 {ticket.comments
                   .filter((comment: any) => isAgent || !comment.isInternal)
                   .reverse()
-                  .map((comment: any) => (
+                  .map((comment: any) => {
+                    // Determine message style based on author and type
+                    const isFromRequester = comment.author?.id === ticket.requester?.id;
+                    let messageStyle = '';
+                    if (comment.isInternal) {
+                      // Internal notes: yellow
+                      messageStyle = 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800';
+                    } else if (isFromRequester) {
+                      // User/requester messages: light blue
+                      messageStyle = 'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800';
+                    } else {
+                      // Agent/admin messages: light gray
+                      messageStyle = 'bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600';
+                    }
+                    return (
                     <div
                       key={comment.id}
-                      className={`p-4 rounded-lg ${
-                        comment.isInternal
-                          ? 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800'
-                          : 'bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600'
-                      }`}
+                      className={`p-4 rounded-lg ${messageStyle}`}
                     >
                     <div className="flex justify-between items-start mb-2">
                       <div className="flex items-center gap-2">
@@ -743,7 +772,8 @@ const TicketDetail: React.FC = () => {
                       dangerouslySetInnerHTML={{ __html: comment.body || comment.bodyPlain }}
                     />
                   </div>
-                ))}
+                    );
+                  })}
               </div>
             </div>
 

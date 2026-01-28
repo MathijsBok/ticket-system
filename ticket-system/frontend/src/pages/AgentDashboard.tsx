@@ -34,6 +34,7 @@ const AgentDashboard: React.FC = () => {
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const { permission, requestPermission, isSupported } = useNotification();
   const { newTicketCount, isPolling } = useTicketNotifications({
@@ -201,20 +202,46 @@ const AgentDashboard: React.FC = () => {
     });
   }, [tickets, sortField, sortDirection]);
 
+  // Filter tickets based on search query
+  const filteredTickets = useMemo(() => {
+    if (!searchQuery.trim()) return sortedTickets;
+
+    const query = searchQuery.toLowerCase().trim();
+    return sortedTickets.filter((ticket: any) => {
+      const ticketNumber = `#${ticket.ticketNumber}`.toLowerCase();
+      const subject = ticket.subject.toLowerCase();
+      const requesterEmail = ticket.requester.email.toLowerCase();
+      const requesterName = (ticket.requester.name || '').toLowerCase();
+      const assigneeEmail = (ticket.assignee?.email || '').toLowerCase();
+      const assigneeName = ticket.assignee
+        ? `${ticket.assignee.firstName || ''} ${ticket.assignee.lastName || ''}`.trim().toLowerCase()
+        : '';
+
+      return (
+        ticketNumber.includes(query) ||
+        subject.includes(query) ||
+        requesterEmail.includes(query) ||
+        requesterName.includes(query) ||
+        assigneeEmail.includes(query) ||
+        assigneeName.includes(query)
+      );
+    });
+  }, [sortedTickets, searchQuery]);
+
   // Reset to page 1 when filters or sorting changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [statusFilter, sortField, sortDirection]);
+  }, [statusFilter, sortField, sortDirection, searchQuery]);
 
   // Pagination calculations
-  const totalTickets = sortedTickets?.length || 0;
+  const totalTickets = filteredTickets?.length || 0;
   const totalPages = Math.ceil(totalTickets / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = Math.min(startIndex + itemsPerPage, totalTickets);
 
   const paginatedTickets = useMemo(() => {
-    return sortedTickets.slice(startIndex, endIndex);
-  }, [sortedTickets, startIndex, endIndex]);
+    return filteredTickets.slice(startIndex, endIndex);
+  }, [filteredTickets, startIndex, endIndex]);
 
   // Handle page changes
   const handlePageChange = (page: number) => {
@@ -486,6 +513,35 @@ const AgentDashboard: React.FC = () => {
           </div>
         )}
 
+        {/* Search and Status Filters */}
+        <div className="flex flex-col sm:flex-row gap-4">
+          {/* Search Input */}
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search tickets..."
+              className="block w-full sm:w-[512px] pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary text-sm"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* Status Filters */}
         <div className="flex gap-2 flex-wrap">
           {statusFilters.map((filter) => (
@@ -637,7 +693,7 @@ const AgentDashboard: React.FC = () => {
         )}
 
         {/* Tickets table */}
-        {sortedTickets && sortedTickets.length > 0 && (
+        {filteredTickets && filteredTickets.length > 0 && (
           <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
               <thead className="bg-gray-50 dark:bg-gray-900">
@@ -893,14 +949,18 @@ const AgentDashboard: React.FC = () => {
         )}
 
         {/* Empty state */}
-        {sortedTickets && sortedTickets.length === 0 && (
+        {filteredTickets && filteredTickets.length === 0 && (
           <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
             <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
             </svg>
             <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">No tickets found</h3>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              {statusFilter ? `No ${statusFilter.toLowerCase().replace('_', ' ')} tickets at the moment.` : 'No tickets in the system.'}
+              {searchQuery
+                ? `No tickets match "${searchQuery}".`
+                : statusFilter
+                ? `No ${statusFilter.toLowerCase().replace('_', ' ')} tickets at the moment.`
+                : 'No tickets in the system.'}
             </p>
           </div>
         )}

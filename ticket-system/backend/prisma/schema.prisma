@@ -245,20 +245,22 @@ model TicketTimeEntry {
 }
 
 model FormFieldLibrary {
-  id           String   @id @default(uuid()) @db.Uuid
-  label        String   @db.VarChar(255)
-  fieldType    String   @db.VarChar(50)
-  required     Boolean  @default(false)
-  options      Json?
-  placeholder  String?  @db.VarChar(255)
-  defaultValue String?  @db.Text
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id             String   @id @default(uuid()) @db.Uuid
+  label          String   @db.VarChar(255)
+  fieldType      String   @db.VarChar(50)
+  required       Boolean  @default(false)
+  options        Json?
+  placeholder    String?  @db.VarChar(255)
+  defaultValue   String?  @db.Text
+  zendeskFieldId BigInt?  @unique
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   formFields    FormField[]
   formResponses FormResponse[]
 
   @@index([fieldType])
+  @@index([zendeskFieldId])
 }
 
 model FormField {

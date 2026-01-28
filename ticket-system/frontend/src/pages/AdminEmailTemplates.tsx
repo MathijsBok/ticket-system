@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useParams, useNavigate } from 'react-router-dom';
 import { emailTemplateApi } from '../lib/api';
 import Layout from '../components/Layout';
 import RichTextEditor from '../components/RichTextEditor';
@@ -24,7 +25,9 @@ const placeholderInfo = [
 
 const AdminEmailTemplates: React.FC = () => {
   const queryClient = useQueryClient();
-  const [editingTemplate, setEditingTemplate] = useState<EmailTemplate | null>(null);
+  const navigate = useNavigate();
+  const { id: urlTemplateId } = useParams<{ id: string }>();
+
   const [previewData, setPreviewData] = useState<EmailPreview | null>(null);
   const [formData, setFormData] = useState({
     subject: '',
@@ -46,7 +49,7 @@ const AdminEmailTemplates: React.FC = () => {
     onSuccess: () => {
       toast.success('Template updated successfully');
       queryClient.invalidateQueries({ queryKey: ['emailTemplates'] });
-      setEditingTemplate(null);
+      navigate('/admin/email-templates');
     },
     onError: () => {
       toast.error('Failed to update template');
@@ -58,7 +61,7 @@ const AdminEmailTemplates: React.FC = () => {
     onSuccess: () => {
       toast.success('Template reset to default');
       queryClient.invalidateQueries({ queryKey: ['emailTemplates'] });
-      setEditingTemplate(null);
+      navigate('/admin/email-templates');
     },
     onError: () => {
       toast.error('Failed to reset template');
@@ -66,14 +69,30 @@ const AdminEmailTemplates: React.FC = () => {
   });
 
   const handleEdit = (template: EmailTemplate) => {
-    setEditingTemplate(template);
-    setFormData({
-      subject: template.subject,
-      bodyHtml: template.bodyHtml,
-      bodyPlain: template.bodyPlain
-    });
-    setPreviewData(null);
+    // Navigate to the edit URL
+    navigate(`/admin/email-templates/${template.id}`);
   };
+
+  // Get the editing template from URL param
+  const editingTemplate = urlTemplateId && templates
+    ? templates.find(t => t.id === urlTemplateId) || null
+    : null;
+
+  // Populate form when editing (URL changes to /admin/email-templates/:id)
+  useEffect(() => {
+    if (editingTemplate) {
+      setFormData({
+        subject: editingTemplate.subject,
+        bodyHtml: editingTemplate.bodyHtml,
+        bodyPlain: editingTemplate.bodyPlain
+      });
+      setPreviewData(null);
+    } else if (!urlTemplateId) {
+      // Reset form when back on list view
+      setFormData({ subject: '', bodyHtml: '', bodyPlain: '' });
+      setPreviewData(null);
+    }
+  }, [editingTemplate, urlTemplateId]);
 
   const handleSave = () => {
     if (!editingTemplate) return;
@@ -191,7 +210,7 @@ const AdminEmailTemplates: React.FC = () => {
                 Edit: {editingTemplate.name}
               </h2>
               <button
-                onClick={() => setEditingTemplate(null)}
+                onClick={() => navigate(-1)}
                 className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
               >
                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">

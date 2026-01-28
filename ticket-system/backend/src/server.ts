@@ -1,3 +1,8 @@
+// Enable BigInt JSON serialization globally
+(BigInt.prototype as any).toJSON = function () {
+  return this.toString();
+};
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';

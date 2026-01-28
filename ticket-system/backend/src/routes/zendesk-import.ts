@@ -22,6 +22,33 @@ const upload = multer({
   }
 });
 
+// Configure multer for CSV file uploads
+const uploadCsv = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB limit
+  },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype === 'text/csv' || file.originalname.endsWith('.csv')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only CSV files are allowed'));
+    }
+  }
+});
+
+// Map Zendesk field types to our field types
+const mapZendeskFieldType = (zendeskType: string): string => {
+  const typeMap: Record<string, string> = {
+    'checkbox': 'checkbox',
+    'text': 'text',
+    'numeric': 'text',
+    'multi-line': 'textarea',
+    'drop-down': 'select'
+  };
+  return typeMap[zendeskType.toLowerCase()] || 'text';
+};
+
 // Zendesk data interfaces
 interface ZendeskUser {
   id: number;
@@ -39,6 +66,11 @@ interface ZendeskComment {
   created_at?: string;
 }
 
+interface ZendeskCustomField {
+  id: number;
+  value: any;
+}
+
 interface ZendeskTicket {
   id: number;
   subject?: string;
@@ -51,6 +83,7 @@ interface ZendeskTicket {
   assignee_id?: number;
   submitter?: ZendeskUser;
   comments?: ZendeskComment[];
+  custom_fields?: ZendeskCustomField[];
   created_at?: string;
   updated_at?: string;
   solved_at?: string;
@@ -120,6 +153,96 @@ const extractUsersFromTickets = (tickets: ZendeskTicket[]): Map<number, ZendeskU
   return users;
 };
 
+// Extract unique custom field IDs from tickets
+const extractCustomFieldIds = (tickets: ZendeskTicket[]): Set<number> => {
+  const fieldIds = new Set<number>();
+
+  for (const ticket of tickets) {
+    if (ticket.custom_fields) {
+      for (const field of ticket.custom_fields) {
+        if (field.id) {
+          fieldIds.add(field.id);
+        }
+      }
+    }
+  }
+
+  return fieldIds;
+};
+
+// Create or find FormFieldLibrary entries for Zendesk custom fields
+const createOrFindCustomFields = async (
+  fieldIds: Set<number>
+): Promise<Map<number, string>> => {
+  const fieldMap = new Map<number, string>();
+
+  for (const zendeskId of fieldIds) {
+    // Look up by zendeskFieldId first
+    let existingField = await prisma.formFieldLibrary.findFirst({
+      where: { zendeskFieldId: BigInt(zendeskId) }
+    });
+
+    if (existingField) {
+      fieldMap.set(zendeskId, existingField.id);
+    } else {
+      // Create a placeholder field - import the fields CSV to get proper names
+      const newField = await prisma.formFieldLibrary.create({
+        data: {
+          label: `Zendesk Field ${zendeskId}`,
+          fieldType: 'text',
+          required: false,
+          zendeskFieldId: BigInt(zendeskId)
+        }
+      });
+      fieldMap.set(zendeskId, newField.id);
+    }
+  }
+
+  return fieldMap;
+};
+
+// Create FormResponse entries for a ticket's custom fields
+const createFormResponses = async (
+  ticketId: string,
+  customFields: ZendeskCustomField[],
+  fieldMap: Map<number, string>
+): Promise<number> => {
+  let createdCount = 0;
+
+  for (const field of customFields) {
+    // Skip null/undefined/false/empty values
+    if (field.value === null || field.value === undefined || field.value === false || field.value === '') {
+      continue;
+    }
+
+    const formFieldId = fieldMap.get(field.id);
+    if (!formFieldId) {
+      continue;
+    }
+
+    // Convert value to string
+    const stringValue = typeof field.value === 'object'
+      ? JSON.stringify(field.value)
+      : String(field.value);
+
+    try {
+      await prisma.formResponse.create({
+        data: {
+          ticketId,
+          fieldId: formFieldId,
+          value: stringValue
+        }
+      });
+      createdCount++;
+    } catch (error) {
+      // Skip if there's an error (e.g., duplicate)
+      console.error(`Failed to create form response for field ${field.id}:`, error);
+    }
+  }
+
+  return createdCount;
+};
+
 // Import tickets from Zendesk JSON export
 router.post('/import', requireAuth, requireAdmin, upload.single('file'), async (req: AuthRequest, res: Response) => {
   try {
@@ -178,7 +301,14 @@ router.post('/import', requireAuth, requireAdmin, upload.single('file'), async (
     let importedCount = 0;
     let skippedCount = 0;
     let createdUsersCount = 0;
+    let createdFieldsCount = 0;
+    let createdResponsesCount = 0;
     const errors: string[] = [];
+
+    // Extract and create custom field definitions
+    const customFieldIds = extractCustomFieldIds(tickets);
+    const customFieldMap = await createOrFindCustomFields(customFieldIds);
+    createdFieldsCount = customFieldMap.size;
 
     // Get the admin user who is importing
     const { userId } = getAuth(req);
@@ -334,6 +464,16 @@ router.post('/import', requireAuth, requireAdmin, upload.single('file'), async (
           });
         }
 
+        // Import custom field values as FormResponses
+        if (zendeskTicket.custom_fields && zendeskTicket.custom_fields.length > 0) {
+          const responsesCreated = await createFormResponses(
+            ticket.id,
+            zendeskTicket.custom_fields,
+            customFieldMap
+          );
+          createdResponsesCount += responsesCreated;
+        }
+
         importedCount++;
       } catch (error: any) {
         console.error(`Error importing ticket ${zendeskTicket.id}:`, error);
@@ -348,6 +488,8 @@ router.post('/import', requireAuth, requireAdmin, upload.single('file'), async (
       duplicates: duplicateCount,
       skipped: skippedCount,
       usersCreated: createdUsersCount,
+      customFieldsCreated: createdFieldsCount,
+      formResponsesCreated: createdResponsesCount,
       errors: errors.length > 0 ? errors.slice(0, 10) : undefined // Return max 10 errors
     });
 
@@ -473,14 +615,14 @@ router.post('/import-users', requireAuth, requireAdmin, upload.single('file'), a
         });
 
         if (existingUser) {
-          // Update existing user with new fields
+          // Update existing user - only fill in missing fields
           await prisma.user.update({
             where: { email: zendeskUser.email },
             data: {
-              firstName: firstName || existingUser.firstName,
-              lastName: lastName || existingUser.lastName,
-              timezone: timezone || existingUser.timezone,
-              lastSeenAt: zendeskUser.last_login_at ? new Date(zendeskUser.last_login_at) : existingUser.lastSeenAt
+              firstName: existingUser.firstName || firstName,
+              lastName: existingUser.lastName || lastName,
+              timezone: existingUser.timezone || timezone,
+              lastSeenAt: existingUser.lastSeenAt || (zendeskUser.last_login_at ? new Date(zendeskUser.last_login_at) : undefined)
             }
           });
           updatedCount++;
@@ -494,14 +636,14 @@ router.post('/import-users', requireAuth, requireAdmin, upload.single('file'), a
         });
 
         if (existingImportedUser) {
-          // Update existing imported user
+          // Update existing imported user - only fill in missing fields
           await prisma.user.update({
             where: { clerkId: importClerkId },
             data: {
-              firstName,
-              lastName,
-              timezone,
-              lastSeenAt: zendeskUser.last_login_at ? new Date(zendeskUser.last_login_at) : undefined
+              firstName: existingImportedUser.firstName || firstName,
+              lastName: existingImportedUser.lastName || lastName,
+              timezone: existingImportedUser.timezone || timezone,
+              lastSeenAt: existingImportedUser.lastSeenAt || (zendeskUser.last_login_at ? new Date(zendeskUser.last_login_at) : undefined)
             }
           });
           updatedCount++;
@@ -542,6 +684,110 @@ router.post('/import-users', requireAuth, requireAdmin, upload.single('file'), a
     console.error('Error importing user data:', error);
     return res.status(500).json({
       error: 'Failed to import user data',
+      details: error.message
+    });
+  }
+});
+
+// Import ticket fields from Zendesk CSV export
+router.post('/import-fields', requireAuth, requireAdmin, uploadCsv.single('file'), async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const fileContent = req.file.buffer.toString().trim();
+    const lines = fileContent.split('\n').filter(line => line.trim());
+
+    if (lines.length < 2) {
+      return res.status(400).json({ error: 'CSV file is empty or has no data rows' });
+    }
+
+    // Skip header row
+    const dataLines = lines.slice(1);
+
+    let importedCount = 0;
+    let updatedCount = 0;
+    let skippedCount = 0;
+    const errors: string[] = [];
+
+    for (const line of dataLines) {
+      try {
+        // Parse CSV line (handle commas in quoted fields)
+        const match = line.match(/^"?([^",]*)"?,\s*"?([^",]*)"?,\s*"?(\d+)"?,\s*"?([^",]*)"?,\s*"?([^",]*)"?$/);
+        if (!match) {
+          skippedCount++;
+          continue;
+        }
+
+        const [, displayName, fieldType, fieldIdStr] = match;
+        const zendeskFieldId = BigInt(fieldIdStr.trim());
+        const mappedType = mapZendeskFieldType(fieldType.trim());
+
+        // Check if field already exists by zendeskFieldId
+        const existingField = await prisma.formFieldLibrary.findFirst({
+          where: { zendeskFieldId }
+        });
+
+        if (existingField) {
+          // Update label and type if needed
+          await prisma.formFieldLibrary.update({
+            where: { id: existingField.id },
+            data: {
+              label: displayName.trim(),
+              fieldType: mappedType
+            }
+          });
+          updatedCount++;
+        } else {
+          // Check if there's a placeholder "Zendesk Field {id}" entry
+          const placeholderLabel = `Zendesk Field ${zendeskFieldId}`;
+          const placeholderField = await prisma.formFieldLibrary.findFirst({
+            where: { label: placeholderLabel }
+          });
+
+          if (placeholderField) {
+            // Update placeholder with real data
+            await prisma.formFieldLibrary.update({
+              where: { id: placeholderField.id },
+              data: {
+                label: displayName.trim(),
+                fieldType: mappedType,
+                zendeskFieldId
+              }
+            });
+            updatedCount++;
+          } else {
+            // Create new field
+            await prisma.formFieldLibrary.create({
+              data: {
+                label: displayName.trim(),
+                fieldType: mappedType,
+                required: false,
+                zendeskFieldId
+              }
+            });
+            importedCount++;
+          }
+        }
+      } catch (error: any) {
+        errors.push(`Line: ${error.message}`);
+        skippedCount++;
+      }
+    }
+
+    return res.json({
+      success: true,
+      imported: importedCount,
+      updated: updatedCount,
+      skipped: skippedCount,
+      errors: errors.length > 0 ? errors.slice(0, 10) : undefined
+    });
+
+  } catch (error: any) {
+    console.error('Error importing ticket fields:', error);
+    return res.status(500).json({
+      error: 'Failed to import ticket fields',
       details: error.message
     });
   }
