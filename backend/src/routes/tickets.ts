@@ -271,6 +271,16 @@ router.patch('/:id',
       const { status, priority, assigneeId, categoryId } = req.body;
       const userId = req.userId!;
 
+      // Fetch current ticket to check status
+      const currentTicket = await prisma.ticket.findUnique({
+        where: { id },
+        select: { status: true }
+      });
+
+      if (!currentTicket) {
+        return res.status(404).json({ error: 'Ticket not found' });
+      }
+
       const updateData: any = {};
       const activities: any[] = [];
 
@@ -324,6 +334,16 @@ router.patch('/:id',
           action: 'assigned',
           details: { assigneeId }
         });
+
+        // Auto-set status to OPEN when assigning a NEW ticket
+        if (assigneeId && currentTicket.status === 'NEW' && !status) {
+          updateData.status = 'OPEN';
+          activities.push({
+            userId,
+            action: 'status_changed',
+            details: { newStatus: 'OPEN', reason: 'auto_on_assign' }
+          });
+        }
       }
 
       if (categoryId !== undefined) {
