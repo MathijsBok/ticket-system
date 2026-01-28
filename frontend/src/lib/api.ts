@@ -260,7 +260,8 @@ export const zendeskApi = {
     return api.post('/zendesk/import', formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
-      }
+      },
+      timeout: 600000 // 10 minutes for large imports
     });
   },
   importUsers: (file: File) => {
@@ -270,7 +271,8 @@ export const zendeskApi = {
     return api.post('/zendesk/import-users', formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
-      }
+      },
+      timeout: 300000 // 5 minutes for user imports
     });
   },
   resetTicketSequence: () =>
@@ -364,4 +366,24 @@ export const bugApi = {
 
   delete: (id: string) =>
     api.delete(`/bugs/${id}`)
+};
+
+// Export API
+export const exportApi = {
+  analyticsPdf: () =>
+    api.get('/export/analytics/pdf', {
+      responseType: 'blob'
+    }),
+
+  ticketsJson: (startDate?: string, endDate?: string) =>
+    api.get('/export/tickets/json', {
+      params: { startDate, endDate },
+      responseType: 'blob'
+    }),
+
+  usersJson: (startDate?: string, endDate?: string) =>
+    api.get('/export/users/json', {
+      params: { startDate, endDate },
+      responseType: 'blob'
+    })
 };

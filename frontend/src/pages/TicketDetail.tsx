@@ -3,8 +3,8 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useUser } from '@clerk/clerk-react';
 import toast from 'react-hot-toast';
-import { ticketApi, commentApi, userApi, macroApi } from '../lib/api';
-import { Macro } from '../types';
+import { ticketApi, commentApi, userApi, macroApi, attachmentApi } from '../lib/api';
+import { Macro, Attachment } from '../types';
 import { useView } from '../contexts/ViewContext';
 import Layout from '../components/Layout';
 import RichTextEditor from '../components/RichTextEditor';
@@ -63,6 +63,8 @@ const TicketDetail: React.FC = () => {
   const [macroFilter, setMacroFilter] = useState('');
   const [showAssignDropdown, setShowAssignDropdown] = useState(false);
   const [mentionedUserIds, setMentionedUserIds] = useState<string[]>([]);
+  const [selectedAttachment, setSelectedAttachment] = useState<Attachment | null>(null);
+  const [attachmentLoading, setAttachmentLoading] = useState(false);
 
   const { data: ticket, isLoading } = useQuery({
     queryKey: ['ticket', id],
@@ -230,6 +232,33 @@ const TicketDetail: React.FC = () => {
     const newStatus = e.target.value;
     if (newStatus && newStatus !== ticket?.status) {
       updateStatusMutation.mutate(newStatus);
+    }
+  };
+
+  const formatFileSize = (bytes: number | string) => {
+    const size = typeof bytes === 'string' ? parseInt(bytes) : bytes;
+    if (size < 1024) return size + ' B';
+    if (size < 1024 * 1024) return (size / 1024).toFixed(1) + ' KB';
+    return (size / (1024 * 1024)).toFixed(1) + ' MB';
+  };
+
+  const handleViewAttachment = (attachment: Attachment) => {
+    setSelectedAttachment(attachment);
+  };
+
+  const handleDownloadAttachment = async (attachment: Attachment) => {
+    try {
+      const response = await attachmentApi.download(attachment.id);
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', attachment.filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      toast.error('Failed to download attachment');
     }
   };
 
@@ -629,6 +658,52 @@ const TicketDetail: React.FC = () => {
               </div>
             )}
 
+            {/* Attachments Section */}
+            {ticket.attachments && ticket.attachments.length > 0 && (
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                  Attachments ({ticket.attachments.length})
+                </h3>
+                <ul className="space-y-2">
+                  {ticket.attachments.map((attachment: Attachment) => (
+                    <li key={attachment.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                      <button
+                        onClick={() => handleViewAttachment(attachment)}
+                        className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                      >
+                        {attachment.mimeType.startsWith('image/') ? (
+                          <svg className="w-5 h-5 text-blue-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                        ) : (
+                          <svg className="w-5 h-5 text-purple-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                        )}
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                            {attachment.filename}
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            {formatFileSize(attachment.fileSize)}
+                          </p>
+                        </div>
+                      </button>
+                      <button
+                        onClick={() => handleDownloadAttachment(attachment)}
+                        className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex-shrink-0"
+                        title="Download"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             {/* Macro selector for agents - Desktop only in left column (not shown for closed tickets) */}
             {isAgent && macros && macros.length > 0 && !ticketClosed && (
               <div className="hidden lg:block bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
@@ -927,6 +1002,107 @@ const TicketDetail: React.FC = () => {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Attachment Preview Modal */}
+        {selectedAttachment && (
+          <div
+            className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4"
+            onClick={() => setSelectedAttachment(null)}
+          >
+            <div
+              className="bg-white dark:bg-gray-800 rounded-lg max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+                <div className="flex items-center gap-3 min-w-0">
+                  {selectedAttachment.mimeType.startsWith('image/') ? (
+                    <svg className="w-5 h-5 text-blue-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5 text-purple-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                  )}
+                  <div className="min-w-0">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white truncate">
+                      {selectedAttachment.filename}
+                    </h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {formatFileSize(selectedAttachment.fileSize)}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <button
+                    onClick={() => handleDownloadAttachment(selectedAttachment)}
+                    className="p-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
+                    title="Download"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => setSelectedAttachment(null)}
+                    className="p-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
+                    title="Close"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              {/* Modal Content */}
+              <div className="p-4 overflow-auto max-h-[calc(90vh-80px)] flex items-center justify-center bg-gray-100 dark:bg-gray-900">
+                {selectedAttachment.mimeType.startsWith('image/') ? (
+                  <img
+                    src={`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/attachments/${selectedAttachment.id}/view`}
+                    alt={selectedAttachment.filename}
+                    className="max-w-full max-h-[70vh] object-contain rounded"
+                    onLoad={() => setAttachmentLoading(false)}
+                    onError={() => {
+                      setAttachmentLoading(false);
+                      toast.error('Failed to load image');
+                    }}
+                  />
+                ) : selectedAttachment.mimeType.startsWith('video/') ? (
+                  <video
+                    src={`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/attachments/${selectedAttachment.id}/view`}
+                    controls
+                    className="max-w-full max-h-[70vh] rounded"
+                    onLoadedData={() => setAttachmentLoading(false)}
+                    onError={() => {
+                      setAttachmentLoading(false);
+                      toast.error('Failed to load video');
+                    }}
+                  >
+                    Your browser does not support the video tag.
+                  </video>
+                ) : (
+                  <div className="text-center py-8">
+                    <svg className="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <p className="text-gray-600 dark:text-gray-400 mb-4">Preview not available for this file type</p>
+                    <button
+                      onClick={() => handleDownloadAttachment(selectedAttachment)}
+                      className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-md hover:opacity-90"
+                    >
+                      <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      Download File
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}

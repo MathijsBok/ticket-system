@@ -7,6 +7,28 @@ import { requireAuth, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
+// Allowed file types (images and videos only)
+const ALLOWED_MIME_TYPES = [
+  // Images
+  'image/png',
+  'image/jpeg',
+  'image/jpg',
+  'image/gif',
+  'image/webp',
+  'image/bmp',
+  'image/svg+xml',
+  // Videos
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
+  'video/x-msvideo'
+];
+
+const ALLOWED_EXTENSIONS = [
+  '.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg',
+  '.mp4', '.webm', '.mov', '.avi'
+];
+
 // Configure multer for file uploads
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => {
@@ -27,8 +49,18 @@ const upload = multer({
   limits: {
     fileSize: parseInt(process.env.MAX_FILE_SIZE || '10485760') // 10MB default
   },
-  fileFilter: (_req, _file, cb) => {
-    // Add file type restrictions if needed
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const mimeType = file.mimetype.toLowerCase();
+
+    if (!ALLOWED_EXTENSIONS.includes(ext)) {
+      return cb(new Error(`File type not allowed. Allowed extensions: ${ALLOWED_EXTENSIONS.join(', ')}`));
+    }
+
+    if (!ALLOWED_MIME_TYPES.includes(mimeType)) {
+      return cb(new Error(`File type not allowed. Only images and videos are permitted.`));
+    }
+
     cb(null, true);
   }
 });
@@ -115,6 +147,45 @@ router.get('/:id/download', requireAuth, async (req: AuthRequest, res: Response)
   } catch (error) {
     console.error('Error downloading attachment:', error);
     return res.status(500).json({ error: 'Failed to download attachment' });
+  }
+});
+
+// View attachment inline (for preview)
+router.get('/:id/view', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = req.userId!;
+    const userRole = req.userRole!;
+
+    const attachment = await prisma.attachment.findUnique({
+      where: { id },
+      include: {
+        ticket: {
+          select: { requesterId: true }
+        }
+      }
+    });
+
+    if (!attachment) {
+      return res.status(404).json({ error: 'Attachment not found' });
+    }
+
+    // Users can only view attachments from their own tickets
+    if (userRole === 'USER' && attachment.ticket.requesterId !== userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    if (!fs.existsSync(attachment.filePath)) {
+      return res.status(404).json({ error: 'File not found on disk' });
+    }
+
+    // Send file inline for preview
+    res.setHeader('Content-Type', attachment.mimeType);
+    res.setHeader('Content-Disposition', `inline; filename="${attachment.filename}"`);
+    return res.sendFile(path.resolve(attachment.filePath));
+  } catch (error) {
+    console.error('Error viewing attachment:', error);
+    return res.status(500).json({ error: 'Failed to view attachment' });
   }
 });
 

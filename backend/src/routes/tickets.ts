@@ -250,7 +250,7 @@ router.patch('/:id',
   requireAuth,
   requireAgent,
   [
-    body('status').optional().isIn(['NEW', 'OPEN', 'PENDING', 'ON_HOLD', 'SOLVED']),
+    body('status').optional().isIn(['NEW', 'OPEN', 'PENDING', 'ON_HOLD', 'SOLVED', 'CLOSED']),
     body('priority').optional().isIn(['LOW', 'NORMAL', 'HIGH', 'URGENT']),
     body('assigneeId').optional().isUUID(),
     body('categoryId').optional().isUUID()
@@ -361,7 +361,7 @@ router.patch('/bulk/update',
   [
     body('ticketIds').isArray().notEmpty(),
     body('ticketIds.*').isUUID(),
-    body('status').optional().isIn(['NEW', 'OPEN', 'PENDING', 'ON_HOLD', 'SOLVED'])
+    body('status').optional().isIn(['NEW', 'OPEN', 'PENDING', 'ON_HOLD', 'SOLVED', 'CLOSED'])
   ],
   async (req: AuthRequest, res: Response) => {
     const errors = validationResult(req);

@@ -4,7 +4,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useUser } from '@clerk/clerk-react';
 import { useView } from '../contexts/ViewContext';
 import toast from 'react-hot-toast';
-import { ticketApi, formApi } from '../lib/api';
+import { ticketApi, formApi, attachmentApi } from '../lib/api';
 import Layout from '../components/Layout';
 import FormRenderer from '../components/FormRenderer';
 import { Form } from '../types';
@@ -23,6 +23,12 @@ const CreateTicket: React.FC = () => {
   const [selectedFormId, setSelectedFormId] = useState<string | null>(null);
   const [formValues, setFormValues] = useState<Record<string, string>>({});
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+
+  // Allowed file types
+  const ALLOWED_EXTENSIONS = '.png,.jpg,.jpeg,.gif,.webp,.bmp,.svg,.mp4,.webm,.mov,.avi';
+  const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp', 'image/bmp', 'image/svg+xml', 'video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo'];
 
   // Fetch available forms
   const { data: forms } = useQuery({
@@ -75,8 +81,24 @@ const CreateTicket: React.FC = () => {
       const response = await ticketApi.create(data);
       return response.data;
     },
-    onSuccess: (data) => {
-      toast.success('Ticket created successfully!');
+    onSuccess: async (data) => {
+      // Upload attachments if any
+      if (selectedFiles.length > 0) {
+        setIsUploading(true);
+        try {
+          for (const file of selectedFiles) {
+            await attachmentApi.upload(file, data.id);
+          }
+          toast.success('Ticket created with attachments!');
+        } catch (error) {
+          console.error('Failed to upload some attachments:', error);
+          toast.success('Ticket created, but some attachments failed to upload');
+        } finally {
+          setIsUploading(false);
+        }
+      } else {
+        toast.success('Ticket created successfully!');
+      }
       navigate(`/tickets/${data.id}`);
     },
     onError: () => {
@@ -172,6 +194,28 @@ const CreateTicket: React.FC = () => {
       setFormValues({});
       setFormErrors({});
     }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const validFiles = files.filter(file => ALLOWED_TYPES.includes(file.type));
+
+    if (validFiles.length !== files.length) {
+      toast.error('Some files were rejected. Only images and videos are allowed.');
+    }
+
+    setSelectedFiles(prev => [...prev, ...validFiles]);
+    e.target.value = ''; // Reset input to allow re-selecting same file
+  };
+
+  const removeFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   };
 
   return (
@@ -321,6 +365,87 @@ const CreateTicket: React.FC = () => {
             </div>
           )}
 
+          {/* Attachments Section */}
+          {selectedFormId && (
+            <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                Attachments
+              </h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Add images or videos (optional)
+                  </label>
+                  <div className="flex items-center justify-center w-full">
+                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 dark:hover:bg-gray-700 dark:bg-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:hover:border-gray-500">
+                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                        <svg className="w-8 h-8 mb-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+                        <p className="mb-2 text-sm text-gray-500 dark:text-gray-400">
+                          <span className="font-semibold">Click to upload</span> or drag and drop
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          PNG, JPG, GIF, WEBP, SVG, MP4, WEBM, MOV (Max 10MB each)
+                        </p>
+                      </div>
+                      <input
+                        type="file"
+                        className="hidden"
+                        multiple
+                        accept={ALLOWED_EXTENSIONS}
+                        onChange={handleFileSelect}
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                {/* Selected files list */}
+                {selectedFiles.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Selected files ({selectedFiles.length})
+                    </p>
+                    <ul className="divide-y divide-gray-200 dark:divide-gray-600 border border-gray-200 dark:border-gray-600 rounded-lg">
+                      {selectedFiles.map((file, index) => (
+                        <li key={index} className="flex items-center justify-between px-4 py-3">
+                          <div className="flex items-center gap-3">
+                            {file.type.startsWith('image/') ? (
+                              <svg className="w-5 h-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                            ) : (
+                              <svg className="w-5 h-5 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                              </svg>
+                            )}
+                            <div>
+                              <p className="text-sm font-medium text-gray-900 dark:text-white truncate max-w-xs">
+                                {file.name}
+                              </p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">
+                                {formatFileSize(file.size)}
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeFile(index)}
+                            className="text-red-500 hover:text-red-700 p-1"
+                          >
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Priority Selection (Only visible for agents/admins when form is selected) */}
           {selectedFormId && isAgentOrAdmin && (
             <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 p-6">
@@ -351,10 +476,10 @@ const CreateTicket: React.FC = () => {
             <div className="flex gap-4">
               <button
                 type="submit"
-                disabled={createMutation.isPending}
+                disabled={createMutation.isPending || isUploading}
                 className="flex-1 inline-flex justify-center items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {createMutation.isPending ? 'Creating...' : 'Create Ticket'}
+                {isUploading ? 'Uploading attachments...' : createMutation.isPending ? 'Creating...' : 'Create Ticket'}
               </button>
               <button
                 type="button"
