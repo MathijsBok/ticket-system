@@ -236,7 +236,10 @@ export const userApi = {
     api.patch(`/users/${id}/role`, { role }),
 
   block: (id: string, isBlocked: boolean, reason?: string) =>
-    api.patch(`/users/${id}/block`, { isBlocked, reason })
+    api.patch(`/users/${id}/block`, { isBlocked, reason }),
+
+  delete: (id: string) =>
+    api.delete(`/users/${id}`)
 };
 
 // Settings API
@@ -341,4 +344,22 @@ export const notificationApi = {
 
   delete: (id: string) =>
     api.delete(`/notifications/${id}`)
+};
+
+// Bug API
+export const bugApi = {
+  getAll: () =>
+    api.get('/bugs'),
+
+  create: (data: { title: string; description: string }) =>
+    api.post('/bugs', data),
+
+  solve: (id: string) =>
+    api.patch(`/bugs/${id}/solve`),
+
+  reopen: (id: string) =>
+    api.patch(`/bugs/${id}/reopen`),
+
+  delete: (id: string) =>
+    api.delete(`/bugs/${id}`)
 };

@@ -371,4 +371,50 @@ router.patch(
   }
 );
 
+// Delete user (admin only)
+router.delete(
+  '/:id',
+  requireAuth,
+  requireAdmin,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+
+      // Find the user
+      const user = await prisma.user.findUnique({
+        where: { id },
+        select: { id: true, clerkId: true, role: true }
+      });
+
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      // Prevent admin from deleting themselves
+      if (user.id === req.userId) {
+        return res.status(400).json({ error: 'You cannot delete yourself' });
+      }
+
+      // Delete the user from the database
+      // Note: Related records will be handled by cascade delete or set null based on schema
+      await prisma.user.delete({
+        where: { id }
+      });
+
+      // Also delete from Clerk
+      try {
+        await clerkClient.users.deleteUser(user.clerkId);
+      } catch (clerkError) {
+        console.error('Failed to delete Clerk user:', clerkError);
+        // Don't fail the request, the database record is deleted
+      }
+
+      return res.json({ message: 'User deleted successfully' });
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      return res.status(500).json({ error: 'Failed to delete user' });
+    }
+  }
+);
+
 export default router;

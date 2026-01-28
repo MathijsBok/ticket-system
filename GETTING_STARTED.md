@@ -34,7 +34,7 @@ cd ../frontend && npm install
 1. Go to https://clerk.com and sign up
 2. Click "Create Application"
 3. Choose "Email" as authentication method
-4. Name it "Ticket System"
+4. Name it "Klever Support"
 
 #### Get Your Keys
 1. Go to "API Keys" in Clerk dashboard

@@ -71,8 +71,10 @@ interface UserTableProps {
   handleSaveUser: (userId: string) => void;
   handleCancelEdit: () => void;
   handleBlockUser: (user: User) => void;
+  handleDeleteUser: (user: User) => void;
   isPending: boolean;
   isBlocking: boolean;
+  isDeleting: boolean;
 }
 
 const UserTable: React.FC<UserTableProps> = ({
@@ -99,8 +101,10 @@ const UserTable: React.FC<UserTableProps> = ({
   handleSaveUser,
   handleCancelEdit,
   handleBlockUser,
+  handleDeleteUser,
   isPending,
-  isBlocking
+  isBlocking,
+  isDeleting
 }) => (
   <div className="space-y-3">
     <div className="flex items-center gap-3">
@@ -201,7 +205,7 @@ const UserTable: React.FC<UserTableProps> = ({
                   : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
               }`}
             >
-              <td className="px-4 py-2 text-sm text-gray-900 dark:text-white truncate" title={user.email}>
+              <td className="px-4 py-2 text-sm text-gray-900 dark:text-white max-w-0" title={user.email}>
                 {editingUserId === user.id ? (
                   <input
                     type="email"
@@ -210,7 +214,7 @@ const UserTable: React.FC<UserTableProps> = ({
                     className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
                   />
                 ) : (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
                     <span className="truncate">{user.email}</span>
                     {user.isBlocked && (
                       <span className="flex-shrink-0 px-1.5 py-0.5 text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 rounded" title={user.blockedReason || 'Blocked'}>
@@ -220,7 +224,7 @@ const UserTable: React.FC<UserTableProps> = ({
                   </div>
                 )}
               </td>
-              <td className="px-4 py-2 text-sm text-gray-900 dark:text-white truncate" title={getUserName(user)}>
+              <td className="px-4 py-2 text-sm text-gray-900 dark:text-white max-w-0" title={getUserName(user)}>
                 {editingUserId === user.id ? (
                   <div className="flex gap-1">
                     <input
@@ -239,7 +243,7 @@ const UserTable: React.FC<UserTableProps> = ({
                     />
                   </div>
                 ) : (
-                  getUserName(user)
+                  <span className="block truncate">{getUserName(user)}</span>
                 )}
               </td>
               <td className="px-4 py-2 whitespace-nowrap">
@@ -293,7 +297,7 @@ const UserTable: React.FC<UserTableProps> = ({
                     </button>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-3">
                     <button
                       onClick={() => handleEditUser(user)}
                       className="text-primary hover:text-primary/80 p-1"
@@ -309,7 +313,7 @@ const UserTable: React.FC<UserTableProps> = ({
                         disabled={isBlocking}
                         className={`p-1 ${user.isBlocked
                           ? 'text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300'
-                          : 'text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300'
+                          : 'text-orange-600 dark:text-orange-400 hover:text-orange-800 dark:hover:text-orange-300'
                         } disabled:opacity-50`}
                         title={user.isBlocked ? 'Unblock user' : 'Block user (mark as spam)'}
                       >
@@ -324,6 +328,16 @@ const UserTable: React.FC<UserTableProps> = ({
                         )}
                       </button>
                     )}
+                    <button
+                      onClick={() => handleDeleteUser(user)}
+                      disabled={isDeleting}
+                      className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 p-1 disabled:opacity-50"
+                      title="Delete user"
+                    >
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
                   </div>
                 )}
               </td>
@@ -373,6 +387,7 @@ const AdminUsers: React.FC = () => {
   const [editingLastName, setEditingLastName] = useState('');
   const [selectedRole, setSelectedRole] = useState<UserRole>('USER');
   const [searchQuery, setSearchQuery] = useState('');
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
 
   const { data: users, isLoading, error } = useQuery({
     queryKey: ['allUsers'],
@@ -406,6 +421,20 @@ const AdminUsers: React.FC = () => {
     onError: (error: any) => {
       console.error('Block user error:', error?.response?.status, error?.response?.data);
       const message = error?.response?.data?.error || 'Failed to update user status';
+      toast.error(message);
+    }
+  });
+
+  const deleteUserMutation = useMutation({
+    mutationFn: (id: string) => userApi.delete(id),
+    onSuccess: () => {
+      toast.success('User deleted successfully');
+      queryClient.invalidateQueries({ queryKey: ['allUsers'] });
+      setUserToDelete(null);
+    },
+    onError: (error: any) => {
+      console.error('Delete user error:', error?.response?.status, error?.response?.data);
+      const message = error?.response?.data?.error || 'Failed to delete user';
       toast.error(message);
     }
   });
@@ -551,6 +580,16 @@ const AdminUsers: React.FC = () => {
     });
   }, [blockUserMutation]);
 
+  const handleDeleteUser = useCallback((user: User) => {
+    setUserToDelete(user);
+  }, []);
+
+  const confirmDelete = useCallback(() => {
+    if (userToDelete) {
+      deleteUserMutation.mutate(userToDelete.id);
+    }
+  }, [userToDelete, deleteUserMutation]);
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -658,8 +697,10 @@ const AdminUsers: React.FC = () => {
                 handleSaveUser={handleSaveUser}
                 handleCancelEdit={handleCancelEdit}
                 handleBlockUser={handleBlockUser}
+                handleDeleteUser={handleDeleteUser}
                 isPending={updateUserMutation.isPending}
                 isBlocking={blockUserMutation.isPending}
+                isDeleting={deleteUserMutation.isPending}
               />
             )}
 
@@ -689,8 +730,10 @@ const AdminUsers: React.FC = () => {
                 handleSaveUser={handleSaveUser}
                 handleCancelEdit={handleCancelEdit}
                 handleBlockUser={handleBlockUser}
+                handleDeleteUser={handleDeleteUser}
                 isPending={updateUserMutation.isPending}
                 isBlocking={blockUserMutation.isPending}
+                isDeleting={deleteUserMutation.isPending}
               />
             )}
 
@@ -720,8 +763,10 @@ const AdminUsers: React.FC = () => {
                 handleSaveUser={handleSaveUser}
                 handleCancelEdit={handleCancelEdit}
                 handleBlockUser={handleBlockUser}
+                handleDeleteUser={handleDeleteUser}
                 isPending={updateUserMutation.isPending}
                 isBlocking={blockUserMutation.isPending}
+                isDeleting={deleteUserMutation.isPending}
               />
             )}
 
@@ -751,11 +796,63 @@ const AdminUsers: React.FC = () => {
                 handleSaveUser={handleSaveUser}
                 handleCancelEdit={handleCancelEdit}
                 handleBlockUser={handleBlockUser}
+                handleDeleteUser={handleDeleteUser}
                 isPending={updateUserMutation.isPending}
                 isBlocking={blockUserMutation.isPending}
+                isDeleting={deleteUserMutation.isPending}
               />
             )}
           </>
+        )}
+
+        {/* Delete Confirmation Dialog */}
+        {userToDelete && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="flex-shrink-0 w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
+                  <svg className="w-6 h-6 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Delete User
+                </h3>
+              </div>
+              <p className="text-gray-600 dark:text-gray-400 mb-2">
+                Are you sure you want to delete this user?
+              </p>
+              <div className="bg-gray-50 dark:bg-gray-900 rounded-md p-3 mb-4">
+                <p className="font-medium text-gray-900 dark:text-white">
+                  {userToDelete.firstName || userToDelete.lastName
+                    ? `${userToDelete.firstName || ''} ${userToDelete.lastName || ''}`.trim()
+                    : userToDelete.email}
+                </p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">{userToDelete.email}</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                  Role: <span className={`px-1.5 py-0.5 text-xs font-medium rounded ${getRoleColor(userToDelete.role)}`}>{userToDelete.role}</span>
+                </p>
+              </div>
+              <p className="text-sm text-red-600 dark:text-red-400 mb-4">
+                This action cannot be undone. The user will be removed from both the database and Clerk.
+              </p>
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setUserToDelete(null)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmDelete}
+                  disabled={deleteUserMutation.isPending}
+                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 transition-colors"
+                >
+                  {deleteUserMutation.isPending ? 'Deleting...' : 'Delete User'}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </Layout>

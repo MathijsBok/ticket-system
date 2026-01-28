@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useUser, UserButton } from '@clerk/clerk-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { useView } from '../contexts/ViewContext';
@@ -14,6 +14,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { theme, toggleTheme } = useTheme();
   const { currentView, setCurrentView } = useView();
   const location = useLocation();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   // Default to 'USER' role if no role is set (new users)
   const userRole = (user?.publicMetadata?.role as string) || 'USER';
 
@@ -45,7 +46,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       nav.push(
         { name: 'Tickets', href: '/agent' },
         { name: 'Macros', href: '/admin/macros' },
-        { name: 'Email Templates', href: '/admin/email-templates' }
+        { name: 'Email Templates', href: '/admin/email-templates' },
+        { name: 'Bug Reports', href: '/admin/bugs' }
       );
     } else if (effectiveRole === 'ADMIN') {
       // Admin view: show all admin navigation in the main nav array
@@ -58,12 +60,17 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         { name: 'Macros', href: '/admin/macros' },
         { name: 'Email Templates', href: '/admin/email-templates' },
         { name: 'Users', href: '/admin/users' },
+        { name: 'Bug Reports', href: '/admin/bugs' },
         { name: 'Settings', href: '/admin/settings' }
       );
     }
 
     return nav;
   }, [effectiveRole]);
+
+  const handleNavClick = () => {
+    setMobileMenuOpen(false);
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -74,12 +81,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             {/* Logo */}
             <div className="flex items-center">
               <Link to="/" className="text-xl font-bold text-primary">
-                Ticket System
+                Klever Support
               </Link>
             </div>
 
-            {/* Navigation */}
-            <nav className="flex items-center gap-6">
+            {/* Desktop Navigation */}
+            <nav className="hidden lg:flex items-center gap-6">
               {navigation.map((item) => (
                 <Link
                   key={item.href}
@@ -134,9 +141,90 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               {/* User menu */}
               <UserButton afterSignOutUrl="/" />
             </nav>
+
+            {/* Mobile menu button and utilities */}
+            <div className="flex lg:hidden items-center gap-3">
+              {/* Notifications bell for agents and admins (mobile) */}
+              {(userRole === 'AGENT' || userRole === 'ADMIN') && (
+                <NotificationBell />
+              )}
+
+              {/* Theme toggle (mobile) */}
+              <button
+                onClick={toggleTheme}
+                className="p-2 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+              >
+                {theme === 'light' ? (
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                  </svg>
+                ) : (
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                  </svg>
+                )}
+              </button>
+
+              {/* User menu (mobile) */}
+              <UserButton afterSignOutUrl="/" />
+
+              {/* Hamburger menu button */}
+              <button
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="p-2 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                aria-label="Toggle menu"
+              >
+                {mobileMenuOpen ? (
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                ) : (
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                )}
+              </button>
+            </div>
           </div>
         </div>
 
+        {/* Mobile Navigation Menu */}
+        {mobileMenuOpen && (
+          <div className="lg:hidden border-t border-gray-200 dark:border-gray-700">
+            <div className="px-4 py-3 space-y-1">
+              {navigation.map((item) => (
+                <Link
+                  key={item.href}
+                  to={item.href}
+                  onClick={handleNavClick}
+                  className={`block px-3 py-2 rounded-md text-base font-medium transition-colors ${
+                    location.pathname === item.href
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  }`}
+                >
+                  {item.name}
+                </Link>
+              ))}
+
+              {userRole === 'ADMIN' && (
+                <div className="px-3 py-2 flex items-center gap-2">
+                  <span className="text-sm text-gray-500 dark:text-gray-400">View as:</span>
+                  <select
+                    value={currentView}
+                    onChange={(e) => handleViewChange(e.target.value)}
+                    className="flex-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary transition-colors"
+                  >
+                    <option value="USER">User</option>
+                    <option value="AGENT">Agent</option>
+                    <option value="ADMIN">Admin</option>
+                  </select>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </header>
 
       {/* Main content */}

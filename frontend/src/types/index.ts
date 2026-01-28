@@ -236,7 +236,10 @@ export interface EmailPreview {
 }
 
 // Notification types
-export type NotificationType = 'MENTION' | 'TICKET_ASSIGNED' | 'TICKET_UPDATED' | 'NEW_REPLY';
+export type NotificationType = 'MENTION' | 'TICKET_ASSIGNED' | 'TICKET_UPDATED' | 'NEW_REPLY' | 'BUG_REPORTED';
+
+// Bug status
+export type BugStatus = 'OPEN' | 'SOLVED';
 
 // Notification for users
 export interface Notification {
@@ -259,4 +262,31 @@ export interface AgentForMention {
   firstName?: string;
   lastName?: string;
   role: UserRole;
+}
+
+// Bug report
+export interface Bug {
+  id: string;
+  title: string;
+  description: string;
+  status: BugStatus;
+  reportedById: string;
+  solvedById?: string;
+  createdAt: string;
+  solvedAt?: string;
+  updatedAt: string;
+  reportedBy: {
+    id: string;
+    email: string;
+    firstName?: string;
+    lastName?: string;
+    role: UserRole;
+  };
+  solvedBy?: {
+    id: string;
+    email: string;
+    firstName?: string;
+    lastName?: string;
+    role: UserRole;
+  };
 }

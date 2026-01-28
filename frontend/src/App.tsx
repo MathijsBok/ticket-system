@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { ClerkProvider, SignedIn, SignedOut, RedirectToSignIn, useUser } from '@clerk/clerk-react';
+import { ClerkProvider, SignedIn, SignedOut, useUser } from '@clerk/clerk-react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -10,6 +10,8 @@ import { ViewProvider } from './contexts/ViewContext';
 import ProtectedRoute from './components/ProtectedRoute';
 
 // Pages
+import LoginPage from './pages/LoginPage';
+import SignUpPage from './pages/SignUpPage';
 import UserDashboard from './pages/UserDashboard';
 import AgentDashboard from './pages/AgentDashboard';
 import AdminDashboard from './pages/AdminDashboard';
@@ -22,6 +24,7 @@ import AdminSettings from './pages/AdminSettings';
 import AdminMacros from './pages/AdminMacros';
 import AdminEmailTemplates from './pages/AdminEmailTemplates';
 import AdminUsers from './pages/AdminUsers';
+import AdminBugs from './pages/AdminBugs';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -205,6 +208,22 @@ function App() {
                         </ProtectedRoute>
                       }
                     />
+                    <Route
+                      path="/admin/bugs"
+                      element={
+                        <ProtectedRoute allowedRoles={['AGENT', 'ADMIN']}>
+                          <AdminBugs />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/admin/bugs/:id"
+                      element={
+                        <ProtectedRoute allowedRoles={['AGENT', 'ADMIN']}>
+                          <AdminBugs />
+                        </ProtectedRoute>
+                      }
+                    />
 
                     {/* Common Routes */}
                     <Route path="/tickets/new" element={<CreateTicket />} />
@@ -213,7 +232,11 @@ function App() {
                   </Routes>
                 </SignedIn>
                 <SignedOut>
-                  <RedirectToSignIn />
+                  <Routes>
+                    <Route path="/sign-in/*" element={<LoginPage />} />
+                    <Route path="/sign-up/*" element={<SignUpPage />} />
+                    <Route path="*" element={<Navigate to="/sign-in" replace />} />
+                  </Routes>
                 </SignedOut>
               </BrowserRouter>
               <Toaster position="top-right" />

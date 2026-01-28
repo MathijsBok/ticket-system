@@ -71,6 +71,8 @@ model User {
   activities      TicketActivity[]  @relation("UserActivities")
   mentions        Mention[]
   notifications   Notification[]
+  bugsReported    Bug[]             @relation("BugReporter")
+  bugsSolved      Bug[]             @relation("BugSolver")
 
   @@index([clerkId])
   @@index([email])
@@ -374,12 +376,19 @@ model Mention {
   @@index([mentionedUserId])
 }
 
+// Bug status
+enum BugStatus {
+  OPEN
+  SOLVED
+}
+
 // Notification types
 enum NotificationType {
   MENTION
   TICKET_ASSIGNED
   TICKET_UPDATED
   NEW_REPLY
+  BUG_REPORTED
 }
 
 // Notification - alerts for users
@@ -399,5 +408,25 @@ model Notification {
 
   @@index([userId])
   @@index([userId, isRead])
+  @@index([createdAt])
+}
+
+// Bug reports from agents/admins
+model Bug {
+  id          String    @id @default(uuid()) @db.Uuid
+  title       String    @db.VarChar(255)
+  description String    @db.Text
+  status      BugStatus @default(OPEN)
+  reportedById String   @db.Uuid
+  solvedById  String?   @db.Uuid
+  createdAt   DateTime  @default(now())
+  solvedAt    DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  reportedBy User  @relation("BugReporter", fields: [reportedById], references: [id])
+  solvedBy   User? @relation("BugSolver", fields: [solvedById], references: [id])
+
+  @@index([status])
+  @@index([reportedById])
   @@index([createdAt])
 }

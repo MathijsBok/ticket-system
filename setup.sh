@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "🎫 Ticket System Setup Script"
+echo "🎫 Klever Support Setup Script"
 echo "=============================="
 echo ""
 

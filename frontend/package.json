@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@clerk/clerk-react": "^5.0.0",
+    "@clerk/themes": "^2.4.50",
     "@tailwindcss/typography": "^0.5.19",
     "@tanstack/react-query": "^5.22.0",
     "axios": "^1.6.7",
