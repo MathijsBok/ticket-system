@@ -318,6 +318,10 @@ model Settings {
   defaultTicketPriority       String   @default("NORMAL")
   allowCustomerReopenClosed   Boolean  @default(false)
 
+  // Attachment Cleanup Settings
+  autoDeleteAttachmentsEnabled Boolean @default(false)
+  autoDeleteAttachmentsDays    Int     @default(90) // Days after upload to delete attachments
+
   createdAt                   DateTime @default(now())
   updatedAt                   DateTime @updatedAt
 }

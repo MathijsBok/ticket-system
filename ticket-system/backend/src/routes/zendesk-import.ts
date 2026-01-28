@@ -11,7 +11,7 @@ const prisma = new PrismaClient();
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 50 * 1024 * 1024 // 50MB limit
+    fileSize: 250 * 1024 * 1024 // 250MB limit
   },
   fileFilter: (_req, file, cb) => {
     if (file.mimetype === 'application/json') {
