@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { settingsApi, zendeskApi, exportApi, apiKeyApi, analyticsApi } from '../lib/api';
+import { settingsApi, zendeskApi, exportApi, apiKeyApi, analyticsApi, adminAnalyticsApi } from '../lib/api';
 import Layout from '../components/Layout';
 
 type TabType = 'notifications' | 'automation' | 'sendgrid' | 'import' | 'export' | 'api' | 'maintenance';
@@ -87,6 +87,19 @@ const AdminSettings: React.FC = () => {
   const [backfillBacklogResult, setBackfillBacklogResult] = useState<{
     message: string;
     snapshots: Array<{ date: string; new: number; open: number; pending: number; hold: number; total: number }>;
+  } | null>(null);
+  // Maintenance state - Agent Performance
+  const [backfillAgentPerfLoading, setBackfillAgentPerfLoading] = useState(false);
+  const [backfillAgentPerfResult, setBackfillAgentPerfResult] = useState<{
+    message: string;
+    agentsProcessed: number;
+    performance: Array<{
+      agent: { id: string; email: string; name: string };
+      totalReplies: number;
+      totalTickets: number;
+      avgRepliesPerTicket: string;
+      contribution: number;
+    }>;
   } | null>(null);
   // Import Backlog state
   const [importBacklogLoading, setImportBacklogLoading] = useState(false);
@@ -428,6 +441,26 @@ const AdminSettings: React.FC = () => {
       });
     } finally {
       setBackfillBacklogLoading(false);
+    }
+  };
+
+  const handleRecalculateAgentPerformance = async () => {
+    setBackfillAgentPerfLoading(true);
+    setBackfillAgentPerfResult(null);
+    try {
+      const response = await adminAnalyticsApi.recalculateAgentPerformance();
+      setBackfillAgentPerfResult(response.data);
+      toast.success(response.data.message);
+    } catch (error) {
+      console.error('Failed to recalculate agent performance:', error);
+      toast.error('Failed to recalculate agent performance');
+      setBackfillAgentPerfResult({
+        message: 'Failed to recalculate agent performance. Check console for details.',
+        agentsProcessed: 0,
+        performance: []
+      });
+    } finally {
+      setBackfillAgentPerfLoading(false);
     }
   };
 
@@ -2710,6 +2743,93 @@ const AdminSettings: React.FC = () => {
                                   <td className="pr-4 py-1">{snapshot.pending}</td>
                                   <td className="pr-4 py-1">{snapshot.hold}</td>
                                   <td className="py-1 font-medium">{snapshot.total}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Recalculate Agent Performance */}
+              <div className="p-6 border border-gray-200 dark:border-gray-700 rounded-lg">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                        <svg className="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                      </div>
+                      <h3 className="text-md font-medium text-gray-900 dark:text-white">Recalculate Agent Performance</h3>
+                    </div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                      Recalculate agent performance metrics based on all tickets and comments.
+                      This updates session reply counts and refreshes contribution scores.
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleRecalculateAgentPerformance}
+                    disabled={backfillAgentPerfLoading}
+                    className="ml-4 inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {backfillAgentPerfLoading ? (
+                      <>
+                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Recalculate
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {backfillAgentPerfResult && (
+                  <div className={`mt-4 p-4 rounded-md ${
+                    backfillAgentPerfResult.agentsProcessed > 0
+                      ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
+                      : 'bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600'
+                  }`}>
+                    <p className={`text-sm font-medium ${
+                      backfillAgentPerfResult.agentsProcessed > 0
+                        ? 'text-green-800 dark:text-green-300'
+                        : 'text-gray-700 dark:text-gray-300'
+                    }`}>
+                      {backfillAgentPerfResult.message}
+                    </p>
+                    {backfillAgentPerfResult.performance.length > 0 && (
+                      <div className="mt-3">
+                        <p className="text-xs font-semibold text-green-700 dark:text-green-400 mb-2">Agent Performance Summary:</p>
+                        <div className="overflow-x-auto">
+                          <table className="min-w-full text-xs">
+                            <thead>
+                              <tr className="text-left text-gray-600 dark:text-gray-400">
+                                <th className="pr-4 py-1">Agent</th>
+                                <th className="pr-4 py-1">Tickets</th>
+                                <th className="pr-4 py-1">Replies</th>
+                                <th className="pr-4 py-1">Avg/Ticket</th>
+                                <th className="py-1">Contribution</th>
+                              </tr>
+                            </thead>
+                            <tbody className="text-gray-800 dark:text-gray-200">
+                              {backfillAgentPerfResult.performance.map((item) => (
+                                <tr key={item.agent.id}>
+                                  <td className="pr-4 py-1">{item.agent.name || item.agent.email}</td>
+                                  <td className="pr-4 py-1">{item.totalTickets}</td>
+                                  <td className="pr-4 py-1">{item.totalReplies}</td>
+                                  <td className="pr-4 py-1">{item.avgRepliesPerTicket}</td>
+                                  <td className="py-1 font-medium">{item.contribution}%</td>
                                 </tr>
                               ))}
                             </tbody>

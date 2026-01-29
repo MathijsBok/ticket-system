@@ -68,6 +68,7 @@ const AnalyticsDashboard: React.FC = () => {
   const [priorityYear, setPriorityYear] = useState<number>(new Date().getFullYear());
   const [weekdayYear, setWeekdayYear] = useState<number>(new Date().getFullYear());
   const [hourlyYear, setHourlyYear] = useState<number>(new Date().getFullYear());
+  const [agentPerfYear, setAgentPerfYear] = useState<number>(new Date().getFullYear());
 
   const { data: dashboardData, isLoading, error } = useQuery({
     queryKey: ['dashboardAnalytics'],
@@ -79,12 +80,13 @@ const AnalyticsDashboard: React.FC = () => {
   });
 
   const { data: agentPerformanceData } = useQuery({
-    queryKey: ['agentPerformance'],
+    queryKey: ['agentPerformance', agentPerfYear],
     queryFn: async () => {
-      const response = await adminAnalyticsApi.getAgentPerformance();
+      const response = await adminAnalyticsApi.getAgentPerformance(agentPerfYear);
       return response.data;
     },
-    refetchInterval: 60000
+    refetchInterval: 60000,
+    placeholderData: (previousData) => previousData
   });
 
   const { data: solvedByMonthData } = useQuery({
@@ -796,85 +798,103 @@ const AnalyticsDashboard: React.FC = () => {
         )}
 
         {/* Agent Performance Table */}
-        {agentPerformanceData && agentPerformanceData.agents && agentPerformanceData.agents.length > 0 && (
+        {agentPerformanceData && (
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 border border-gray-100 dark:border-gray-700">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 bg-gradient-to-br from-teal-500 to-green-500 rounded-xl flex items-center justify-center">
-                <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-teal-500 to-green-500 rounded-xl flex items-center justify-center">
+                  <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Agent Performance</h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Metrics based on ticket replies</p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white">Agent Performance</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Metrics based on ticket replies</p>
-              </div>
+              {/* Year Selector */}
+              <select
+                value={agentPerfYear}
+                onChange={(e) => setAgentPerfYear(Number(e.target.value))}
+                className="px-3 py-1.5 text-sm font-medium bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                {(agentPerformanceData?.availableYears || [new Date().getFullYear()]).map((year: number) => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
             </div>
             {/* Calculation Explanation */}
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-3 mb-4">
               <p className="text-xs text-blue-700 dark:text-blue-400">
-                <span className="font-semibold">Contribution:</span> For each ticket, (Agent's replies / Total replies) × 100, averaged across all tickets.
+                <span className="font-semibold">Contribution:</span> Average of (agent's replies ÷ total replies) per ticket the agent worked on.
               </p>
             </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full">
-                <thead>
-                  <tr className="border-b border-gray-200 dark:border-gray-700">
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900 dark:text-white">Agent</th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900 dark:text-white">Tickets</th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900 dark:text-white">Replies</th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900 dark:text-white">Avg/Ticket</th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900 dark:text-white">Contribution</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {agentPerformanceData.agents.map((perf: any, index: number) => (
-                    <tr key={perf.agent.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-gradient-to-br from-teal-500 to-green-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
-                            {index + 1}
-                          </div>
-                          <div>
-                            <span className="text-sm font-medium text-gray-900 dark:text-white block">
-                              {perf.agent.firstName && perf.agent.lastName
-                                ? `${perf.agent.firstName} ${perf.agent.lastName}`
-                                : perf.agent.email}
-                            </span>
-                            <span className="text-xs text-gray-500 dark:text-gray-400">{perf.agent.email}</span>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200">
-                          {perf.totalTickets.toLocaleString()}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200">
-                          {perf.totalReplies.toLocaleString()}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200">
-                          {perf.avgRepliesPerTicket}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-3">
-                          <div className="flex-1 min-w-[100px] bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 overflow-hidden">
-                            <div
-                              className="bg-gradient-to-r from-green-500 to-emerald-500 h-2.5 rounded-full transition-all duration-500"
-                              style={{ width: `${perf.contribution}%` }}
-                            ></div>
-                          </div>
-                          <span className="text-sm font-semibold text-gray-900 dark:text-white min-w-[3rem]">{perf.contribution}%</span>
-                        </div>
-                      </td>
+            {agentPerformanceData.agents && agentPerformanceData.agents.filter((p: any) => p.totalReplies > 0).length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200 dark:border-gray-700">
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900 dark:text-white">Agent</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900 dark:text-white">Tickets</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900 dark:text-white">Replies</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900 dark:text-white">Avg/Ticket</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900 dark:text-white">Contribution</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                    {agentPerformanceData.agents.filter((p: any) => p.totalReplies > 0).map((perf: any, index: number) => (
+                      <tr key={perf.agent.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-gradient-to-br from-teal-500 to-green-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
+                              {index + 1}
+                            </div>
+                            <div>
+                              <span className="text-sm font-medium text-gray-900 dark:text-white block">
+                                {perf.agent.firstName && perf.agent.lastName
+                                  ? `${perf.agent.firstName} ${perf.agent.lastName}`
+                                  : perf.agent.email}
+                              </span>
+                              <span className="text-xs text-gray-500 dark:text-gray-400">{perf.agent.email}</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200">
+                            {perf.totalTickets.toLocaleString()}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200">
+                            {perf.totalReplies.toLocaleString()}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200">
+                            {perf.avgRepliesPerTicket}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-3">
+                            <div className="flex-1 min-w-[100px] bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 overflow-hidden">
+                              <div
+                                className="bg-gradient-to-r from-green-500 to-emerald-500 h-2.5 rounded-full transition-all duration-500"
+                                style={{ width: `${perf.contribution}%` }}
+                              ></div>
+                            </div>
+                            <span className="text-sm font-semibold text-gray-900 dark:text-white min-w-[3rem]">{perf.contribution}%</span>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+                No agent performance data available for {agentPerfYear}
+              </div>
+            )}
           </div>
         )}
 

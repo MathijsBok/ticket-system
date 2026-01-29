@@ -268,8 +268,11 @@ export const adminAnalyticsApi = {
   getTicketContributions: () =>
     api.get('/admin-analytics/ticket-contributions'),
 
-  getAgentPerformance: () =>
-    api.get('/admin-analytics/agent-performance')
+  getAgentPerformance: (year?: number) =>
+    api.get('/admin-analytics/agent-performance', { params: { year } }),
+
+  recalculateAgentPerformance: () =>
+    api.post('/admin-analytics/recalculate-agent-performance')
 };
 
 // User API
