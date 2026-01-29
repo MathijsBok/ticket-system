@@ -2,20 +2,88 @@ import sgMail from '@sendgrid/mail';
 import crypto from 'crypto';
 import { prisma } from '../lib/prisma';
 
-// Initialize SendGrid with API key
-const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
-const SENDGRID_FROM_EMAIL = process.env.SENDGRID_FROM_EMAIL || 'support@example.com';
-const SENDGRID_FROM_NAME = process.env.SENDGRID_FROM_NAME || 'Support Team';
-const SENDGRID_INBOUND_DOMAIN = process.env.SENDGRID_INBOUND_DOMAIN || 'reply.example.com';
+// Environment variable fallbacks
+const ENV_SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
+const ENV_SENDGRID_FROM_EMAIL = process.env.SENDGRID_FROM_EMAIL || 'support@example.com';
+const ENV_SENDGRID_FROM_NAME = process.env.SENDGRID_FROM_NAME || 'Support Team';
+const ENV_SENDGRID_INBOUND_DOMAIN = process.env.SENDGRID_INBOUND_DOMAIN || 'reply.example.com';
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
-if (SENDGRID_API_KEY) {
-  sgMail.setApiKey(SENDGRID_API_KEY);
+// Cache for SendGrid settings to avoid repeated DB lookups
+let cachedSettings: {
+  sendgridEnabled: boolean;
+  sendgridApiKey: string | null;
+  sendgridFromEmail: string | null;
+  sendgridFromName: string | null;
+  sendgridInboundDomain: string | null;
+} | null = null;
+let settingsCacheTime = 0;
+const SETTINGS_CACHE_TTL = 60000; // 1 minute cache
+
+// Get SendGrid settings from database (with caching)
+async function getSendGridSettings() {
+  const now = Date.now();
+  if (cachedSettings && (now - settingsCacheTime) < SETTINGS_CACHE_TTL) {
+    return cachedSettings;
+  }
+
+  const settings = await prisma.settings.findFirst();
+  cachedSettings = {
+    sendgridEnabled: settings?.sendgridEnabled ?? false,
+    sendgridApiKey: settings?.sendgridApiKey ?? null,
+    sendgridFromEmail: settings?.sendgridFromEmail ?? null,
+    sendgridFromName: settings?.sendgridFromName ?? null,
+    sendgridInboundDomain: settings?.sendgridInboundDomain ?? null,
+  };
+  settingsCacheTime = now;
+  return cachedSettings;
+}
+
+// Get effective SendGrid configuration (database first, then env fallback)
+async function getEffectiveConfig() {
+  const dbSettings = await getSendGridSettings();
+
+  // If SendGrid is enabled in DB and has API key, use DB settings
+  if (dbSettings.sendgridEnabled && dbSettings.sendgridApiKey) {
+    return {
+      enabled: true,
+      apiKey: dbSettings.sendgridApiKey,
+      fromEmail: dbSettings.sendgridFromEmail || ENV_SENDGRID_FROM_EMAIL,
+      fromName: dbSettings.sendgridFromName || ENV_SENDGRID_FROM_NAME,
+      inboundDomain: dbSettings.sendgridInboundDomain || ENV_SENDGRID_INBOUND_DOMAIN,
+    };
+  }
+
+  // Fall back to environment variables
+  if (ENV_SENDGRID_API_KEY) {
+    return {
+      enabled: true,
+      apiKey: ENV_SENDGRID_API_KEY,
+      fromEmail: ENV_SENDGRID_FROM_EMAIL,
+      fromName: ENV_SENDGRID_FROM_NAME,
+      inboundDomain: ENV_SENDGRID_INBOUND_DOMAIN,
+    };
+  }
+
+  return {
+    enabled: false,
+    apiKey: null,
+    fromEmail: ENV_SENDGRID_FROM_EMAIL,
+    fromName: ENV_SENDGRID_FROM_NAME,
+    inboundDomain: ENV_SENDGRID_INBOUND_DOMAIN,
+  };
 }
 
 // Check if email sending is configured
-export function isEmailConfigured(): boolean {
-  return !!(SENDGRID_API_KEY && SENDGRID_FROM_EMAIL);
+export async function isEmailConfigured(): Promise<boolean> {
+  const config = await getEffectiveConfig();
+  return config.enabled && !!config.apiKey && !!config.fromEmail;
+}
+
+// Get inbound domain for generating reply addresses
+export async function getInboundDomain(): Promise<string> {
+  const config = await getEffectiveConfig();
+  return config.inboundDomain;
 }
 
 // Generate a unique reply token
@@ -23,14 +91,14 @@ function generateReplyToken(): string {
   return crypto.randomBytes(32).toString('hex');
 }
 
-// Generate Reply-To address for a ticket
-export function generateReplyToAddress(replyToken: string): string {
-  return `reply+${replyToken}@${SENDGRID_INBOUND_DOMAIN}`;
+// Generate Reply-To address for a ticket (sync version using passed domain)
+export function generateReplyToAddress(replyToken: string, inboundDomain?: string): string {
+  return `reply+${replyToken}@${inboundDomain || ENV_SENDGRID_INBOUND_DOMAIN}`;
 }
 
 // Generate Message-ID for email threading
-function generateMessageId(ticketNumber: number): string {
-  const domain = SENDGRID_FROM_EMAIL.split('@')[1] || 'tickets.local';
+function generateMessageId(ticketNumber: number, fromEmail: string): string {
+  const domain = fromEmail.split('@')[1] || 'tickets.local';
   return `<ticket-${ticketNumber}-${Date.now()}@${domain}>`;
 }
 
@@ -101,12 +169,17 @@ export async function sendAgentReplyEmail(
     };
   }
 ): Promise<boolean> {
-  if (!isEmailConfigured()) {
+  // Get effective SendGrid configuration
+  const config = await getEffectiveConfig();
+  if (!config.enabled || !config.apiKey) {
     console.log('[Email] SendGrid not configured, skipping email');
     return false;
   }
 
   try {
+    // Set API key dynamically
+    sgMail.setApiKey(config.apiKey);
+
     // Check if email notifications are enabled
     const settings = await prisma.settings.findFirst();
     if (!settings?.sendTicketResolvedEmail) {
@@ -127,8 +200,8 @@ export async function sendAgentReplyEmail(
 
     // Get or create email thread
     const thread = await getOrCreateEmailThread(ticket.id);
-    const replyToAddress = generateReplyToAddress(thread.replyToken);
-    const messageId = generateMessageId(ticket.ticketNumber);
+    const replyToAddress = generateReplyToAddress(thread.replyToken, config.inboundDomain);
+    const messageId = generateMessageId(ticket.ticketNumber, config.fromEmail);
 
     // Build placeholder data
     const userName = [ticket.requester.firstName, ticket.requester.lastName]
@@ -171,8 +244,8 @@ export async function sendAgentReplyEmail(
     await sgMail.send({
       to: ticket.requester.email,
       from: {
-        email: SENDGRID_FROM_EMAIL,
-        name: SENDGRID_FROM_NAME
+        email: config.fromEmail,
+        name: config.fromName
       },
       replyTo: {
         email: replyToAddress,
@@ -208,12 +281,17 @@ export async function sendTicketCreatedEmail(
     };
   }
 ): Promise<boolean> {
-  if (!isEmailConfigured()) {
+  // Get effective SendGrid configuration
+  const config = await getEffectiveConfig();
+  if (!config.enabled || !config.apiKey) {
     console.log('[Email] SendGrid not configured, skipping email');
     return false;
   }
 
   try {
+    // Set API key dynamically
+    sgMail.setApiKey(config.apiKey);
+
     // Check if email notifications are enabled
     const settings = await prisma.settings.findFirst();
     if (!settings?.sendTicketCreatedEmail) {
@@ -233,8 +311,8 @@ export async function sendTicketCreatedEmail(
 
     // Get or create email thread
     const thread = await getOrCreateEmailThread(ticket.id);
-    const replyToAddress = generateReplyToAddress(thread.replyToken);
-    const messageId = generateMessageId(ticket.ticketNumber);
+    const replyToAddress = generateReplyToAddress(thread.replyToken, config.inboundDomain);
+    const messageId = generateMessageId(ticket.ticketNumber, config.fromEmail);
 
     // Build placeholder data
     const userName = [ticket.requester.firstName, ticket.requester.lastName]
@@ -259,8 +337,8 @@ export async function sendTicketCreatedEmail(
     await sgMail.send({
       to: ticket.requester.email,
       from: {
-        email: SENDGRID_FROM_EMAIL,
-        name: SENDGRID_FROM_NAME
+        email: config.fromEmail,
+        name: config.fromName
       },
       replyTo: {
         email: replyToAddress,
@@ -300,12 +378,17 @@ export async function sendTicketResolvedEmail(
     };
   }
 ): Promise<boolean> {
-  if (!isEmailConfigured()) {
+  // Get effective SendGrid configuration
+  const config = await getEffectiveConfig();
+  if (!config.enabled || !config.apiKey) {
     console.log('[Email] SendGrid not configured, skipping email');
     return false;
   }
 
   try {
+    // Set API key dynamically
+    sgMail.setApiKey(config.apiKey);
+
     // Check if email notifications are enabled
     const settings = await prisma.settings.findFirst();
     if (!settings?.sendTicketResolvedEmail) {
@@ -325,8 +408,8 @@ export async function sendTicketResolvedEmail(
 
     // Get email thread
     const thread = await getOrCreateEmailThread(ticket.id);
-    const replyToAddress = generateReplyToAddress(thread.replyToken);
-    const messageId = generateMessageId(ticket.ticketNumber);
+    const replyToAddress = generateReplyToAddress(thread.replyToken, config.inboundDomain);
+    const messageId = generateMessageId(ticket.ticketNumber, config.fromEmail);
 
     // Build placeholder data
     const userName = [ticket.requester.firstName, ticket.requester.lastName]
@@ -363,8 +446,8 @@ export async function sendTicketResolvedEmail(
     await sgMail.send({
       to: ticket.requester.email,
       from: {
-        email: SENDGRID_FROM_EMAIL,
-        name: SENDGRID_FROM_NAME
+        email: config.fromEmail,
+        name: config.fromName
       },
       replyTo: {
         email: replyToAddress,

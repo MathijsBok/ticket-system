@@ -347,6 +347,13 @@ model Settings {
   aiKnowledgeCacheUpdatedAt   DateTime?          // When the cache was last updated
   aiKnowledgeRefreshDays      Int      @default(7) // Days between cache refreshes
 
+  // SendGrid Email Settings
+  sendgridEnabled             Boolean  @default(false)
+  sendgridApiKey              String?  @db.VarChar(255)
+  sendgridFromEmail           String?  @db.VarChar(255)
+  sendgridFromName            String?  @db.VarChar(100)
+  sendgridInboundDomain       String?  @db.VarChar(255) // Domain for reply-to addresses (e.g., reply.yourdomain.com)
+
   createdAt                   DateTime @default(now())
   updatedAt                   DateTime @updatedAt
 }

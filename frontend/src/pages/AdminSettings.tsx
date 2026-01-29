@@ -5,8 +5,8 @@ import toast from 'react-hot-toast';
 import { settingsApi, zendeskApi, exportApi, apiKeyApi, analyticsApi } from '../lib/api';
 import Layout from '../components/Layout';
 
-type TabType = 'notifications' | 'automation' | 'import' | 'export' | 'api' | 'maintenance';
-const validTabs: TabType[] = ['notifications', 'automation', 'import', 'export', 'api', 'maintenance'];
+type TabType = 'notifications' | 'automation' | 'sendgrid' | 'import' | 'export' | 'api' | 'maintenance';
+const validTabs: TabType[] = ['notifications', 'automation', 'sendgrid', 'import', 'export', 'api', 'maintenance'];
 
 interface ApiKey {
   id: string;
@@ -207,6 +207,74 @@ const AdminSettings: React.FC = () => {
         ticketSuggestionsApiKey: settings.ticketSuggestionsApiKey ?? '',
         aiKnowledgeUrls: settings.aiKnowledgeUrls ?? '',
         aiKnowledgeRefreshDays: settings.aiKnowledgeRefreshDays ?? 7,
+      });
+    }
+  };
+
+  // Local state for SendGrid tab (manual save instead of auto-save)
+  const [sendgridForm, setSendgridForm] = useState({
+    sendgridEnabled: false,
+    sendgridApiKey: '',
+    sendgridFromEmail: '',
+    sendgridFromName: '',
+    sendgridInboundDomain: '',
+  });
+  const [sendgridSaving, setSendgridSaving] = useState(false);
+
+  // Sync local sendgrid form state when settings load
+  useEffect(() => {
+    if (settings) {
+      setSendgridForm({
+        sendgridEnabled: settings.sendgridEnabled ?? false,
+        sendgridApiKey: settings.sendgridApiKey ?? '',
+        sendgridFromEmail: settings.sendgridFromEmail ?? '',
+        sendgridFromName: settings.sendgridFromName ?? '',
+        sendgridInboundDomain: settings.sendgridInboundDomain ?? '',
+      });
+    }
+  }, [settings]);
+
+  // Check if sendgrid form has unsaved changes
+  const hasSendgridChanges = settings && (
+    sendgridForm.sendgridEnabled !== (settings.sendgridEnabled ?? false) ||
+    sendgridForm.sendgridApiKey !== (settings.sendgridApiKey ?? '') ||
+    sendgridForm.sendgridFromEmail !== (settings.sendgridFromEmail ?? '') ||
+    sendgridForm.sendgridFromName !== (settings.sendgridFromName ?? '') ||
+    sendgridForm.sendgridInboundDomain !== (settings.sendgridInboundDomain ?? '')
+  );
+
+  // Handle sendgrid form field changes
+  const handleSendgridChange = <K extends keyof typeof sendgridForm>(
+    field: K,
+    value: typeof sendgridForm[K]
+  ) => {
+    setSendgridForm(prev => ({ ...prev, [field]: value }));
+  };
+
+  // Save all sendgrid settings
+  const handleSaveSendgrid = async () => {
+    if (!settings?.id) return;
+    setSendgridSaving(true);
+    try {
+      await settingsApi.update(settings.id, sendgridForm);
+      toast.success('SendGrid settings saved successfully');
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Failed to save settings');
+    } finally {
+      setSendgridSaving(false);
+    }
+  };
+
+  // Discard sendgrid changes
+  const handleDiscardSendgridChanges = () => {
+    if (settings) {
+      setSendgridForm({
+        sendgridEnabled: settings.sendgridEnabled ?? false,
+        sendgridApiKey: settings.sendgridApiKey ?? '',
+        sendgridFromEmail: settings.sendgridFromEmail ?? '',
+        sendgridFromName: settings.sendgridFromName ?? '',
+        sendgridInboundDomain: settings.sendgridInboundDomain ?? '',
       });
     }
   };
@@ -767,6 +835,11 @@ const AdminSettings: React.FC = () => {
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
       </svg>
     )},
+    { id: 'sendgrid' as TabType, label: 'SendGrid', icon: (
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+      </svg>
+    )},
     { id: 'import' as TabType, label: 'Import', icon: (
       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
@@ -1273,6 +1346,185 @@ const AdminSettings: React.FC = () => {
                       className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-primary hover:opacity-90 rounded-md disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
                     >
                       {automationSaving ? (
+                        <>
+                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          Save Changes
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* SendGrid Tab */}
+          {activeTab === 'sendgrid' && (
+            <div className="space-y-8">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+                  SendGrid Email Configuration
+                </h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                  Configure SendGrid for sending and receiving emails. Enable email replies to tickets.
+                </p>
+
+                <div className="space-y-6">
+                  {/* Enable SendGrid */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <label className="text-sm font-medium text-gray-900 dark:text-white">
+                        Enable SendGrid
+                      </label>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                        Enable email notifications and inbound email replies
+                      </p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer ml-4">
+                      <input
+                        type="checkbox"
+                        checked={sendgridForm.sendgridEnabled}
+                        onChange={(e) => handleSendgridChange('sendgridEnabled', e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 dark:peer-focus:ring-primary/40 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary"></div>
+                    </label>
+                  </div>
+
+                  {/* API Key */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
+                      SendGrid API Key
+                    </label>
+                    <input
+                      type="password"
+                      value={sendgridForm.sendgridApiKey}
+                      onChange={(e) => handleSendgridChange('sendgridApiKey', e.target.value)}
+                      placeholder="SG.xxxxxxxxxx..."
+                      className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                    />
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                      Get your API key from{' '}
+                      <a
+                        href="https://app.sendgrid.com/settings/api_keys"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline"
+                      >
+                        SendGrid API Keys
+                      </a>
+                    </p>
+                  </div>
+
+                  {/* From Email */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
+                      From Email Address
+                    </label>
+                    <input
+                      type="email"
+                      value={sendgridForm.sendgridFromEmail}
+                      onChange={(e) => handleSendgridChange('sendgridFromEmail', e.target.value)}
+                      placeholder="support@yourdomain.com"
+                      className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                    />
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                      The email address that will appear as the sender. Must be verified in SendGrid.
+                    </p>
+                  </div>
+
+                  {/* From Name */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
+                      From Name
+                    </label>
+                    <input
+                      type="text"
+                      value={sendgridForm.sendgridFromName}
+                      onChange={(e) => handleSendgridChange('sendgridFromName', e.target.value)}
+                      placeholder="Support Team"
+                      className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                    />
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                      The display name shown to recipients
+                    </p>
+                  </div>
+
+                  {/* Inbound Domain */}
+                  <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+                    <h3 className="text-md font-medium text-gray-900 dark:text-white mb-4">
+                      Inbound Email Configuration
+                    </h3>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
+                        Inbound Domain
+                      </label>
+                      <input
+                        type="text"
+                        value={sendgridForm.sendgridInboundDomain}
+                        onChange={(e) => handleSendgridChange('sendgridInboundDomain', e.target.value)}
+                        placeholder="reply.yourdomain.com"
+                        className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                      />
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                        Domain used for Reply-To addresses (e.g., reply+token@reply.yourdomain.com)
+                      </p>
+                    </div>
+
+                    <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                      <h4 className="text-sm font-medium text-blue-800 dark:text-blue-300 mb-2">
+                        Setup Instructions
+                      </h4>
+                      <ol className="text-xs text-blue-700 dark:text-blue-400 space-y-1 list-decimal list-inside">
+                        <li>Set up Inbound Parse in SendGrid for your inbound domain</li>
+                        <li>Point the webhook URL to: <code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{window.location.origin.replace('localhost:5173', 'localhost:3000')}/webhooks/sendgrid/inbound</code></li>
+                        <li>Add MX record: <code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">reply.yourdomain.com MX 10 mx.sendgrid.net</code></li>
+                      </ol>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Save Button */}
+              <div className="border-t border-gray-200 dark:border-gray-700 pt-6 mt-8">
+                <div className="flex items-center justify-between">
+                  <div>
+                    {hasSendgridChanges && (
+                      <p className="text-sm text-amber-600 dark:text-amber-400 flex items-center gap-2">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        You have unsaved changes
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex gap-3">
+                    {hasSendgridChanges && (
+                      <button
+                        type="button"
+                        onClick={handleDiscardSendgridChanges}
+                        className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+                      >
+                        Discard Changes
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleSaveSendgrid}
+                      disabled={!hasSendgridChanges || sendgridSaving}
+                      className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-primary hover:opacity-90 rounded-md disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+                    >
+                      {sendgridSaving ? (
                         <>
                           <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
