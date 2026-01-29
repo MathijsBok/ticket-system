@@ -17,6 +17,7 @@
     "seed": "ts-node prisma/seed.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.2",
     "@clerk/express": "^1.0.0",
     "@prisma/client": "^5.20.0",
     "@types/node-cron": "^3.0.11",

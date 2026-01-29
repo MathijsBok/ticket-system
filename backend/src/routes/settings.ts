@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { requireAuth, requireAdmin } from '../middleware/auth';
+import { requireAuth, requireAdmin, requireAgent } from '../middleware/auth';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -21,6 +21,20 @@ router.get('/', requireAuth, requireAdmin, async (_req, res) => {
   } catch (error) {
     console.error('Error fetching settings:', error);
     return res.status(500).json({ error: 'Failed to fetch settings' });
+  }
+});
+
+// Get AI settings status (for agents)
+router.get('/ai-status', requireAuth, requireAgent, async (_req, res) => {
+  try {
+    const settings = await prisma.settings.findFirst();
+    return res.json({
+      enabled: settings?.aiSummaryEnabled ?? false,
+      configured: !!(settings?.anthropicApiKey)
+    });
+  } catch (error) {
+    console.error('Error fetching AI settings:', error);
+    return res.status(500).json({ error: 'Failed to fetch AI settings' });
   }
 });
 

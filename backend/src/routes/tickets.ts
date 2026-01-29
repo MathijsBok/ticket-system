@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import { prisma } from '../lib/prisma';
 import { requireAuth, requireAgent, AuthRequest } from '../middleware/auth';
+import { generateTicketSummary } from '../services/aiService';
 
 const router = Router();
 
@@ -776,6 +777,45 @@ router.get('/stats/overview', requireAuth, requireAgent, async (_req: AuthReques
   } catch (error) {
     console.error('Error fetching ticket stats:', error);
     return res.status(500).json({ error: 'Failed to fetch statistics' });
+  }
+});
+
+// Generate AI summary for a ticket
+router.post('/:id/generate-summary', requireAuth, requireAgent, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // Check if ticket exists
+    const ticket = await prisma.ticket.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+
+    if (!ticket) {
+      return res.status(404).json({ error: 'Ticket not found' });
+    }
+
+    // Generate summary using AI service
+    const summary = await generateTicketSummary(id);
+
+    // Update ticket with the generated summary
+    const updatedTicket = await prisma.ticket.update({
+      where: { id },
+      data: {
+        aiSummary: summary,
+        aiSummaryGeneratedAt: new Date(),
+      },
+      select: {
+        aiSummary: true,
+        aiSummaryGeneratedAt: true,
+      },
+    });
+
+    return res.json(updatedTicket);
+  } catch (error: any) {
+    console.error('Error generating AI summary:', error);
+    const message = error?.message || 'Failed to generate summary';
+    return res.status(500).json({ error: message });
   }
 });
 

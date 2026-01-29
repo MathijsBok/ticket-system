@@ -115,6 +115,8 @@ model Ticket {
   closedAt        DateTime?
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
+  aiSummary             String?   @db.Text
+  aiSummaryGeneratedAt  DateTime?
 
   requester       User              @relation("TicketRequester", fields: [requesterId], references: [id])
   assignee        User?             @relation("TicketAssignee", fields: [assigneeId], references: [id])
@@ -330,6 +332,10 @@ model Settings {
   // Attachment Cleanup Settings
   autoDeleteAttachmentsEnabled Boolean @default(false)
   autoDeleteAttachmentsDays    Int     @default(90) // Days after upload to delete attachments
+
+  // AI Settings
+  aiSummaryEnabled            Boolean  @default(false)
+  anthropicApiKey             String?  @db.VarChar(255)
 
   createdAt                   DateTime @default(now())
   updatedAt                   DateTime @updatedAt

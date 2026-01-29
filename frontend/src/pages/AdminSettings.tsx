@@ -457,6 +457,10 @@ const AdminSettings: React.FC = () => {
     updateMutation.mutate({ [field]: value });
   };
 
+  const handleTextChange = (field: string, value: string) => {
+    updateMutation.mutate({ [field]: value || null });
+  };
+
   const handleTicketFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -943,6 +947,64 @@ const AdminSettings: React.FC = () => {
                       />
                       <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 dark:peer-focus:ring-primary/40 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary"></div>
                     </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* AI Features */}
+              <div className="border-t border-gray-200 dark:border-gray-700 pt-8">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+                  AI Features
+                </h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                  Configure AI-powered features for your support team
+                </p>
+
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <label className="text-sm font-medium text-gray-900 dark:text-white">
+                        AI Ticket Summaries
+                      </label>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                        Allow agents to generate AI-powered summaries for tickets
+                      </p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer ml-4">
+                      <input
+                        type="checkbox"
+                        checked={settings?.aiSummaryEnabled || false}
+                        onChange={(e) => handleToggle('aiSummaryEnabled', e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 dark:peer-focus:ring-primary/40 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary"></div>
+                    </label>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
+                      Anthropic API Key
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="password"
+                        value={settings?.anthropicApiKey || ''}
+                        onChange={(e) => handleTextChange('anthropicApiKey', e.target.value)}
+                        placeholder="sk-ant-..."
+                        className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                      Get your API key from{' '}
+                      <a
+                        href="https://console.anthropic.com/settings/keys"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline"
+                      >
+                        console.anthropic.com
+                      </a>
+                    </p>
                   </div>
                 </div>
               </div>

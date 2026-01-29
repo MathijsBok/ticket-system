@@ -58,7 +58,10 @@ export const ticketApi = {
     api.post('/tickets/merge', data),
 
   getMergeCandidates: (ticketId: string) =>
-    api.get(`/tickets/merge-candidates/${ticketId}`)
+    api.get(`/tickets/merge-candidates/${ticketId}`),
+
+  generateSummary: (ticketId: string) =>
+    api.post(`/tickets/${ticketId}/generate-summary`)
 };
 
 // Comment API
@@ -304,7 +307,10 @@ export const settingsApi = {
     api.get('/settings'),
 
   update: (id: string, data: any) =>
-    api.patch(`/settings/${id}`, data)
+    api.patch(`/settings/${id}`, data),
+
+  getAIStatus: () =>
+    api.get('/settings/ai-status')
 };
 
 // Zendesk Import API
