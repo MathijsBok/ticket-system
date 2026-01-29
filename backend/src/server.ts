@@ -32,6 +32,7 @@ import bugRoutes from './routes/bugs';
 import exportRoutes from './routes/export';
 import apiKeyRoutes from './routes/apiKeys';
 import externalApiRoutes from './routes/externalApi';
+import aiSummaryAnalyticsRoutes from './routes/aiSummaryAnalytics';
 
 // Import automation jobs
 import { initializeTicketAutomation } from './jobs/ticketAutomation';
@@ -81,6 +82,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/bugs', bugRoutes);
 app.use('/api/export', exportRoutes);
 app.use('/api/api-keys', apiKeyRoutes);
+app.use('/api/ai-summary-analytics', aiSummaryAnalyticsRoutes);
 
 // Health check
 app.get('/health', (_req, res) => {

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { settingsApi, zendeskApi, exportApi, apiKeyApi, analyticsApi, adminAnalyticsApi } from '../lib/api';
+import { settingsApi, zendeskApi, exportApi, apiKeyApi, analyticsApi, adminAnalyticsApi, aiAnalyticsApi } from '../lib/api';
 import Layout from '../components/Layout';
 
 type TabType = 'notifications' | 'automation' | 'sendgrid' | 'import' | 'export' | 'api' | 'maintenance';
@@ -100,6 +100,14 @@ const AdminSettings: React.FC = () => {
       avgRepliesPerTicket: string;
       contribution: number;
     }>;
+  } | null>(null);
+  // Maintenance state - AI Summary Backfill
+  const [backfillAiSummaryLoading, setBackfillAiSummaryLoading] = useState(false);
+  const [backfillAiSummaryResult, setBackfillAiSummaryResult] = useState<{
+    message: string;
+    created: number;
+    skipped: number;
+    totalTicketsWithSummary?: number;
   } | null>(null);
   // Import Backlog state
   const [importBacklogLoading, setImportBacklogLoading] = useState(false);
@@ -461,6 +469,26 @@ const AdminSettings: React.FC = () => {
       });
     } finally {
       setBackfillAgentPerfLoading(false);
+    }
+  };
+
+  const handleBackfillAiSummary = async () => {
+    setBackfillAiSummaryLoading(true);
+    setBackfillAiSummaryResult(null);
+    try {
+      const response = await aiAnalyticsApi.backfillSummaries();
+      setBackfillAiSummaryResult(response.data);
+      toast.success(response.data.message);
+    } catch (error) {
+      console.error('Failed to backfill AI summary analytics:', error);
+      toast.error('Failed to backfill AI summary analytics');
+      setBackfillAiSummaryResult({
+        message: 'Failed to backfill AI summary analytics. Check console for details.',
+        created: 0,
+        skipped: 0
+      });
+    } finally {
+      setBackfillAiSummaryLoading(false);
     }
   };
 
@@ -2835,6 +2863,85 @@ const AdminSettings: React.FC = () => {
                             </tbody>
                           </table>
                         </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Backfill AI Summary Analytics */}
+              <div className="p-6 border border-gray-200 dark:border-gray-700 rounded-lg">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
+                        <svg className="w-6 h-6 text-indigo-600 dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                        </svg>
+                      </div>
+                      <h3 className="text-md font-medium text-gray-900 dark:text-white">Backfill AI Summary Analytics</h3>
+                    </div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                      Create analytics events for existing tickets that have AI summaries.
+                      This will populate the AI Analytics dashboard with historical data.
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleBackfillAiSummary}
+                    disabled={backfillAiSummaryLoading}
+                    className="ml-4 inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {backfillAiSummaryLoading ? (
+                      <>
+                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Run Backfill
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {backfillAiSummaryResult && (
+                  <div className={`mt-4 p-4 rounded-md ${
+                    backfillAiSummaryResult.created > 0
+                      ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
+                      : 'bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600'
+                  }`}>
+                    <p className={`text-sm font-medium ${
+                      backfillAiSummaryResult.created > 0
+                        ? 'text-green-800 dark:text-green-300'
+                        : 'text-gray-700 dark:text-gray-300'
+                    }`}>
+                      {backfillAiSummaryResult.message}
+                    </p>
+                    {(backfillAiSummaryResult.created > 0 || backfillAiSummaryResult.skipped > 0) && (
+                      <div className="mt-3 flex flex-wrap gap-4 text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex items-center px-2 py-1 rounded-md font-medium bg-green-100 dark:bg-green-800/30 text-green-700 dark:text-green-300">
+                            Created: {backfillAiSummaryResult.created}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex items-center px-2 py-1 rounded-md font-medium bg-gray-100 dark:bg-gray-600/30 text-gray-700 dark:text-gray-300">
+                            Already tracked: {backfillAiSummaryResult.skipped}
+                          </span>
+                        </div>
+                        {backfillAiSummaryResult.totalTicketsWithSummary !== undefined && (
+                          <div className="flex items-center gap-2">
+                            <span className="inline-flex items-center px-2 py-1 rounded-md font-medium bg-indigo-100 dark:bg-indigo-800/30 text-indigo-700 dark:text-indigo-300">
+                              Total with summaries: {backfillAiSummaryResult.totalTicketsWithSummary}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

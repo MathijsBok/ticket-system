@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { analyticsApi, adminAnalyticsApi } from '../lib/api';
+import { analyticsApi, adminAnalyticsApi, aiSummaryAnalyticsApi } from '../lib/api';
 import Layout from '../components/Layout';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, LineChart, Line, XAxis, YAxis, CartesianGrid, BarChart, Bar, TooltipProps } from 'recharts';
 
@@ -69,6 +69,7 @@ const AnalyticsDashboard: React.FC = () => {
   const [weekdayYear, setWeekdayYear] = useState<number>(new Date().getFullYear());
   const [hourlyYear, setHourlyYear] = useState<number>(new Date().getFullYear());
   const [agentPerfYear, setAgentPerfYear] = useState<number>(new Date().getFullYear());
+  const [aiSummaryYear, setAiSummaryYear] = useState<number>(new Date().getFullYear());
 
   const { data: dashboardData, isLoading, error } = useQuery({
     queryKey: ['dashboardAnalytics'],
@@ -83,6 +84,16 @@ const AnalyticsDashboard: React.FC = () => {
     queryKey: ['agentPerformance', agentPerfYear],
     queryFn: async () => {
       const response = await adminAnalyticsApi.getAgentPerformance(agentPerfYear);
+      return response.data;
+    },
+    refetchInterval: 60000,
+    placeholderData: (previousData) => previousData
+  });
+
+  const { data: aiSummaryData } = useQuery({
+    queryKey: ['aiSummaryAnalytics', aiSummaryYear],
+    queryFn: async () => {
+      const response = await aiSummaryAnalyticsApi.getStats(aiSummaryYear);
       return response.data;
     },
     refetchInterval: 60000,
@@ -893,6 +904,147 @@ const AnalyticsDashboard: React.FC = () => {
             ) : (
               <div className="text-center py-12 text-gray-500 dark:text-gray-400">
                 No agent performance data available for {agentPerfYear}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* AI Analytics */}
+        {aiSummaryData && (
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 border border-gray-100 dark:border-gray-700">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-xl flex items-center justify-center">
+                  <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">AI Analytics</h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">AI Summary (Ticket Detail) and AI Suggestions (Create Ticket)</p>
+                </div>
+              </div>
+              {/* Year Selector */}
+              <select
+                value={aiSummaryYear}
+                onChange={(e) => setAiSummaryYear(Number(e.target.value))}
+                className="px-3 py-1.5 text-sm font-medium bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                {(aiSummaryData?.availableYears || [new Date().getFullYear()]).map((year: number) => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* AI Summary Stats (Ticket Detail Page) */}
+            <div className="mb-6">
+              <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">AI Summary (Ticket Detail)</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <svg className="w-5 h-5 text-indigo-600 dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                    <span className="text-xs font-medium text-indigo-600 dark:text-indigo-400">Summary Generated</span>
+                  </div>
+                  <p className="text-2xl font-bold text-indigo-700 dark:text-indigo-300">{aiSummaryData.counts?.summaryGenerated || 0}</p>
+                </div>
+                <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <svg className="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    <span className="text-xs font-medium text-purple-600 dark:text-purple-400">Summary Regenerated</span>
+                  </div>
+                  <p className="text-2xl font-bold text-purple-700 dark:text-purple-300">{aiSummaryData.counts?.summaryRegenerated || 0}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* AI Suggestions Stats (Create Ticket Page) */}
+            <div className="mb-6">
+              <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">AI Suggestions (Create Ticket)</h4>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    <span className="text-xs font-medium text-blue-600 dark:text-blue-400">Suggestions Shown</span>
+                  </div>
+                  <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">{aiSummaryData.counts?.suggestionShown || 0}</p>
+                </div>
+                <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
+                    </svg>
+                    <span className="text-xs font-medium text-green-600 dark:text-green-400">Solved Issue</span>
+                  </div>
+                  <p className="text-2xl font-bold text-green-700 dark:text-green-300">{aiSummaryData.counts?.suggestionHelpful || 0}</p>
+                </div>
+                <div className="bg-red-50 dark:bg-red-900/20 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14H5.236a2 2 0 01-1.789-2.894l3.5-7A2 2 0 018.736 3h4.018a2 2 0 01.485.06l3.76.94m-7 10v5a2 2 0 002 2h.096c.5 0 .905-.405.905-.905 0-.714.211-1.412.608-2.006L17 13V4m-7 10h2m5-10h2a2 2 0 012 2v6a2 2 0 01-2 2h-2.5" />
+                    </svg>
+                    <span className="text-xs font-medium text-red-600 dark:text-red-400">Did Not Solve</span>
+                  </div>
+                  <p className="text-2xl font-bold text-red-700 dark:text-red-300">{aiSummaryData.counts?.suggestionNotHelpful || 0}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Summary Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Total Summary Generations</p>
+                <p className="text-xl font-bold text-gray-900 dark:text-white">{aiSummaryData.totalSummaryGenerations || 0}</p>
+              </div>
+              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Total Suggestion Feedback</p>
+                <p className="text-xl font-bold text-gray-900 dark:text-white">{aiSummaryData.totalSuggestionFeedback || 0}</p>
+              </div>
+              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Suggestion Helpful Rate</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-xl font-bold text-gray-900 dark:text-white">{aiSummaryData.suggestionHelpfulRate || 0}%</p>
+                  {aiSummaryData.totalSuggestionFeedback > 0 && (
+                    <div className="flex-1 bg-gray-200 dark:bg-gray-600 rounded-full h-2.5 overflow-hidden">
+                      <div
+                        className="bg-gradient-to-r from-green-500 to-emerald-500 h-2.5 rounded-full transition-all duration-500"
+                        style={{ width: `${aiSummaryData.suggestionHelpfulRate || 0}%` }}
+                      ></div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Monthly Chart */}
+            {aiSummaryData.monthlyChart && aiSummaryData.monthlyChart.some((m: any) => m.summaryGenerated > 0 || m.suggestionHelpful > 0 || m.suggestionNotHelpful > 0) && (
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">Monthly Breakdown</h4>
+                <ResponsiveContainer width="100%" height={250}>
+                  <BarChart data={aiSummaryData.monthlyChart} margin={{ left: 0, right: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-700" />
+                    <XAxis dataKey="name" className="text-xs" />
+                    <YAxis className="text-xs" />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Legend />
+                    <Bar dataKey="summaryGenerated" name="Summary Generated" fill="#6366F1" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="summaryRegenerated" name="Summary Regenerated" fill="#A855F7" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="suggestionHelpful" name="Solved Issue" fill="#10B981" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="suggestionNotHelpful" name="Did Not Solve" fill="#EF4444" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {aiSummaryData.totalSummaryGenerations === 0 && aiSummaryData.totalSuggestionFeedback === 0 && (
+              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                No AI analytics data available for {aiSummaryYear}
               </div>
             )}
           </div>

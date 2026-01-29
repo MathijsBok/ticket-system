@@ -476,3 +476,31 @@ export const apiKeyApi = {
   delete: (id: string) =>
     api.delete(`/api-keys/${id}`)
 };
+
+// AI Analytics API
+export const aiAnalyticsApi = {
+  // For agents - summary events on ticket detail page
+  recordEvent: (data: {
+    ticketId?: string;
+    eventType: 'SUMMARY_GENERATED' | 'SUMMARY_REGENERATED';
+    formId?: string
+  }) =>
+    api.post('/ai-summary-analytics/event', data),
+
+  // For users - suggestion feedback on create ticket page
+  recordSuggestionFeedback: (data: {
+    eventType: 'SUGGESTION_SHOWN' | 'SUGGESTION_HELPFUL' | 'SUGGESTION_NOT_HELPFUL';
+    formId?: string
+  }) =>
+    api.post('/ai-summary-analytics/suggestion-feedback', data),
+
+  getStats: (year?: number) =>
+    api.get('/ai-summary-analytics/stats', { params: { year } }),
+
+  // Backfill AI summary analytics from existing tickets
+  backfillSummaries: () =>
+    api.post('/ai-summary-analytics/backfill-summaries')
+};
+
+// Keep old name as alias for backwards compatibility
+export const aiSummaryAnalyticsApi = aiAnalyticsApi;

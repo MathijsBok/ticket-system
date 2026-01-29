@@ -519,3 +519,30 @@ model EmailThread {
 
   @@index([replyToken])
 }
+
+// AI Analytics event types
+enum AiEventType {
+  // AI Summary events (Ticket Detail page)
+  SUMMARY_GENERATED
+  SUMMARY_REGENERATED
+  // AI Suggestion events (Create Ticket page)
+  SUGGESTION_SHOWN
+  SUGGESTION_HELPFUL        // "This solved my issue" clicked
+  SUGGESTION_NOT_HELPFUL    // "This did not solve my issue" clicked
+}
+
+// AI Analytics events for tracking
+model AiAnalyticsEvent {
+  id        String      @id @default(uuid()) @db.Uuid
+  ticketId  String?     @db.Uuid  // Optional - not set for SUGGESTION_HELPFUL (no ticket created)
+  userId    String      @db.Uuid
+  eventType AiEventType
+  formId    String?     @db.Uuid  // Track which form the suggestion was for
+  createdAt DateTime    @default(now())
+
+  @@index([eventType])
+  @@index([createdAt])
+  @@index([ticketId])
+  @@index([userId])
+  @@index([formId])
+}

@@ -4,7 +4,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useUser } from '@clerk/clerk-react';
 import { useView } from '../contexts/ViewContext';
 import toast from 'react-hot-toast';
-import { ticketApi, formApi, attachmentApi } from '../lib/api';
+import { ticketApi, formApi, attachmentApi, aiAnalyticsApi } from '../lib/api';
 import Layout from '../components/Layout';
 import FormRenderer from '../components/FormRenderer';
 import { Form } from '../types';
@@ -103,6 +103,14 @@ const CreateTicket: React.FC = () => {
       const data = response.data as SuggestionResponse;
       setAiSolution(data.solution);
       setSolutionTicketCount(data.ticketCount);
+
+      // Track that a suggestion was shown
+      if (data.solution) {
+        aiAnalyticsApi.recordSuggestionFeedback({
+          eventType: 'SUGGESTION_SHOWN',
+          formId: formId || undefined
+        }).catch(console.error);
+      }
     } catch (error) {
       console.error('Error fetching suggestions:', error);
       setAiSolution(null);
@@ -374,6 +382,11 @@ const CreateTicket: React.FC = () => {
               <button
                 type="button"
                 onClick={() => {
+                  // Track that suggestion was helpful
+                  aiAnalyticsApi.recordSuggestionFeedback({
+                    eventType: 'SUGGESTION_HELPFUL',
+                    formId: selectedFormId || undefined
+                  }).catch(console.error);
                   toast.success('Glad this helped! No ticket needed.');
                   navigate(-1);
                 }}
@@ -389,6 +402,11 @@ const CreateTicket: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
+                    // Track that suggestion was not helpful
+                    aiAnalyticsApi.recordSuggestionFeedback({
+                      eventType: 'SUGGESTION_NOT_HELPFUL',
+                      formId: selectedFormId || undefined
+                    }).catch(console.error);
                     setAcknowledgedSuggestion(true);
                     toast('You can now submit your ticket', { icon: '📝' });
                   }}

@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useUser } from '@clerk/clerk-react';
 import toast from 'react-hot-toast';
-import { ticketApi, commentApi, userApi, macroApi, attachmentApi, settingsApi } from '../lib/api';
+import { ticketApi, commentApi, userApi, macroApi, attachmentApi, settingsApi, aiSummaryAnalyticsApi } from '../lib/api';
 import { parseUserAgent } from '../lib/deviceDetection';
 import { Macro, Attachment } from '../types';
 import { useView } from '../contexts/ViewContext';
@@ -158,6 +158,10 @@ const TicketDetail: React.FC = () => {
     onSuccess: () => {
       toast.success('Summary generated');
       queryClient.invalidateQueries({ queryKey: ['ticket', id] });
+
+      // Track the generate/regenerate event
+      const eventType = ticket?.aiSummary ? 'SUMMARY_REGENERATED' : 'SUMMARY_GENERATED';
+      aiSummaryAnalyticsApi.recordEvent({ ticketId: id!, eventType }).catch(console.error);
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.error || 'Failed to generate summary');
