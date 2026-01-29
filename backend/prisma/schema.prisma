@@ -104,6 +104,8 @@ model Ticket {
   formId          String?        @db.Uuid
   categoryId      String?        @db.Uuid
   relatedTicketId String?        @db.Uuid
+  mergedIntoId    String?        @db.Uuid // If this ticket was merged into another
+  mergedAt        DateTime?               // When the merge happened
   country         String?        @db.VarChar(100)
   ipAddress       String?        @db.VarChar(50)
   userAgent       String?        @db.VarChar(500)
@@ -121,6 +123,8 @@ model Ticket {
   category        Category?         @relation(fields: [categoryId], references: [id])
   relatedTicket   Ticket?           @relation("RelatedTickets", fields: [relatedTicketId], references: [id])
   followUpTickets Ticket[]          @relation("RelatedTickets")
+  mergedInto      Ticket?           @relation("MergedTickets", fields: [mergedIntoId], references: [id])
+  mergedTickets   Ticket[]          @relation("MergedTickets")
   comments        Comment[]
   attachments     Attachment[]
   activities      TicketActivity[]
@@ -134,6 +138,7 @@ model Ticket {
   @@index([createdAt], name: "idx_tickets_created")
   @@index([status, assigneeId], name: "idx_tickets_status_assignee")
   @@index([relatedTicketId], name: "idx_tickets_related")
+  @@index([mergedIntoId], name: "idx_tickets_merged")
 }
 
 model Comment {

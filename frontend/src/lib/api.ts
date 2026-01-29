@@ -52,7 +52,13 @@ export const ticketApi = {
     api.delete('/tickets/bulk/delete', { data: { ticketIds } }),
 
   getStats: () =>
-    api.get('/tickets/stats/overview')
+    api.get('/tickets/stats/overview'),
+
+  merge: (data: { sourceTicketIds: string[]; targetTicketId: string; mergeComment?: string }) =>
+    api.post('/tickets/merge', data),
+
+  getMergeCandidates: (ticketId: string) =>
+    api.get(`/tickets/merge-candidates/${ticketId}`)
 };
 
 // Comment API

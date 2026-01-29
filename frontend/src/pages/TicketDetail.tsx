@@ -66,6 +66,9 @@ const TicketDetail: React.FC = () => {
   const [mentionedUserIds, setMentionedUserIds] = useState<string[]>([]);
   const [selectedAttachment, setSelectedAttachment] = useState<Attachment | null>(null);
   const [attachmentLoading, setAttachmentLoading] = useState(false);
+  const [showMergeModal, setShowMergeModal] = useState(false);
+  const [selectedMergeTarget, setSelectedMergeTarget] = useState<string | null>(null);
+  const [mergeComment, setMergeComment] = useState('');
 
   const { data: ticket, isLoading } = useQuery({
     queryKey: ['ticket', id],
@@ -104,6 +107,35 @@ const TicketDetail: React.FC = () => {
       return response.data;
     },
     enabled: userRole === 'AGENT' || userRole === 'ADMIN'
+  });
+
+  // Fetch merge candidates (other open tickets from same requester)
+  const { data: mergeCandidates, refetch: refetchMergeCandidates } = useQuery({
+    queryKey: ['mergeCandidates', id],
+    queryFn: async () => {
+      const response = await ticketApi.getMergeCandidates(id!);
+      return response.data;
+    },
+    enabled: !!id && showMergeModal && (userRole === 'AGENT' || userRole === 'ADMIN')
+  });
+
+  // Merge tickets mutation
+  const mergeMutation = useMutation({
+    mutationFn: async (data: { sourceTicketIds: string[]; targetTicketId: string; mergeComment?: string }) => {
+      const response = await ticketApi.merge(data);
+      return response.data;
+    },
+    onSuccess: (data) => {
+      toast.success(data.message || 'Tickets merged successfully');
+      setShowMergeModal(false);
+      setSelectedMergeTarget(null);
+      setMergeComment('');
+      queryClient.invalidateQueries({ queryKey: ['ticket', id] });
+      queryClient.invalidateQueries({ queryKey: ['tickets'] });
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || 'Failed to merge tickets');
+    }
   });
 
   // Replace placeholders in macro content with actual values
@@ -330,6 +362,18 @@ const TicketDetail: React.FC = () => {
       case 'ticket_auto_solved':
         return 'Ticket Auto-solved';
 
+      case 'ticket_merged':
+        if (details?.mergedIntoTicketNumber) {
+          return `Ticket merged into #${details.mergedIntoTicketNumber}`;
+        }
+        return 'Ticket merged';
+
+      case 'tickets_merged_in':
+        if (details?.mergedTicketNumbers && Array.isArray(details.mergedTicketNumbers)) {
+          return `Merged in ticket(s): #${details.mergedTicketNumbers.join(', #')}`;
+        }
+        return 'Tickets merged in';
+
       default:
         return action.replace('_', ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
     }
@@ -379,7 +423,7 @@ const TicketDetail: React.FC = () => {
 
   return (
     <Layout>
-      <div className="space-y-6">
+      <div className="space-y-4 sm:space-y-6 overflow-x-hidden">
         {/* Back button */}
         <button
           onClick={() => navigate(-1)}
@@ -392,13 +436,13 @@ const TicketDetail: React.FC = () => {
         </button>
 
         {/* Ticket header */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-          <div className="flex justify-between items-start mb-4">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6 overflow-hidden">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 mb-4">
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
               Ticket #{ticket.ticketNumber}
             </h1>
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(ticket.status)}`}>
                 {ticket.status.replace('_', ' ')}
               </span>
@@ -418,7 +462,7 @@ const TicketDetail: React.FC = () => {
                     <button
                       onClick={() => assignToMeMutation.mutate()}
                       disabled={assignToMeMutation.isPending}
-                      className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:opacity-90 text-sm font-medium disabled:opacity-50 transition-colors"
+                      className="px-3 sm:px-4 py-2 bg-primary text-primary-foreground rounded-md hover:opacity-90 text-sm font-medium disabled:opacity-50 transition-colors whitespace-nowrap"
                     >
                       Assign to Me
                     </button>
@@ -427,12 +471,12 @@ const TicketDetail: React.FC = () => {
                   <div className="relative">
                     <button
                       onClick={() => setShowAssignDropdown(!showAssignDropdown)}
-                      className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-primary transition-colors flex items-center gap-2"
+                      className="px-3 sm:px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-primary transition-colors flex items-center gap-1 sm:gap-2"
                     >
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                       </svg>
-                      Assign
+                      <span className="hidden sm:inline">Assign</span>
                       <svg className={`w-4 h-4 transition-transform ${showAssignDropdown ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                       </svg>
@@ -502,30 +546,110 @@ const TicketDetail: React.FC = () => {
                     <option value="SOLVED">Solved</option>
                     <option value="CLOSED">Closed</option>
                   </select>
+                  {/* Merge button - only show for open tickets */}
+                  {ticket.status !== 'SOLVED' && ticket.status !== 'CLOSED' && !ticket.mergedIntoId && (
+                    <button
+                      onClick={() => {
+                        setShowMergeModal(true);
+                        refetchMergeCandidates();
+                      }}
+                      className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-primary transition-colors whitespace-nowrap"
+                      title="Merge into another ticket"
+                    >
+                      <svg className="w-4 h-4 sm:mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                      </svg>
+                      <span className="hidden sm:inline">Merge</span>
+                    </button>
+                  )}
                 </>
               )}
             </div>
           </div>
 
-          <div className="flex justify-between items-center">
-            <h2 className="text-xl text-gray-700 dark:text-gray-300">{ticket.subject}</h2>
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+            <h2 className="text-lg sm:text-xl text-gray-700 dark:text-gray-300 break-words">{ticket.subject}</h2>
 
             {/* Create Follow-up Ticket Button */}
             {ticket.status === 'CLOSED' && (
               <Link
                 to={`/tickets/new?relatedTicketId=${ticket.id}`}
-                className="inline-flex items-center px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors"
+                className="inline-flex items-center px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors whitespace-nowrap flex-shrink-0"
               >
                 <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
-                Create Follow-up Ticket
+                <span className="hidden sm:inline">Create Follow-up Ticket</span>
+                <span className="sm:hidden">Follow-up</span>
               </Link>
             )}
           </div>
 
+          {/* Merged into another ticket banner */}
+          {ticket.mergedInto && (
+            <div className="mt-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <svg className="w-5 h-5 text-purple-600 dark:text-purple-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                </svg>
+                <div className="flex-1">
+                  <h4 className="text-sm font-semibold text-purple-800 dark:text-purple-300 mb-1">
+                    This ticket has been merged
+                  </h4>
+                  <p className="text-sm text-purple-700 dark:text-purple-400">
+                    This ticket was closed and merged into{' '}
+                    <Link
+                      to={`/tickets/${ticket.mergedInto.id}`}
+                      className="font-medium underline hover:text-purple-900 dark:hover:text-purple-200"
+                    >
+                      Ticket #{ticket.mergedInto.ticketNumber}
+                    </Link>
+                    {' '}- {ticket.mergedInto.subject}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Tickets merged into this one */}
+          {ticket.mergedTickets && ticket.mergedTickets.length > 0 && (
+            <div className="mt-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <svg className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+                <div className="flex-1">
+                  <h4 className="text-sm font-semibold text-blue-800 dark:text-blue-300 mb-2">
+                    Merged tickets ({ticket.mergedTickets.length})
+                  </h4>
+                  <div className="space-y-2">
+                    {ticket.mergedTickets.map((merged: any) => (
+                      <div key={merged.id} className="text-sm text-blue-700 dark:text-blue-400">
+                        <div className="flex flex-wrap items-center gap-1 sm:gap-2">
+                          <Link
+                            to={`/tickets/${merged.id}`}
+                            className="font-medium underline hover:text-blue-900 dark:hover:text-blue-200 flex-shrink-0"
+                          >
+                            #{merged.ticketNumber}
+                          </Link>
+                          <span className="text-blue-600 dark:text-blue-500 hidden sm:inline">-</span>
+                          <span className="truncate max-w-full sm:max-w-xs">{merged.subject}</span>
+                        </div>
+                        {merged.mergedAt && (
+                          <span className="text-xs text-blue-500 dark:text-blue-500 block sm:inline sm:ml-2">
+                            merged {format(new Date(merged.mergedAt), 'MMM d, yyyy')}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Closed ticket warning */}
-          {ticketClosed && !isAgent && (
+          {ticketClosed && !isAgent && !ticket.mergedIntoId && (
             <div className="mt-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
               <div className="flex items-start gap-3">
                 <svg className="w-5 h-5 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -551,40 +675,42 @@ const TicketDetail: React.FC = () => {
             </div>
           )}
 
-          <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm text-gray-600 dark:text-gray-400">
-            <div>
+          <div className="mt-4 flex flex-wrap gap-x-4 sm:gap-x-6 gap-y-2 text-sm text-gray-600 dark:text-gray-400">
+            <div className="min-w-0">
               <span className="font-medium">Created:</span> {format(new Date(ticket.createdAt), 'MMM d, yyyy HH:mm')}
             </div>
             {ticket.updatedAt && ticket.updatedAt !== ticket.createdAt && (
-              <div>
+              <div className="min-w-0">
                 <span className="font-medium">Updated:</span> {format(new Date(ticket.updatedAt), 'MMM d, yyyy HH:mm')}
               </div>
             )}
             {ticket.solvedAt && (
-              <div>
+              <div className="min-w-0">
                 <span className="font-medium">Solved:</span> {format(new Date(ticket.solvedAt), 'MMM d, yyyy HH:mm')}
               </div>
             )}
             {ticket.category && (
-              <div>
+              <div className="min-w-0">
                 <span className="font-medium">Category:</span> {ticket.category.name}
               </div>
             )}
-            <div>
-              <span className="font-medium">Requester:</span> {
-                ticket.requester.firstName || ticket.requester.lastName
+            <div className="min-w-0 w-full sm:w-auto">
+              <span className="font-medium">Requester:</span>{' '}
+              <span className="break-all">
+                {ticket.requester.firstName || ticket.requester.lastName
                   ? `${ticket.requester.firstName || ''} ${ticket.requester.lastName || ''}`.trim()
-                  : ticket.requester.email
-              }
-              <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">({ticket.requester.email})</span>
+                  : ticket.requester.email}
+              </span>
+              <span className="text-xs text-gray-500 dark:text-gray-400 ml-1 break-all">({ticket.requester.email})</span>
             </div>
             {ticket.assignee && (
-              <div>
-                <span className="font-medium">Assigned to:</span> {
-                  ticket.assignee.firstName || ticket.assignee.lastName
+              <div className="min-w-0">
+                <span className="font-medium">Assigned to:</span>{' '}
+                <span className="break-all">
+                  {ticket.assignee.firstName || ticket.assignee.lastName
                     ? `${ticket.assignee.firstName || ''} ${ticket.assignee.lastName || ''}`.trim()
-                    : ticket.assignee.email
-                }
+                    : ticket.assignee.email}
+                </span>
               </div>
             )}
           </div>
@@ -625,26 +751,26 @@ const TicketDetail: React.FC = () => {
                   'INTERNAL': 'Internal'
                 };
                 return (
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
-                    <div>
-                      <span className="text-gray-500 dark:text-gray-400 block">Contacted By</span>
-                      <span className="text-gray-900 dark:text-white font-medium">{channelLabels[ticket.channel] || ticket.channel}</span>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 text-sm">
+                    <div className="min-w-0">
+                      <span className="text-gray-500 dark:text-gray-400 block text-xs sm:text-sm">Contacted By</span>
+                      <span className="text-gray-900 dark:text-white font-medium truncate block">{channelLabels[ticket.channel] || ticket.channel}</span>
                     </div>
-                    <div>
-                      <span className="text-gray-500 dark:text-gray-400 block">Device</span>
-                      <span className="text-gray-900 dark:text-white font-medium">{deviceInfo?.deviceType || 'Unknown'}</span>
+                    <div className="min-w-0">
+                      <span className="text-gray-500 dark:text-gray-400 block text-xs sm:text-sm">Device</span>
+                      <span className="text-gray-900 dark:text-white font-medium truncate block">{deviceInfo?.deviceType || 'Unknown'}</span>
                     </div>
-                    <div>
-                      <span className="text-gray-500 dark:text-gray-400 block">Operating System</span>
-                      <span className="text-gray-900 dark:text-white font-medium">{deviceInfo?.os || 'Unknown'}</span>
+                    <div className="min-w-0">
+                      <span className="text-gray-500 dark:text-gray-400 block text-xs sm:text-sm">OS</span>
+                      <span className="text-gray-900 dark:text-white font-medium truncate block">{deviceInfo?.os || 'Unknown'}</span>
                     </div>
-                    <div>
-                      <span className="text-gray-500 dark:text-gray-400 block">Browser</span>
-                      <span className="text-gray-900 dark:text-white font-medium">{deviceInfo?.browser || 'Unknown'}</span>
+                    <div className="min-w-0">
+                      <span className="text-gray-500 dark:text-gray-400 block text-xs sm:text-sm">Browser</span>
+                      <span className="text-gray-900 dark:text-white font-medium truncate block">{deviceInfo?.browser || 'Unknown'}</span>
                     </div>
-                    <div>
-                      <span className="text-gray-500 dark:text-gray-400 block">Country</span>
-                      <span className="text-gray-900 dark:text-white font-medium">
+                    <div className="min-w-0 col-span-2 sm:col-span-1">
+                      <span className="text-gray-500 dark:text-gray-400 block text-xs sm:text-sm">Country</span>
+                      <span className="text-gray-900 dark:text-white font-medium truncate block">
                         {ticket.country || 'Unknown'}{' '}
                         {ticket.requester?.timezoneOffset && (
                           <span className="text-gray-500 dark:text-gray-400">
@@ -661,16 +787,16 @@ const TicketDetail: React.FC = () => {
 
           {/* Related Ticket Info */}
           {ticket.relatedTicket && (
-            <div className="mt-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
-              <div className="flex items-center gap-2">
-                <svg className="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="mt-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 overflow-hidden">
+              <div className="flex items-start gap-2">
+                <svg className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <span className="text-sm text-blue-800 dark:text-blue-300">
-                  Created from previous ticket:{' '}
+                <span className="text-sm text-blue-800 dark:text-blue-300 min-w-0">
+                  <span className="block sm:inline">Created from previous ticket:{' '}</span>
                   <Link
                     to={`/tickets/${ticket.relatedTicket.id}`}
-                    className="font-medium underline hover:no-underline"
+                    className="font-medium underline hover:no-underline break-words"
                   >
                     #{ticket.relatedTicket.ticketNumber} - {ticket.relatedTicket.subject}
                   </Link>
@@ -1089,16 +1215,16 @@ const TicketDetail: React.FC = () => {
         {/* Attachment Preview Modal */}
         {selectedAttachment && (
           <div
-            className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-2 sm:p-4"
             onClick={() => setSelectedAttachment(null)}
           >
             <div
-              className="bg-white dark:bg-gray-800 rounded-lg max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl"
+              className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Modal Header */}
-              <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-                <div className="flex items-center gap-3 min-w-0">
+              <div className="flex items-center justify-between p-3 sm:p-4 border-b border-gray-200 dark:border-gray-700">
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
                   {selectedAttachment.mimeType.startsWith('image/') ? (
                     <svg className="w-5 h-5 text-blue-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -1108,16 +1234,16 @@ const TicketDetail: React.FC = () => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                     </svg>
                   )}
-                  <div className="min-w-0">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white truncate">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-white truncate">
                       {selectedAttachment.filename}
                     </h3>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                    <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
                       {formatFileSize(selectedAttachment.fileSize)}
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
+                <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
                   <button
                     onClick={() => handleDownloadAttachment(selectedAttachment)}
                     className="p-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
@@ -1140,7 +1266,7 @@ const TicketDetail: React.FC = () => {
               </div>
 
               {/* Modal Content */}
-              <div className="p-4 overflow-auto max-h-[calc(90vh-80px)] flex items-center justify-center bg-gray-100 dark:bg-gray-900">
+              <div className="p-2 sm:p-4 overflow-auto max-h-[calc(90vh-80px)] flex items-center justify-center bg-gray-100 dark:bg-gray-900">
                 {selectedAttachment.mimeType.startsWith('image/') ? (
                   <img
                     src={`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/attachments/${selectedAttachment.id}/view`}
@@ -1184,6 +1310,163 @@ const TicketDetail: React.FC = () => {
                     </button>
                   </div>
                 )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Merge Tickets Modal */}
+        {showMergeModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-lg w-full overflow-hidden max-h-[90vh] flex flex-col">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-primary/10 dark:bg-primary/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <svg className="w-4 h-4 sm:w-5 sm:h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                    </svg>
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">Merge Ticket</h3>
+                    <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 truncate">
+                      Merge #{ticket?.ticketNumber} into another ticket
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowMergeModal(false);
+                    setSelectedMergeTarget(null);
+                    setMergeComment('');
+                  }}
+                  className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Modal Content */}
+              <div className="p-4 sm:p-6 overflow-y-auto flex-1">
+                <div className="mb-4">
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                    This ticket will be closed and merged into the selected target ticket.
+                    <span className="text-orange-600 dark:text-orange-400 font-medium"> This action cannot be undone.</span>
+                  </p>
+                </div>
+
+                {/* Merge candidates list */}
+                <div className="space-y-2 mb-4">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Open tickets from the same requester:
+                  </label>
+                  {mergeCandidates && mergeCandidates.length > 0 ? (
+                    mergeCandidates.map((candidate: any) => (
+                      <label
+                        key={candidate.id}
+                        className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                          selectedMergeTarget === candidate.id
+                            ? 'border-primary bg-primary/5 dark:bg-primary/10'
+                            : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="mergeTarget"
+                          value={candidate.id}
+                          checked={selectedMergeTarget === candidate.id}
+                          onChange={() => setSelectedMergeTarget(candidate.id)}
+                          className="mt-0.5 w-4 h-4 text-primary border-gray-300 focus:ring-primary"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-medium text-gray-900 dark:text-white">
+                              #{candidate.ticketNumber}
+                            </span>
+                            <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
+                              candidate.status === 'NEW' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' :
+                              candidate.status === 'OPEN' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' :
+                              candidate.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' :
+                              'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                            }`}>
+                              {candidate.status.replace('_', ' ')}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-600 dark:text-gray-400 truncate">
+                            {candidate.subject}
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                            {format(new Date(candidate.createdAt), 'MMM d, yyyy')} · {candidate._count?.comments || 0} comments
+                          </p>
+                        </div>
+                      </label>
+                    ))
+                  ) : (
+                    <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                      <svg className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      <p>No other open tickets from this requester</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Optional merge comment */}
+                {selectedMergeTarget && (
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Add a note (optional):
+                    </label>
+                    <textarea
+                      value={mergeComment}
+                      onChange={(e) => setMergeComment(e.target.value)}
+                      placeholder="Why are these tickets being merged?"
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="flex items-center justify-end gap-2 sm:gap-3 px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 flex-shrink-0">
+                <button
+                  onClick={() => {
+                    setShowMergeModal(false);
+                    setSelectedMergeTarget(null);
+                    setMergeComment('');
+                  }}
+                  className="px-3 sm:px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    if (selectedMergeTarget && id) {
+                      mergeMutation.mutate({
+                        sourceTicketIds: [id],
+                        targetTicketId: selectedMergeTarget,
+                        mergeComment: mergeComment || undefined
+                      });
+                    }
+                  }}
+                  disabled={!selectedMergeTarget || mergeMutation.isPending}
+                  className="px-3 sm:px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                >
+                  {mergeMutation.isPending ? (
+                    <>
+                      <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      <span className="hidden sm:inline">Merging...</span>
+                    </>
+                  ) : (
+                    <span>Merge</span>
+                  )}
+                </button>
               </div>
             </div>
           </div>

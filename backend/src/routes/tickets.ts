@@ -116,6 +116,25 @@ router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
             status: true,
             createdAt: true
           }
+        },
+        mergedInto: {
+          select: {
+            id: true,
+            ticketNumber: true,
+            subject: true,
+            status: true
+          }
+        },
+        mergedTickets: {
+          select: {
+            id: true,
+            ticketNumber: true,
+            subject: true,
+            mergedAt: true,
+            requester: {
+              select: { id: true, email: true, firstName: true, lastName: true }
+            }
+          }
         }
       }
     });
@@ -465,6 +484,267 @@ router.delete('/bulk/delete',
     }
   }
 );
+
+// Merge tickets - merge source tickets into a target ticket
+router.post('/merge',
+  requireAuth,
+  requireAgent,
+  [
+    body('sourceTicketIds').isArray({ min: 1 }).withMessage('At least one source ticket is required'),
+    body('sourceTicketIds.*').isUUID(),
+    body('targetTicketId').isUUID().withMessage('Target ticket ID is required'),
+    body('mergeComment').optional().isString()
+  ],
+  async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    try {
+      const { sourceTicketIds, targetTicketId, mergeComment } = req.body;
+      const userId = req.userId!;
+
+      // Validate source and target are different
+      if (sourceTicketIds.includes(targetTicketId)) {
+        return res.status(400).json({ error: 'Cannot merge a ticket into itself' });
+      }
+
+      // Fetch target ticket
+      const targetTicket = await prisma.ticket.findUnique({
+        where: { id: targetTicketId },
+        include: {
+          requester: {
+            select: { id: true, email: true, firstName: true, lastName: true }
+          }
+        }
+      });
+
+      if (!targetTicket) {
+        return res.status(404).json({ error: 'Target ticket not found' });
+      }
+
+      // Target ticket cannot be SOLVED or CLOSED
+      if (targetTicket.status === 'SOLVED' || targetTicket.status === 'CLOSED') {
+        return res.status(400).json({ error: 'Cannot merge into a solved or closed ticket' });
+      }
+
+      // Fetch source tickets
+      const sourceTickets = await prisma.ticket.findMany({
+        where: { id: { in: sourceTicketIds } },
+        include: {
+          requester: {
+            select: { id: true, email: true, firstName: true, lastName: true }
+          },
+          comments: {
+            orderBy: { createdAt: 'desc' },
+            take: 1, // Get most recent comment
+            include: {
+              author: {
+                select: { id: true, email: true, firstName: true, lastName: true }
+              }
+            }
+          }
+        }
+      });
+
+      if (sourceTickets.length !== sourceTicketIds.length) {
+        return res.status(404).json({ error: 'One or more source tickets not found' });
+      }
+
+      // Validate source tickets - cannot merge SOLVED or CLOSED tickets
+      const invalidTickets = sourceTickets.filter(t =>
+        t.status === 'SOLVED' || t.status === 'CLOSED'
+      );
+      if (invalidTickets.length > 0) {
+        return res.status(400).json({
+          error: 'Cannot merge solved or closed tickets',
+          invalidTickets: invalidTickets.map(t => t.ticketNumber)
+        });
+      }
+
+      // Check if all source tickets have same requester as target (optional validation)
+      const differentRequesters = sourceTickets.filter(t => t.requesterId !== targetTicket.requesterId);
+
+      // Perform the merge in a transaction
+      const result = await prisma.$transaction(async (tx) => {
+        const now = new Date();
+        const mergedTicketNumbers = sourceTickets.map(t => `#${t.ticketNumber}`).join(', ');
+
+        // Update all source tickets to mark them as merged
+        await tx.ticket.updateMany({
+          where: { id: { in: sourceTicketIds } },
+          data: {
+            status: 'CLOSED',
+            mergedIntoId: targetTicketId,
+            mergedAt: now,
+            closedAt: now
+          }
+        });
+
+        // Create activity log for each source ticket
+        for (const sourceTicket of sourceTickets) {
+          await tx.ticketActivity.create({
+            data: {
+              ticketId: sourceTicket.id,
+              userId,
+              action: 'ticket_merged',
+              details: {
+                mergedIntoTicketId: targetTicketId,
+                mergedIntoTicketNumber: targetTicket.ticketNumber,
+                reason: 'closed_by_merge'
+              }
+            }
+          });
+
+          // Add a system comment to source ticket
+          await tx.comment.create({
+            data: {
+              ticketId: sourceTicket.id,
+              authorId: userId,
+              body: `<p>This ticket has been merged into <a href="/tickets/${targetTicketId}">Ticket #${targetTicket.ticketNumber}</a>.</p>`,
+              bodyPlain: `This ticket has been merged into Ticket #${targetTicket.ticketNumber}.`,
+              isInternal: false,
+              isSystem: true,
+              channel: 'SYSTEM'
+            }
+          });
+        }
+
+        // Create activity log for target ticket
+        await tx.ticketActivity.create({
+          data: {
+            ticketId: targetTicketId,
+            userId,
+            action: 'tickets_merged_in',
+            details: {
+              mergedTicketIds: sourceTicketIds,
+              mergedTicketNumbers: sourceTickets.map(t => t.ticketNumber),
+              hasDifferentRequesters: differentRequesters.length > 0
+            }
+          }
+        });
+
+        // Add a comment to target ticket with merge info
+        const mergeCommentBody = mergeComment
+          ? `<p>${mergeComment}</p><p><em>Merged from tickets: ${mergedTicketNumbers}</em></p>`
+          : `<p><em>The following tickets have been merged into this ticket: ${mergedTicketNumbers}</em></p>`;
+
+        await tx.comment.create({
+          data: {
+            ticketId: targetTicketId,
+            authorId: userId,
+            body: mergeCommentBody,
+            bodyPlain: mergeComment
+              ? `${mergeComment}\n\nMerged from tickets: ${mergedTicketNumbers}`
+              : `The following tickets have been merged into this ticket: ${mergedTicketNumbers}`,
+            isInternal: true, // Internal note about the merge
+            isSystem: true,
+            channel: 'SYSTEM'
+          }
+        });
+
+        // If there are different requesters, add them to the comment as context
+        if (differentRequesters.length > 0) {
+          const requesterInfo = differentRequesters.map(t =>
+            `${t.requester.firstName || ''} ${t.requester.lastName || ''} (${t.requester.email})`
+          ).join(', ');
+
+          await tx.comment.create({
+            data: {
+              ticketId: targetTicketId,
+              authorId: userId,
+              body: `<p><em>Note: Merged tickets had different requesters: ${requesterInfo}</em></p>`,
+              bodyPlain: `Note: Merged tickets had different requesters: ${requesterInfo}`,
+              isInternal: true,
+              isSystem: true,
+              channel: 'SYSTEM'
+            }
+          });
+        }
+
+        // Return updated target ticket
+        return await tx.ticket.findUnique({
+          where: { id: targetTicketId },
+          include: {
+            requester: {
+              select: { id: true, email: true, firstName: true, lastName: true }
+            },
+            assignee: {
+              select: { id: true, email: true, firstName: true, lastName: true }
+            },
+            mergedTickets: {
+              select: {
+                id: true,
+                ticketNumber: true,
+                subject: true,
+                mergedAt: true
+              }
+            }
+          }
+        });
+      });
+
+      return res.json({
+        success: true,
+        message: `Successfully merged ${sourceTickets.length} ticket(s) into #${targetTicket.ticketNumber}`,
+        targetTicket: result,
+        mergedTickets: sourceTickets.map(t => ({
+          id: t.id,
+          ticketNumber: t.ticketNumber,
+          subject: t.subject
+        }))
+      });
+    } catch (error) {
+      console.error('Error merging tickets:', error);
+      return res.status(500).json({ error: 'Failed to merge tickets' });
+    }
+  }
+);
+
+// Get tickets available for merge (same requester, open status)
+router.get('/merge-candidates/:ticketId', requireAuth, requireAgent, async (req: AuthRequest, res: Response) => {
+  try {
+    const { ticketId } = req.params;
+
+    // Get the source ticket to find its requester
+    const sourceTicket = await prisma.ticket.findUnique({
+      where: { id: ticketId },
+      select: { requesterId: true, ticketNumber: true }
+    });
+
+    if (!sourceTicket) {
+      return res.status(404).json({ error: 'Ticket not found' });
+    }
+
+    // Find other open tickets from the same requester
+    const candidates = await prisma.ticket.findMany({
+      where: {
+        id: { not: ticketId },
+        requesterId: sourceTicket.requesterId,
+        status: { notIn: ['SOLVED', 'CLOSED'] },
+        mergedIntoId: null // Not already merged
+      },
+      select: {
+        id: true,
+        ticketNumber: true,
+        subject: true,
+        status: true,
+        createdAt: true,
+        _count: {
+          select: { comments: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 20
+    });
+
+    return res.json(candidates);
+  } catch (error) {
+    console.error('Error fetching merge candidates:', error);
+    return res.status(500).json({ error: 'Failed to fetch merge candidates' });
+  }
+});
 
 // Get ticket statistics (for dashboard)
 router.get('/stats/overview', requireAuth, requireAgent, async (_req: AuthRequest, res) => {
