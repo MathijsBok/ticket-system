@@ -5,8 +5,8 @@ import toast from 'react-hot-toast';
 import { settingsApi, zendeskApi, exportApi, apiKeyApi, analyticsApi, adminAnalyticsApi, aiAnalyticsApi } from '../lib/api';
 import Layout from '../components/Layout';
 
-type TabType = 'notifications' | 'automation' | 'sendgrid' | 'import' | 'export' | 'api' | 'maintenance';
-const validTabs: TabType[] = ['notifications', 'automation', 'sendgrid', 'import', 'export', 'api', 'maintenance'];
+type TabType = 'notifications' | 'automation' | 'sendgrid' | 'import' | 'export' | 'api' | 'maintenance' | 'widget';
+const validTabs: TabType[] = ['notifications', 'automation', 'sendgrid', 'import', 'export', 'api', 'maintenance', 'widget'];
 
 interface ApiKey {
   id: string;
@@ -116,6 +116,20 @@ const AdminSettings: React.FC = () => {
     message: string;
     results: Array<{ date: string; new: number; open: number; pending: number; hold: number; total: number; status: string }>;
   } | null>(null);
+  // Widget state
+  const [widgetForm, setWidgetForm] = useState({
+    chatWidgetEnabled: false,
+    chatWidgetWelcomeMessage: '',
+    chatWidgetVisibleToUsers: true,
+    chatWidgetVisibleToAgents: false,
+    chatWidgetEscalationThreshold: 3,
+    chatWidgetSystemInstructions: '',
+    chatWidgetCompanyName: '',
+    chatWidgetTone: 'professional',
+    chatWidgetFaqItems: [] as Array<{ question: string; answer: string }>,
+  });
+  const [widgetSaving, setWidgetSaving] = useState(false);
+  const [showTrainingModal, setShowTrainingModal] = useState(false);
 
   const { data: settings, isLoading } = useQuery({
     queryKey: ['settings'],
@@ -296,6 +310,76 @@ const AdminSettings: React.FC = () => {
         sendgridFromEmail: settings.sendgridFromEmail ?? '',
         sendgridFromName: settings.sendgridFromName ?? '',
         sendgridInboundDomain: settings.sendgridInboundDomain ?? '',
+      });
+    }
+  };
+
+  // Sync local widget form state when settings load
+  useEffect(() => {
+    if (settings) {
+      setWidgetForm({
+        chatWidgetEnabled: settings.chatWidgetEnabled ?? false,
+        chatWidgetWelcomeMessage: settings.chatWidgetWelcomeMessage ?? '',
+        chatWidgetVisibleToUsers: settings.chatWidgetVisibleToUsers ?? true,
+        chatWidgetVisibleToAgents: settings.chatWidgetVisibleToAgents ?? false,
+        chatWidgetEscalationThreshold: settings.chatWidgetEscalationThreshold ?? 3,
+        chatWidgetSystemInstructions: settings.chatWidgetSystemInstructions ?? '',
+        chatWidgetCompanyName: settings.chatWidgetCompanyName ?? '',
+        chatWidgetTone: settings.chatWidgetTone ?? 'professional',
+        chatWidgetFaqItems: (settings.chatWidgetFaqItems as Array<{ question: string; answer: string }>) ?? [],
+      });
+    }
+  }, [settings]);
+
+  // Check if widget form has unsaved changes
+  const hasWidgetChanges = settings && (
+    widgetForm.chatWidgetEnabled !== (settings.chatWidgetEnabled ?? false) ||
+    widgetForm.chatWidgetWelcomeMessage !== (settings.chatWidgetWelcomeMessage ?? '') ||
+    widgetForm.chatWidgetVisibleToUsers !== (settings.chatWidgetVisibleToUsers ?? true) ||
+    widgetForm.chatWidgetVisibleToAgents !== (settings.chatWidgetVisibleToAgents ?? false) ||
+    widgetForm.chatWidgetEscalationThreshold !== (settings.chatWidgetEscalationThreshold ?? 3) ||
+    widgetForm.chatWidgetSystemInstructions !== (settings.chatWidgetSystemInstructions ?? '') ||
+    widgetForm.chatWidgetCompanyName !== (settings.chatWidgetCompanyName ?? '') ||
+    widgetForm.chatWidgetTone !== (settings.chatWidgetTone ?? 'professional') ||
+    JSON.stringify(widgetForm.chatWidgetFaqItems) !== JSON.stringify((settings.chatWidgetFaqItems as Array<{ question: string; answer: string }>) ?? [])
+  );
+
+  // Handle widget form field changes
+  const handleWidgetChange = <K extends keyof typeof widgetForm>(
+    field: K,
+    value: typeof widgetForm[K]
+  ) => {
+    setWidgetForm(prev => ({ ...prev, [field]: value }));
+  };
+
+  // Save widget settings
+  const handleSaveWidget = async () => {
+    if (!settings?.id) return;
+    setWidgetSaving(true);
+    try {
+      await settingsApi.update(settings.id, widgetForm);
+      toast.success('Widget settings saved successfully');
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Failed to save widget settings');
+    } finally {
+      setWidgetSaving(false);
+    }
+  };
+
+  // Discard widget changes
+  const handleDiscardWidgetChanges = () => {
+    if (settings) {
+      setWidgetForm({
+        chatWidgetEnabled: settings.chatWidgetEnabled ?? false,
+        chatWidgetWelcomeMessage: settings.chatWidgetWelcomeMessage ?? '',
+        chatWidgetVisibleToUsers: settings.chatWidgetVisibleToUsers ?? true,
+        chatWidgetVisibleToAgents: settings.chatWidgetVisibleToAgents ?? false,
+        chatWidgetEscalationThreshold: settings.chatWidgetEscalationThreshold ?? 3,
+        chatWidgetSystemInstructions: settings.chatWidgetSystemInstructions ?? '',
+        chatWidgetCompanyName: settings.chatWidgetCompanyName ?? '',
+        chatWidgetTone: settings.chatWidgetTone ?? 'professional',
+        chatWidgetFaqItems: (settings.chatWidgetFaqItems as Array<{ question: string; answer: string }>) ?? [],
       });
     }
   };
@@ -920,6 +1004,11 @@ const AdminSettings: React.FC = () => {
       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+      </svg>
+    )},
+    { id: 'widget' as TabType, label: 'Widget', icon: (
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
       </svg>
     )}
   ];
@@ -2949,8 +3038,484 @@ const AdminSettings: React.FC = () => {
               </div>
             </div>
           )}
+
+          {/* Widget Tab */}
+          {activeTab === 'widget' && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+                  Chat Widget
+                </h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                  Configure the AI-powered chat widget that helps users get quick answers
+                </p>
+              </div>
+
+              {/* Widget Enable/Disable */}
+              <div className="p-6 border border-gray-200 dark:border-gray-700 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-primary/10 rounded-lg">
+                      <svg className="w-6 h-6 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="text-md font-medium text-gray-900 dark:text-white">Enable Chat Widget</h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Show the floating chat button on all pages
+                      </p>
+                    </div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={widgetForm.chatWidgetEnabled}
+                      onChange={(e) => handleWidgetChange('chatWidgetEnabled', e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 dark:peer-focus:ring-primary/30 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary"></div>
+                  </label>
+                </div>
+              </div>
+
+              {/* Welcome Message */}
+              <div className="p-6 border border-gray-200 dark:border-gray-700 rounded-lg">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                    <svg className="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-md font-medium text-gray-900 dark:text-white">Welcome Message</h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      The initial message shown when users open the chat
+                    </p>
+                  </div>
+                </div>
+                <textarea
+                  value={widgetForm.chatWidgetWelcomeMessage}
+                  onChange={(e) => handleWidgetChange('chatWidgetWelcomeMessage', e.target.value)}
+                  placeholder="Hi! How can I help you today?"
+                  rows={3}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                />
+              </div>
+
+              {/* Visibility Settings */}
+              <div className="p-6 border border-gray-200 dark:border-gray-700 rounded-lg">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                    <svg className="w-6 h-6 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-md font-medium text-gray-900 dark:text-white">Visibility</h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Control who can see the chat widget
+                    </p>
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <label className="flex items-center justify-between">
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Show to Users</span>
+                    <input
+                      type="checkbox"
+                      checked={widgetForm.chatWidgetVisibleToUsers}
+                      onChange={(e) => handleWidgetChange('chatWidgetVisibleToUsers', e.target.checked)}
+                      className="w-4 h-4 text-primary bg-gray-100 border-gray-300 rounded focus:ring-primary dark:focus:ring-primary dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                    />
+                  </label>
+                  <label className="flex items-center justify-between">
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Show to Agents</span>
+                    <input
+                      type="checkbox"
+                      checked={widgetForm.chatWidgetVisibleToAgents}
+                      onChange={(e) => handleWidgetChange('chatWidgetVisibleToAgents', e.target.checked)}
+                      className="w-4 h-4 text-primary bg-gray-100 border-gray-300 rounded focus:ring-primary dark:focus:ring-primary dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              {/* Escalation Settings */}
+              <div className="p-6 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-700/50">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-lg">
+                    <svg className="w-6 h-6 text-orange-600 dark:text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-md font-medium text-gray-900 dark:text-white">Escalation Settings</h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Configure when to prompt users to create a support ticket
+                    </p>
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Escalation Threshold (responses)
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="number"
+                        min="1"
+                        max="10"
+                        value={widgetForm.chatWidgetEscalationThreshold}
+                        onChange={(e) => handleWidgetChange('chatWidgetEscalationThreshold', parseInt(e.target.value) || 3)}
+                        className="w-20 px-3 py-2 text-center border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      />
+                      <span className="text-sm text-gray-600 dark:text-gray-400">
+                        AI responses before showing ticket creation prompt
+                      </span>
+                    </div>
+                    <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                      After this many AI responses, users will be prompted to create a support ticket if their issue isn't resolved.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Training Section */}
+              <div className="p-6 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-700/50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
+                      <svg className="w-6 h-6 text-indigo-600 dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="text-md font-medium text-gray-900 dark:text-white">Train Chatbot</h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Customize the chatbot's personality, add FAQs, and configure custom instructions
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowTrainingModal(true)}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors"
+                  >
+                    Configure Training
+                  </button>
+                </div>
+                {/* Training Summary */}
+                <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
+                  <div className="p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Company Name</p>
+                    <p className="font-medium text-gray-900 dark:text-white truncate">
+                      {widgetForm.chatWidgetCompanyName || 'Not configured'}
+                    </p>
+                  </div>
+                  <div className="p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Tone</p>
+                    <p className="font-medium text-gray-900 dark:text-white capitalize">
+                      {widgetForm.chatWidgetTone || 'Professional'}
+                    </p>
+                  </div>
+                  <div className="p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">FAQ Items</p>
+                    <p className="font-medium text-gray-900 dark:text-white">
+                      {widgetForm.chatWidgetFaqItems.length} configured
+                    </p>
+                  </div>
+                  <div className="p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Custom Instructions</p>
+                    <p className="font-medium text-gray-900 dark:text-white">
+                      {widgetForm.chatWidgetSystemInstructions ? 'Configured' : 'Not configured'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Knowledge Sources Info */}
+              <div className="p-6 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-700/50">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                    <svg className="w-6 h-6 text-purple-600 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-md font-medium text-gray-900 dark:text-white">Knowledge Sources</h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      The chatbot learns from the following sources
+                    </p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                    <svg className="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span>Solved tickets with agent responses</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                    <svg className="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span>AI Knowledge URLs (configured in Automation tab)</span>
+                  </div>
+                </div>
+                <p className="mt-4 text-xs text-gray-500 dark:text-gray-400">
+                  The chatbot uses the same AI knowledge base as the ticket suggestions feature.
+                  Configure knowledge URLs in the Automation tab.
+                </p>
+              </div>
+
+              {/* Chat Sessions Link */}
+              <div className="p-6 border border-gray-200 dark:border-gray-700 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
+                      <svg className="w-6 h-6 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="text-md font-medium text-gray-900 dark:text-white">Chat Sessions</h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Review all chat conversations with users
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    Coming soon
+                  </span>
+                </div>
+              </div>
+
+              {/* Save/Discard Buttons */}
+              <div className="border-t border-gray-200 dark:border-gray-700 pt-6 mt-8">
+                <div className="flex items-center justify-between">
+                  <div>
+                    {hasWidgetChanges && (
+                      <p className="text-sm text-amber-600 dark:text-amber-400 flex items-center gap-2">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        You have unsaved changes
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex gap-3">
+                    {hasWidgetChanges && (
+                      <button
+                        type="button"
+                        onClick={handleDiscardWidgetChanges}
+                        className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                      >
+                        Discard Changes
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleSaveWidget}
+                      disabled={!hasWidgetChanges || widgetSaving}
+                      className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-primary hover:opacity-90 rounded-md disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+                    >
+                      {widgetSaving ? (
+                        <>
+                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Saving...
+                        </>
+                      ) : (
+                        'Save Changes'
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Training Modal */}
+      {showTrainingModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
+            <div className="fixed inset-0 transition-opacity bg-gray-500 bg-opacity-75" onClick={() => setShowTrainingModal(false)} />
+            <div className="relative inline-block w-full max-w-2xl p-6 my-8 text-left align-middle transition-all transform bg-white dark:bg-gray-800 shadow-xl rounded-xl">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Train Chatbot</h3>
+                <button
+                  onClick={() => setShowTrainingModal(false)}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-2">
+                {/* Company Name */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Company Name
+                  </label>
+                  <input
+                    type="text"
+                    value={widgetForm.chatWidgetCompanyName}
+                    onChange={(e) => handleWidgetChange('chatWidgetCompanyName', e.target.value)}
+                    placeholder="Your Company"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  />
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Used in the chatbot's introduction (e.g., "Hi, I'm the support assistant for [Company Name]")
+                  </p>
+                </div>
+
+                {/* Tone Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Communication Tone
+                  </label>
+                  <div className="grid grid-cols-3 gap-3">
+                    {['professional', 'friendly', 'casual'].map((tone) => (
+                      <button
+                        key={tone}
+                        onClick={() => handleWidgetChange('chatWidgetTone', tone)}
+                        className={`p-3 rounded-lg border-2 transition-colors capitalize ${
+                          widgetForm.chatWidgetTone === tone
+                            ? 'border-primary bg-primary/10 text-primary'
+                            : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 text-gray-700 dark:text-gray-300'
+                        }`}
+                      >
+                        {tone}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Custom Instructions */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Custom Instructions
+                  </label>
+                  <textarea
+                    value={widgetForm.chatWidgetSystemInstructions}
+                    onChange={(e) => handleWidgetChange('chatWidgetSystemInstructions', e.target.value)}
+                    placeholder="Add any specific instructions for the chatbot...&#10;&#10;Example:&#10;- Always recommend checking our FAQ page first&#10;- If asked about pricing, direct users to /pricing&#10;- Never promise specific resolution times"
+                    rows={5}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white resize-none"
+                  />
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    These instructions guide the chatbot's behavior and responses
+                  </p>
+                </div>
+
+                {/* FAQ Items */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      FAQ Items ({widgetForm.chatWidgetFaqItems.length})
+                    </label>
+                    <button
+                      onClick={() => {
+                        handleWidgetChange('chatWidgetFaqItems', [
+                          ...widgetForm.chatWidgetFaqItems,
+                          { question: '', answer: '' }
+                        ]);
+                      }}
+                      className="text-sm text-primary hover:text-primary/80 font-medium"
+                    >
+                      + Add FAQ
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                    Add common questions and answers to improve chatbot accuracy
+                  </p>
+                  <div className="space-y-4">
+                    {widgetForm.chatWidgetFaqItems.map((faq, index) => (
+                      <div key={index} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                        <div className="flex items-start justify-between mb-3">
+                          <span className="text-xs font-medium text-gray-500 dark:text-gray-400">FAQ #{index + 1}</span>
+                          <button
+                            onClick={() => {
+                              const newFaqs = widgetForm.chatWidgetFaqItems.filter((_, i) => i !== index);
+                              handleWidgetChange('chatWidgetFaqItems', newFaqs);
+                            }}
+                            className="text-red-500 hover:text-red-700 text-xs"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                        <div className="space-y-3">
+                          <div>
+                            <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Question</label>
+                            <input
+                              type="text"
+                              value={faq.question}
+                              onChange={(e) => {
+                                const newFaqs = [...widgetForm.chatWidgetFaqItems];
+                                newFaqs[index] = { ...newFaqs[index], question: e.target.value };
+                                handleWidgetChange('chatWidgetFaqItems', newFaqs);
+                              }}
+                              placeholder="What is your refund policy?"
+                              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Answer</label>
+                            <textarea
+                              value={faq.answer}
+                              onChange={(e) => {
+                                const newFaqs = [...widgetForm.chatWidgetFaqItems];
+                                newFaqs[index] = { ...newFaqs[index], answer: e.target.value };
+                                handleWidgetChange('chatWidgetFaqItems', newFaqs);
+                              }}
+                              placeholder="We offer a 30-day money-back guarantee on all purchases..."
+                              rows={2}
+                              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white resize-none"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {widgetForm.chatWidgetFaqItems.length === 0 && (
+                      <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                        <svg className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <p className="text-sm">No FAQ items yet</p>
+                        <p className="text-xs mt-1">Click "Add FAQ" to add common questions and answers</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+                <button
+                  onClick={() => setShowTrainingModal(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => {
+                    setShowTrainingModal(false);
+                    // Changes will be saved when the main Save button is clicked
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary/90 rounded-lg transition-colors"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 };

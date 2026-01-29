@@ -4,6 +4,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useView } from '../contexts/ViewContext';
 import { Link, useLocation } from 'react-router-dom';
 import NotificationBell from './NotificationBell';
+import ChatWidget from './ChatWidget';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -230,6 +231,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       <main className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {children}
       </main>
+
+      {/* Chat Widget */}
+      <ChatWidget />
     </div>
   );
 };

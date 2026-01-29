@@ -10,7 +10,10 @@ const VALID_EVENT_TYPES = [
   'SUMMARY_REGENERATED',
   'SUGGESTION_SHOWN',
   'SUGGESTION_HELPFUL',
-  'SUGGESTION_NOT_HELPFUL'
+  'SUGGESTION_NOT_HELPFUL',
+  'CHAT_RESPONSE_GENERATED',
+  'CHAT_FEEDBACK_HELPFUL',
+  'CHAT_FEEDBACK_NOT_HELPFUL'
 ];
 
 // Record an AI analytics event (for agents - summary events)
@@ -109,7 +112,11 @@ router.get('/stats', requireAuth, requireAgent, async (req: AuthRequest, res: Re
       // Suggestion events
       suggestionShown: 0,
       suggestionHelpful: 0,
-      suggestionNotHelpful: 0
+      suggestionNotHelpful: 0,
+      // Chat widget events
+      chatResponseGenerated: 0,
+      chatFeedbackHelpful: 0,
+      chatFeedbackNotHelpful: 0
     };
 
     eventCounts.forEach(item => {
@@ -129,6 +136,15 @@ router.get('/stats', requireAuth, requireAgent, async (req: AuthRequest, res: Re
         case 'SUGGESTION_NOT_HELPFUL':
           counts.suggestionNotHelpful = item._count;
           break;
+        case 'CHAT_RESPONSE_GENERATED':
+          counts.chatResponseGenerated = item._count;
+          break;
+        case 'CHAT_FEEDBACK_HELPFUL':
+          counts.chatFeedbackHelpful = item._count;
+          break;
+        case 'CHAT_FEEDBACK_NOT_HELPFUL':
+          counts.chatFeedbackNotHelpful = item._count;
+          break;
       }
     });
 
@@ -137,6 +153,10 @@ router.get('/stats', requireAuth, requireAgent, async (req: AuthRequest, res: Re
     const totalSuggestionFeedback = counts.suggestionHelpful + counts.suggestionNotHelpful;
     const suggestionHelpfulRate = totalSuggestionFeedback > 0
       ? Math.round((counts.suggestionHelpful / totalSuggestionFeedback) * 100)
+      : 0;
+    const totalChatFeedback = counts.chatFeedbackHelpful + counts.chatFeedbackNotHelpful;
+    const chatHelpfulRate = totalChatFeedback > 0
+      ? Math.round((counts.chatFeedbackHelpful / totalChatFeedback) * 100)
       : 0;
 
     // Get monthly breakdown for chart
@@ -162,6 +182,9 @@ router.get('/stats', requireAuth, requireAgent, async (req: AuthRequest, res: Re
       let suggestionShown = 0;
       let suggestionHelpful = 0;
       let suggestionNotHelpful = 0;
+      let chatResponseGenerated = 0;
+      let chatFeedbackHelpful = 0;
+      let chatFeedbackNotHelpful = 0;
 
       monthEvents.forEach(e => {
         const count = Number(e.count);
@@ -181,6 +204,15 @@ router.get('/stats', requireAuth, requireAgent, async (req: AuthRequest, res: Re
           case 'SUGGESTION_NOT_HELPFUL':
             suggestionNotHelpful = count;
             break;
+          case 'CHAT_RESPONSE_GENERATED':
+            chatResponseGenerated = count;
+            break;
+          case 'CHAT_FEEDBACK_HELPFUL':
+            chatFeedbackHelpful = count;
+            break;
+          case 'CHAT_FEEDBACK_NOT_HELPFUL':
+            chatFeedbackNotHelpful = count;
+            break;
         }
       });
 
@@ -190,7 +222,10 @@ router.get('/stats', requireAuth, requireAgent, async (req: AuthRequest, res: Re
         summaryRegenerated,
         suggestionShown,
         suggestionHelpful,
-        suggestionNotHelpful
+        suggestionNotHelpful,
+        chatResponseGenerated,
+        chatFeedbackHelpful,
+        chatFeedbackNotHelpful
       };
     });
 
@@ -201,6 +236,8 @@ router.get('/stats', requireAuth, requireAgent, async (req: AuthRequest, res: Re
       totalSummaryGenerations,
       totalSuggestionFeedback,
       suggestionHelpfulRate,
+      totalChatFeedback,
+      chatHelpfulRate,
       monthlyChart
     });
   } catch (error) {

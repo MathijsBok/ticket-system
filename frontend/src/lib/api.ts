@@ -504,3 +504,31 @@ export const aiAnalyticsApi = {
 
 // Keep old name as alias for backwards compatibility
 export const aiSummaryAnalyticsApi = aiAnalyticsApi;
+
+// Chat Widget API
+export const chatApi = {
+  getSettings: () =>
+    api.get('/chat/settings'),
+
+  sendMessage: (data: { message: string; sessionId?: string }) =>
+    api.post('/chat', data),
+
+  getMessages: (sessionId: string) =>
+    api.get(`/chat/sessions/${sessionId}/messages`),
+
+  endSession: (sessionId: string, resolved: boolean) =>
+    api.post(`/chat/sessions/${sessionId}/end`, { resolved }),
+
+  giveFeedback: (sessionId: string, messageId: string, wasHelpful: boolean) =>
+    api.post(`/chat/sessions/${sessionId}/feedback`, { messageId, wasHelpful }),
+
+  regenerateResponse: (sessionId: string, messageId: string) =>
+    api.post(`/chat/sessions/${sessionId}/regenerate`, { messageId }),
+
+  // Admin endpoints
+  getSessions: (params?: { status?: string; page?: number; limit?: number }) =>
+    api.get('/chat/sessions', { params }),
+
+  getSession: (id: string) =>
+    api.get(`/chat/sessions/${id}`)
+};

@@ -921,7 +921,7 @@ const AnalyticsDashboard: React.FC = () => {
                 </div>
                 <div>
                   <h3 className="text-xl font-bold text-gray-900 dark:text-white">AI Analytics</h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">AI Summary (Ticket Detail) and AI Suggestions (Create Ticket)</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">AI Summary, Suggestions, and Chat Widget usage</p>
                 </div>
               </div>
               {/* Year Selector */}
@@ -996,15 +996,45 @@ const AnalyticsDashboard: React.FC = () => {
               </div>
             </div>
 
+            {/* Chat Widget Stats */}
+            <div className="mb-6">
+              <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Chat Widget</h4>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="bg-cyan-50 dark:bg-cyan-900/20 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <svg className="w-5 h-5 text-cyan-600 dark:text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                    <span className="text-xs font-medium text-cyan-600 dark:text-cyan-400">Responses Generated</span>
+                  </div>
+                  <p className="text-2xl font-bold text-cyan-700 dark:text-cyan-300">{aiSummaryData.counts?.chatResponseGenerated || 0}</p>
+                </div>
+                <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <svg className="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
+                    </svg>
+                    <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Helpful</span>
+                  </div>
+                  <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{aiSummaryData.counts?.chatFeedbackHelpful || 0}</p>
+                </div>
+                <div className="bg-orange-50 dark:bg-orange-900/20 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <svg className="w-5 h-5 text-orange-600 dark:text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14H5.236a2 2 0 01-1.789-2.894l3.5-7A2 2 0 018.736 3h4.018a2 2 0 01.485.06l3.76.94m-7 10v5a2 2 0 002 2h.096c.5 0 .905-.405.905-.905 0-.714.211-1.412.608-2.006L17 13V4m-7 10h2m5-10h2a2 2 0 012 2v6a2 2 0 01-2 2h-2.5" />
+                    </svg>
+                    <span className="text-xs font-medium text-orange-600 dark:text-orange-400">Not Helpful</span>
+                  </div>
+                  <p className="text-2xl font-bold text-orange-700 dark:text-orange-300">{aiSummaryData.counts?.chatFeedbackNotHelpful || 0}</p>
+                </div>
+              </div>
+            </div>
+
             {/* Summary Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
               <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Total Summary Generations</p>
                 <p className="text-xl font-bold text-gray-900 dark:text-white">{aiSummaryData.totalSummaryGenerations || 0}</p>
-              </div>
-              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Total Suggestion Feedback</p>
-                <p className="text-xl font-bold text-gray-900 dark:text-white">{aiSummaryData.totalSuggestionFeedback || 0}</p>
               </div>
               <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Suggestion Helpful Rate</p>
@@ -1020,10 +1050,28 @@ const AnalyticsDashboard: React.FC = () => {
                   )}
                 </div>
               </div>
+              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Total Chat Responses</p>
+                <p className="text-xl font-bold text-gray-900 dark:text-white">{aiSummaryData.counts?.chatResponseGenerated || 0}</p>
+              </div>
+              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Chat Helpful Rate</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-xl font-bold text-gray-900 dark:text-white">{aiSummaryData.chatHelpfulRate || 0}%</p>
+                  {aiSummaryData.totalChatFeedback > 0 && (
+                    <div className="flex-1 bg-gray-200 dark:bg-gray-600 rounded-full h-2.5 overflow-hidden">
+                      <div
+                        className="bg-gradient-to-r from-cyan-500 to-teal-500 h-2.5 rounded-full transition-all duration-500"
+                        style={{ width: `${aiSummaryData.chatHelpfulRate || 0}%` }}
+                      ></div>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Monthly Chart */}
-            {aiSummaryData.monthlyChart && aiSummaryData.monthlyChart.some((m: any) => m.summaryGenerated > 0 || m.suggestionHelpful > 0 || m.suggestionNotHelpful > 0) && (
+            {aiSummaryData.monthlyChart && aiSummaryData.monthlyChart.some((m: any) => m.summaryGenerated > 0 || m.suggestionHelpful > 0 || m.suggestionNotHelpful > 0 || m.chatResponseGenerated > 0) && (
               <div>
                 <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">Monthly Breakdown</h4>
                 <ResponsiveContainer width="100%" height={250}>
@@ -1037,12 +1085,13 @@ const AnalyticsDashboard: React.FC = () => {
                     <Bar dataKey="summaryRegenerated" name="Summary Regenerated" fill="#A855F7" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="suggestionHelpful" name="Solved Issue" fill="#10B981" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="suggestionNotHelpful" name="Did Not Solve" fill="#EF4444" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="chatResponseGenerated" name="Chat Responses" fill="#06B6D4" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             )}
 
-            {aiSummaryData.totalSummaryGenerations === 0 && aiSummaryData.totalSuggestionFeedback === 0 && (
+            {aiSummaryData.totalSummaryGenerations === 0 && aiSummaryData.totalSuggestionFeedback === 0 && (aiSummaryData.counts?.chatResponseGenerated || 0) === 0 && (
               <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                 No AI analytics data available for {aiSummaryYear}
               </div>
