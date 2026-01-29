@@ -109,10 +109,10 @@ export async function fetchUrlContent(url: string): Promise<string | null> {
         .replace(/&#39;/g, "'")
         .replace(/\s+/g, ' ')
         .trim()
-        .substring(0, 5000); // Limit content length
+        .substring(0, 20000); // Limit content length per URL
     }
 
-    return text.substring(0, 5000); // Limit content length
+    return text.substring(0, 20000); // Limit content length per URL
   } catch (error) {
     console.warn(`[AI Knowledge] Error fetching ${url}:`, error);
     return null;
@@ -140,7 +140,7 @@ export async function fetchKnowledgeContent(urlsText: string | null): Promise<st
 
   // Fetch URLs in parallel with a limit
   const results = await Promise.allSettled(
-    urls.slice(0, 5).map(async (url) => { // Limit to 5 URLs
+    urls.slice(0, 10).map(async (url) => { // Limit to 10 URLs
       const content = await fetchUrlContent(url);
       if (content && content.length > 100) {
         return { url, content };

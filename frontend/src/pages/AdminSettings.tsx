@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
@@ -103,6 +103,113 @@ const AdminSettings: React.FC = () => {
       return response.data;
     }
   });
+
+  // Local state for Automation tab (manual save instead of auto-save)
+  const [automationForm, setAutomationForm] = useState({
+    // Ticket Automation
+    sendPendingTicketReminder: false,
+    pendingTicketReminderHours: 24,
+    autoSolveEnabled: false,
+    autoSolveHours: 48,
+    autoCloseEnabled: false,
+    autoCloseHours: 48,
+    // Storage Management
+    autoDeleteAttachmentsEnabled: false,
+    autoDeleteAttachmentsDays: 90,
+    // AI Features
+    aiSummaryEnabled: false,
+    anthropicApiKey: '',
+    ticketSuggestionsEnabled: false,
+    ticketSuggestionsApiKey: '',
+    aiKnowledgeUrls: '',
+    aiKnowledgeRefreshDays: 7,
+  });
+  const [automationSaving, setAutomationSaving] = useState(false);
+
+  // Sync local automation form state when settings load
+  useEffect(() => {
+    if (settings) {
+      setAutomationForm({
+        sendPendingTicketReminder: settings.sendPendingTicketReminder ?? false,
+        pendingTicketReminderHours: settings.pendingTicketReminderHours ?? 24,
+        autoSolveEnabled: settings.autoSolveEnabled ?? false,
+        autoSolveHours: settings.autoSolveHours ?? 48,
+        autoCloseEnabled: settings.autoCloseEnabled ?? false,
+        autoCloseHours: settings.autoCloseHours ?? 48,
+        autoDeleteAttachmentsEnabled: settings.autoDeleteAttachmentsEnabled ?? false,
+        autoDeleteAttachmentsDays: settings.autoDeleteAttachmentsDays ?? 90,
+        aiSummaryEnabled: settings.aiSummaryEnabled ?? false,
+        anthropicApiKey: settings.anthropicApiKey ?? '',
+        ticketSuggestionsEnabled: settings.ticketSuggestionsEnabled ?? false,
+        ticketSuggestionsApiKey: settings.ticketSuggestionsApiKey ?? '',
+        aiKnowledgeUrls: settings.aiKnowledgeUrls ?? '',
+        aiKnowledgeRefreshDays: settings.aiKnowledgeRefreshDays ?? 7,
+      });
+    }
+  }, [settings]);
+
+  // Check if automation form has unsaved changes
+  const hasAutomationChanges = settings && (
+    automationForm.sendPendingTicketReminder !== (settings.sendPendingTicketReminder ?? false) ||
+    automationForm.pendingTicketReminderHours !== (settings.pendingTicketReminderHours ?? 24) ||
+    automationForm.autoSolveEnabled !== (settings.autoSolveEnabled ?? false) ||
+    automationForm.autoSolveHours !== (settings.autoSolveHours ?? 48) ||
+    automationForm.autoCloseEnabled !== (settings.autoCloseEnabled ?? false) ||
+    automationForm.autoCloseHours !== (settings.autoCloseHours ?? 48) ||
+    automationForm.autoDeleteAttachmentsEnabled !== (settings.autoDeleteAttachmentsEnabled ?? false) ||
+    automationForm.autoDeleteAttachmentsDays !== (settings.autoDeleteAttachmentsDays ?? 90) ||
+    automationForm.aiSummaryEnabled !== (settings.aiSummaryEnabled ?? false) ||
+    automationForm.anthropicApiKey !== (settings.anthropicApiKey ?? '') ||
+    automationForm.ticketSuggestionsEnabled !== (settings.ticketSuggestionsEnabled ?? false) ||
+    automationForm.ticketSuggestionsApiKey !== (settings.ticketSuggestionsApiKey ?? '') ||
+    automationForm.aiKnowledgeUrls !== (settings.aiKnowledgeUrls ?? '') ||
+    automationForm.aiKnowledgeRefreshDays !== (settings.aiKnowledgeRefreshDays ?? 7)
+  );
+
+  // Handle automation form field changes
+  const handleAutomationChange = <K extends keyof typeof automationForm>(
+    field: K,
+    value: typeof automationForm[K]
+  ) => {
+    setAutomationForm(prev => ({ ...prev, [field]: value }));
+  };
+
+  // Save all automation settings
+  const handleSaveAutomation = async () => {
+    if (!settings?.id) return;
+    setAutomationSaving(true);
+    try {
+      await settingsApi.update(settings.id, automationForm);
+      toast.success('Automation settings saved successfully');
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Failed to save settings');
+    } finally {
+      setAutomationSaving(false);
+    }
+  };
+
+  // Discard automation changes
+  const handleDiscardAutomationChanges = () => {
+    if (settings) {
+      setAutomationForm({
+        sendPendingTicketReminder: settings.sendPendingTicketReminder ?? false,
+        pendingTicketReminderHours: settings.pendingTicketReminderHours ?? 24,
+        autoSolveEnabled: settings.autoSolveEnabled ?? false,
+        autoSolveHours: settings.autoSolveHours ?? 48,
+        autoCloseEnabled: settings.autoCloseEnabled ?? false,
+        autoCloseHours: settings.autoCloseHours ?? 48,
+        autoDeleteAttachmentsEnabled: settings.autoDeleteAttachmentsEnabled ?? false,
+        autoDeleteAttachmentsDays: settings.autoDeleteAttachmentsDays ?? 90,
+        aiSummaryEnabled: settings.aiSummaryEnabled ?? false,
+        anthropicApiKey: settings.anthropicApiKey ?? '',
+        ticketSuggestionsEnabled: settings.ticketSuggestionsEnabled ?? false,
+        ticketSuggestionsApiKey: settings.ticketSuggestionsApiKey ?? '',
+        aiKnowledgeUrls: settings.aiKnowledgeUrls ?? '',
+        aiKnowledgeRefreshDays: settings.aiKnowledgeRefreshDays ?? 7,
+      });
+    }
+  };
 
   // API Keys queries and mutations
   const { data: apiKeys, isLoading: isLoadingApiKeys } = useQuery({
@@ -448,18 +555,6 @@ const AdminSettings: React.FC = () => {
 
   const handleToggle = (field: string, value: boolean) => {
     updateMutation.mutate({ [field]: value });
-  };
-
-  const handleNumberChange = (field: string, value: number) => {
-    if (value < 1) {
-      toast.error('Value must be at least 1');
-      return;
-    }
-    updateMutation.mutate({ [field]: value });
-  };
-
-  const handleTextChange = (field: string, value: string) => {
-    updateMutation.mutate({ [field]: value || null });
   };
 
   const handleRefreshKnowledgeCache = async () => {
@@ -839,10 +934,9 @@ const AdminSettings: React.FC = () => {
                         <input
                           type="number"
                           min="1"
-                          value={settings?.pendingTicketReminderHours || 24}
-                          onChange={(e) => handleNumberChange('pendingTicketReminderHours', parseInt(e.target.value))}
-                          onBlur={(e) => handleNumberChange('pendingTicketReminderHours', parseInt(e.target.value))}
-                          disabled={!settings?.sendPendingTicketReminder}
+                          value={automationForm.pendingTicketReminderHours}
+                          onChange={(e) => handleAutomationChange('pendingTicketReminderHours', parseInt(e.target.value) || 1)}
+                          disabled={!automationForm.sendPendingTicketReminder}
                           className="w-16 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                         />
                         <p className="text-sm text-gray-500 dark:text-gray-400">hours of our last reply</p>
@@ -851,8 +945,8 @@ const AdminSettings: React.FC = () => {
                     <label className="relative inline-flex items-center cursor-pointer ml-4">
                       <input
                         type="checkbox"
-                        checked={settings?.sendPendingTicketReminder || false}
-                        onChange={(e) => handleToggle('sendPendingTicketReminder', e.target.checked)}
+                        checked={automationForm.sendPendingTicketReminder}
+                        onChange={(e) => handleAutomationChange('sendPendingTicketReminder', e.target.checked)}
                         className="sr-only peer"
                       />
                       <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 dark:peer-focus:ring-primary/40 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary"></div>
@@ -871,10 +965,9 @@ const AdminSettings: React.FC = () => {
                         <input
                           type="number"
                           min="1"
-                          value={settings?.autoSolveHours || 48}
-                          onChange={(e) => handleNumberChange('autoSolveHours', parseInt(e.target.value))}
-                          onBlur={(e) => handleNumberChange('autoSolveHours', parseInt(e.target.value))}
-                          disabled={!settings?.autoSolveEnabled}
+                          value={automationForm.autoSolveHours}
+                          onChange={(e) => handleAutomationChange('autoSolveHours', parseInt(e.target.value) || 1)}
+                          disabled={!automationForm.autoSolveEnabled}
                           className="w-16 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                         />
                         <p className="text-sm text-gray-500 dark:text-gray-400">hours with no user reply</p>
@@ -883,8 +976,8 @@ const AdminSettings: React.FC = () => {
                     <label className="relative inline-flex items-center cursor-pointer ml-4">
                       <input
                         type="checkbox"
-                        checked={settings?.autoSolveEnabled || false}
-                        onChange={(e) => handleToggle('autoSolveEnabled', e.target.checked)}
+                        checked={automationForm.autoSolveEnabled}
+                        onChange={(e) => handleAutomationChange('autoSolveEnabled', e.target.checked)}
                         className="sr-only peer"
                       />
                       <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 dark:peer-focus:ring-primary/40 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary"></div>
@@ -903,10 +996,9 @@ const AdminSettings: React.FC = () => {
                         <input
                           type="number"
                           min="1"
-                          value={settings?.autoCloseHours || 48}
-                          onChange={(e) => handleNumberChange('autoCloseHours', parseInt(e.target.value))}
-                          onBlur={(e) => handleNumberChange('autoCloseHours', parseInt(e.target.value))}
-                          disabled={!settings?.autoCloseEnabled}
+                          value={automationForm.autoCloseHours}
+                          onChange={(e) => handleAutomationChange('autoCloseHours', parseInt(e.target.value) || 1)}
+                          disabled={!automationForm.autoCloseEnabled}
                           className="w-16 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                         />
                         <p className="text-sm text-gray-500 dark:text-gray-400">hours</p>
@@ -915,8 +1007,8 @@ const AdminSettings: React.FC = () => {
                     <label className="relative inline-flex items-center cursor-pointer ml-4">
                       <input
                         type="checkbox"
-                        checked={settings?.autoCloseEnabled || false}
-                        onChange={(e) => handleToggle('autoCloseEnabled', e.target.checked)}
+                        checked={automationForm.autoCloseEnabled}
+                        onChange={(e) => handleAutomationChange('autoCloseEnabled', e.target.checked)}
                         className="sr-only peer"
                       />
                       <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 dark:peer-focus:ring-primary/40 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary"></div>
@@ -947,10 +1039,9 @@ const AdminSettings: React.FC = () => {
                         <input
                           type="number"
                           min="1"
-                          value={settings?.autoDeleteAttachmentsDays || 90}
-                          onChange={(e) => handleNumberChange('autoDeleteAttachmentsDays', parseInt(e.target.value))}
-                          onBlur={(e) => handleNumberChange('autoDeleteAttachmentsDays', parseInt(e.target.value))}
-                          disabled={!settings?.autoDeleteAttachmentsEnabled}
+                          value={automationForm.autoDeleteAttachmentsDays}
+                          onChange={(e) => handleAutomationChange('autoDeleteAttachmentsDays', parseInt(e.target.value) || 1)}
+                          disabled={!automationForm.autoDeleteAttachmentsEnabled}
                           className="w-16 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                         />
                         <p className="text-sm text-gray-500 dark:text-gray-400">days to save disk space</p>
@@ -959,8 +1050,8 @@ const AdminSettings: React.FC = () => {
                     <label className="relative inline-flex items-center cursor-pointer ml-4">
                       <input
                         type="checkbox"
-                        checked={settings?.autoDeleteAttachmentsEnabled || false}
-                        onChange={(e) => handleToggle('autoDeleteAttachmentsEnabled', e.target.checked)}
+                        checked={automationForm.autoDeleteAttachmentsEnabled}
+                        onChange={(e) => handleAutomationChange('autoDeleteAttachmentsEnabled', e.target.checked)}
                         className="sr-only peer"
                       />
                       <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 dark:peer-focus:ring-primary/40 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary"></div>
@@ -991,8 +1082,8 @@ const AdminSettings: React.FC = () => {
                     <label className="relative inline-flex items-center cursor-pointer ml-4">
                       <input
                         type="checkbox"
-                        checked={settings?.aiSummaryEnabled || false}
-                        onChange={(e) => handleToggle('aiSummaryEnabled', e.target.checked)}
+                        checked={automationForm.aiSummaryEnabled}
+                        onChange={(e) => handleAutomationChange('aiSummaryEnabled', e.target.checked)}
                         className="sr-only peer"
                       />
                       <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 dark:peer-focus:ring-primary/40 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary"></div>
@@ -1006,8 +1097,8 @@ const AdminSettings: React.FC = () => {
                     <div className="flex gap-2">
                       <input
                         type="password"
-                        value={settings?.anthropicApiKey || ''}
-                        onChange={(e) => handleTextChange('anthropicApiKey', e.target.value)}
+                        value={automationForm.anthropicApiKey}
+                        onChange={(e) => handleAutomationChange('anthropicApiKey', e.target.value)}
                         placeholder="sk-ant-..."
                         className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                       />
@@ -1030,8 +1121,8 @@ const AdminSettings: React.FC = () => {
                       <label className="relative inline-flex items-center cursor-pointer ml-4">
                         <input
                           type="checkbox"
-                          checked={settings?.ticketSuggestionsEnabled || false}
-                          onChange={(e) => handleToggle('ticketSuggestionsEnabled', e.target.checked)}
+                          checked={automationForm.ticketSuggestionsEnabled}
+                          onChange={(e) => handleAutomationChange('ticketSuggestionsEnabled', e.target.checked)}
                           className="sr-only peer"
                         />
                         <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 dark:peer-focus:ring-primary/40 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary"></div>
@@ -1045,8 +1136,8 @@ const AdminSettings: React.FC = () => {
                       <div className="flex gap-2">
                         <input
                           type="password"
-                          value={settings?.ticketSuggestionsApiKey || ''}
-                          onChange={(e) => handleTextChange('ticketSuggestionsApiKey', e.target.value)}
+                          value={automationForm.ticketSuggestionsApiKey}
+                          onChange={(e) => handleAutomationChange('ticketSuggestionsApiKey', e.target.value)}
                           placeholder="sk-ant-..."
                           className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                         />
@@ -1061,8 +1152,8 @@ const AdminSettings: React.FC = () => {
                         AI Knowledge URLs
                       </label>
                       <textarea
-                        value={settings?.aiKnowledgeUrls || ''}
-                        onChange={(e) => handleTextChange('aiKnowledgeUrls', e.target.value)}
+                        value={automationForm.aiKnowledgeUrls}
+                        onChange={(e) => handleAutomationChange('aiKnowledgeUrls', e.target.value)}
                         placeholder="https://example.com/faq&#10;https://example.com/help-article&#10;https://example.com/documentation"
                         rows={4}
                         className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent font-mono"
@@ -1087,8 +1178,8 @@ const AdminSettings: React.FC = () => {
                               type="number"
                               min="1"
                               max="365"
-                              value={settings?.aiKnowledgeRefreshDays || 7}
-                              onChange={(e) => handleNumberChange('aiKnowledgeRefreshDays', parseInt(e.target.value) || 7)}
+                              value={automationForm.aiKnowledgeRefreshDays}
+                              onChange={(e) => handleAutomationChange('aiKnowledgeRefreshDays', parseInt(e.target.value) || 7)}
                               className="w-20 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-center"
                             />
                             <span className="text-sm text-gray-600 dark:text-gray-400">days</span>
@@ -1149,6 +1240,56 @@ const AdminSettings: React.FC = () => {
                       console.anthropic.com
                     </a>
                   </p>
+                </div>
+              </div>
+
+              {/* Save Button */}
+              <div className="border-t border-gray-200 dark:border-gray-700 pt-6 mt-8">
+                <div className="flex items-center justify-between">
+                  <div>
+                    {hasAutomationChanges && (
+                      <p className="text-sm text-amber-600 dark:text-amber-400 flex items-center gap-2">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        You have unsaved changes
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex gap-3">
+                    {hasAutomationChanges && (
+                      <button
+                        type="button"
+                        onClick={handleDiscardAutomationChanges}
+                        className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+                      >
+                        Discard Changes
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleSaveAutomation}
+                      disabled={!hasAutomationChanges || automationSaving}
+                      className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-primary hover:opacity-90 rounded-md disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+                    >
+                      {automationSaving ? (
+                        <>
+                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          Save Changes
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
