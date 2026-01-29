@@ -2,7 +2,8 @@ import { Router, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import { prisma } from '../lib/prisma';
 import { requireAuth, requireAgent, AuthRequest } from '../middleware/auth';
-import { generateTicketSummary } from '../services/aiService';
+import { generateTicketSummary, generateKnowledgeBasedSolution, getKnowledgeContent } from '../services/aiService';
+import { getOrCreateEmailThread, sendTicketCreatedEmail, sendTicketResolvedEmail } from '../services/emailService';
 
 const router = Router();
 
@@ -55,6 +56,121 @@ router.get('/', requireAuth, async (req: AuthRequest, res) => {
   } catch (error) {
     console.error('Error fetching tickets:', error);
     return res.status(500).json({ error: 'Failed to fetch tickets' });
+  }
+});
+
+// Get AI-generated solution suggestion based on knowledge from solved tickets
+router.get('/suggestions', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    // Check if ticket suggestions feature is enabled
+    const settings = await prisma.settings.findFirst();
+    if (!settings?.ticketSuggestionsEnabled) {
+      return res.json({ solution: null, ticketCount: 0 });
+    }
+
+    const { subject, description, formId } = req.query;
+
+    // Accept subject and description separately
+    const subjectText = (typeof subject === 'string' ? subject : '').trim();
+    const descriptionText = (typeof description === 'string' ? description : '').trim();
+    const combinedText = `${subjectText} ${descriptionText}`.trim();
+
+    if (combinedText.length < 10) {
+      return res.json({ solution: null, ticketCount: 0 });
+    }
+
+    // Get form name for context
+    let formName = 'General Support';
+    if (formId && typeof formId === 'string') {
+      const form = await prisma.form.findUnique({
+        where: { id: formId },
+        select: { name: true }
+      });
+      if (form) {
+        formName = form.name;
+      }
+    }
+
+    // Extract keywords from both subject and description (words with 3+ characters)
+    const keywords = combinedText
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(word => word.length >= 3)
+      .slice(0, 10);
+
+    if (keywords.length === 0) {
+      return res.json({ solution: null, ticketCount: 0 });
+    }
+
+    // Build search conditions for subject matching
+    const searchConditions = keywords.map(keyword => ({
+      subject: {
+        contains: keyword,
+        mode: 'insensitive' as const
+      }
+    }));
+
+    // Find solved/closed tickets with matching subjects
+    // Include the last agent comment as the resolution
+    const matchingTickets = await prisma.ticket.findMany({
+      where: {
+        status: {
+          in: ['SOLVED', 'CLOSED']
+        },
+        OR: searchConditions
+      },
+      select: {
+        id: true,
+        subject: true,
+        comments: {
+          where: {
+            isSystem: false,
+            isInternal: false,
+            author: {
+              role: {
+                in: ['AGENT', 'ADMIN']
+              }
+            }
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: {
+            bodyPlain: true
+          }
+        }
+      },
+      orderBy: { solvedAt: 'desc' },
+      take: 25 // Fetch more tickets for better matching
+    });
+
+    // Build knowledge base from matching tickets
+    const ticketKnowledge = matchingTickets
+      .filter(t => t.comments.length > 0 && t.comments[0].bodyPlain.length > 20)
+      .map(t => ({
+        subject: t.subject,
+        resolution: t.comments[0].bodyPlain.substring(0, 500) // Limit resolution length
+      }))
+      .slice(0, 10); // Use top 10 for knowledge
+
+    // Get external knowledge from cache (or refresh if expired)
+    const externalKnowledge = await getKnowledgeContent();
+
+    // Generate AI solution based on knowledge
+    const solution = await generateKnowledgeBasedSolution(
+      subjectText,
+      descriptionText,
+      formName,
+      ticketKnowledge,
+      externalKnowledge
+    );
+
+    return res.json({
+      solution,
+      ticketCount: ticketKnowledge.length
+    });
+  } catch (error) {
+    console.error('Error fetching ticket suggestions:', error);
+    return res.status(500).json({ error: 'Failed to fetch suggestions' });
   }
 });
 
@@ -170,7 +286,8 @@ router.post('/',
     body('formResponses').optional().isArray(),
     body('formResponses.*.fieldId').optional().isUUID(),
     body('formResponses.*.value').optional().isString(),
-    body('userAgent').optional().isString().isLength({ max: 500 })
+    body('userAgent').optional().isString().isLength({ max: 500 }),
+    body('shownAiSuggestion').optional().isString()
   ],
   async (req: AuthRequest, res: Response) => {
     const errors = validationResult(req);
@@ -179,7 +296,7 @@ router.post('/',
     }
 
     try {
-      const { subject, channel, priority, categoryId, formId, relatedTicketId, description, formResponses, userAgent } = req.body;
+      const { subject, channel, priority, categoryId, formId, relatedTicketId, description, formResponses, userAgent, shownAiSuggestion } = req.body;
       const userId = req.userId!;
 
       // Get IP address from request
@@ -209,6 +326,7 @@ router.post('/',
             country,
             ipAddress,
             userAgent: clientUserAgent,
+            shownAiSuggestion: shownAiSuggestion || null,
             comments: {
               create: {
                 authorId: userId,
@@ -261,6 +379,23 @@ router.post('/',
           }
         });
       });
+
+      // Create email thread for reply tracking
+      if (ticket) {
+        getOrCreateEmailThread(ticket.id).catch(err => {
+          console.error('[Email] Failed to create email thread:', err);
+        });
+
+        // Send ticket created email notification
+        sendTicketCreatedEmail({
+          id: ticket.id,
+          ticketNumber: ticket.ticketNumber,
+          subject: ticket.subject,
+          requester: ticket.requester
+        }).catch(err => {
+          console.error('[Email] Failed to send ticket created email:', err);
+        });
+      }
 
       return res.status(201).json(ticket);
     } catch (error) {
@@ -390,6 +525,18 @@ router.patch('/:id',
           category: true
         }
       });
+
+      // Send ticket resolved email when status changes to SOLVED
+      if (status === 'SOLVED' && ticket.requester) {
+        sendTicketResolvedEmail({
+          id: ticket.id,
+          ticketNumber: ticket.ticketNumber,
+          subject: ticket.subject,
+          requester: ticket.requester
+        }).catch(err => {
+          console.error('[Email] Failed to send ticket resolved email:', err);
+        });
+      }
 
       return res.json(ticket);
     } catch (error) {

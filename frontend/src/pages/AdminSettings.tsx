@@ -54,6 +54,7 @@ const AdminSettings: React.FC = () => {
   const [isExportingAnalytics, setIsExportingAnalytics] = useState(false);
   const [isExportingTickets, setIsExportingTickets] = useState(false);
   const [isExportingUsers, setIsExportingUsers] = useState(false);
+  const [isRefreshingCache, setIsRefreshingCache] = useState(false);
   const [ticketExportStartDate, setTicketExportStartDate] = useState('');
   const [ticketExportEndDate, setTicketExportEndDate] = useState('');
   const [userExportStartDate, setUserExportStartDate] = useState('');
@@ -459,6 +460,23 @@ const AdminSettings: React.FC = () => {
 
   const handleTextChange = (field: string, value: string) => {
     updateMutation.mutate({ [field]: value || null });
+  };
+
+  const handleRefreshKnowledgeCache = async () => {
+    setIsRefreshingCache(true);
+    try {
+      const response = await settingsApi.refreshKnowledgeCache();
+      if (response.data.success) {
+        toast.success(`Knowledge cache refreshed (${response.data.cacheLength.toLocaleString()} characters)`);
+        // Refetch settings to update the cache timestamp
+        queryClient.invalidateQueries({ queryKey: ['settings'] });
+      }
+    } catch (error) {
+      console.error('Error refreshing knowledge cache:', error);
+      toast.error('Failed to refresh knowledge cache');
+    } finally {
+      setIsRefreshingCache(false);
+    }
   };
 
   const handleTicketFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -983,7 +1001,7 @@ const AdminSettings: React.FC = () => {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
-                      Anthropic API Key
+                      API Key for Ticket Summaries
                     </label>
                     <div className="flex gap-2">
                       <input
@@ -995,17 +1013,142 @@ const AdminSettings: React.FC = () => {
                       />
                     </div>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                      Get your API key from{' '}
-                      <a
-                        href="https://console.anthropic.com/settings/keys"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary hover:underline"
-                      >
-                        console.anthropic.com
-                      </a>
+                      Used for generating AI summaries on ticket detail pages
                     </p>
                   </div>
+
+                  <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex-1">
+                        <label className="text-sm font-medium text-gray-900 dark:text-white">
+                          AI Ticket Suggestions
+                        </label>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                          Show AI-powered solution suggestions when users create tickets
+                        </p>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer ml-4">
+                        <input
+                          type="checkbox"
+                          checked={settings?.ticketSuggestionsEnabled || false}
+                          onChange={(e) => handleToggle('ticketSuggestionsEnabled', e.target.checked)}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 dark:peer-focus:ring-primary/40 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary"></div>
+                      </label>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
+                        API Key for Ticket Suggestions
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type="password"
+                          value={settings?.ticketSuggestionsApiKey || ''}
+                          onChange={(e) => handleTextChange('ticketSuggestionsApiKey', e.target.value)}
+                          placeholder="sk-ant-..."
+                          className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                        />
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                        Used for generating solution suggestions when users create new tickets
+                      </p>
+                    </div>
+
+                    <div className="mt-4">
+                      <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
+                        AI Knowledge URLs
+                      </label>
+                      <textarea
+                        value={settings?.aiKnowledgeUrls || ''}
+                        onChange={(e) => handleTextChange('aiKnowledgeUrls', e.target.value)}
+                        placeholder="https://example.com/faq&#10;https://example.com/help-article&#10;https://example.com/documentation"
+                        rows={4}
+                        className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent font-mono"
+                      />
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                        Add URLs (one per line) to help pages, FAQs, or documentation. The AI will fetch and use this content to provide better suggestions to users.
+                      </p>
+
+                      {/* Cache Settings */}
+                      <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-900 dark:text-white">
+                              Cache Refresh Interval
+                            </label>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              How often to re-fetch content from URLs
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              min="1"
+                              max="365"
+                              value={settings?.aiKnowledgeRefreshDays || 7}
+                              onChange={(e) => handleNumberChange('aiKnowledgeRefreshDays', parseInt(e.target.value) || 7)}
+                              className="w-20 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-center"
+                            />
+                            <span className="text-sm text-gray-600 dark:text-gray-400">days</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-3 border-t border-gray-200 dark:border-gray-600">
+                          <div>
+                            <p className="text-sm font-medium text-gray-900 dark:text-white">
+                              Cache Status
+                            </p>
+                            {settings?.aiKnowledgeCacheUpdatedAt ? (
+                              <p className="text-xs text-gray-500 dark:text-gray-400">
+                                Last updated: {new Date(settings.aiKnowledgeCacheUpdatedAt).toLocaleString()}
+                              </p>
+                            ) : (
+                              <p className="text-xs text-amber-600 dark:text-amber-400">
+                                Cache not yet populated
+                              </p>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleRefreshKnowledgeCache}
+                            disabled={isRefreshingCache || !settings?.aiKnowledgeUrls}
+                            className="inline-flex items-center px-3 py-2 text-sm font-medium text-white bg-primary hover:opacity-90 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {isRefreshingCache ? (
+                              <>
+                                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Refreshing...
+                              </>
+                            ) : (
+                              <>
+                                <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                </svg>
+                                Refresh Now
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-gray-500 dark:text-gray-400 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    Get your API keys from{' '}
+                    <a
+                      href="https://console.anthropic.com/settings/keys"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline"
+                    >
+                      console.anthropic.com
+                    </a>
+                  </p>
                 </div>
               </div>
             </div>

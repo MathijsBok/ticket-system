@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useUser } from '@clerk/clerk-react';
@@ -8,6 +8,11 @@ import { ticketApi, formApi, attachmentApi } from '../lib/api';
 import Layout from '../components/Layout';
 import FormRenderer from '../components/FormRenderer';
 import { Form } from '../types';
+
+interface SuggestionResponse {
+  solution: string | null;
+  ticketCount: number;
+}
 
 const CreateTicket: React.FC = () => {
   const navigate = useNavigate();
@@ -25,6 +30,12 @@ const CreateTicket: React.FC = () => {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [aiSolution, setAiSolution] = useState<string | null>(null);
+  const [solutionTicketCount, setSolutionTicketCount] = useState(0);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  const [dismissedSuggestions, setDismissedSuggestions] = useState(false);
+  const [acknowledgedSuggestion, setAcknowledgedSuggestion] = useState(false);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Allowed file types
   const ALLOWED_EXTENSIONS = '.png,.jpg,.jpeg,.gif,.webp,.bmp,.svg,.mp4,.webm,.mov,.avi';
@@ -40,7 +51,7 @@ const CreateTicket: React.FC = () => {
   });
 
   // Fetch selected form details
-  const { data: selectedForm } = useQuery({
+  const { data: selectedForm, isLoading: isLoadingForm } = useQuery({
     queryKey: ['form', selectedFormId],
     queryFn: async () => {
       if (!selectedFormId) return null;
@@ -75,6 +86,63 @@ const CreateTicket: React.FC = () => {
       }
     }
   }, [relatedTicket, selectedForm, formValues]);
+
+  // Debounced search for AI solution suggestions
+  const searchSuggestions = useCallback(async (subject: string, description: string, formId: string | null) => {
+    // Require BOTH subject AND description to be filled (minimum 5 chars each)
+    if (!subject.trim() || subject.trim().length < 5 || !description.trim() || description.trim().length < 10 || dismissedSuggestions || !formId) {
+      setAiSolution(null);
+      setSolutionTicketCount(0);
+      return;
+    }
+
+    setIsLoadingSuggestions(true);
+    setAcknowledgedSuggestion(false); // Reset acknowledgment when loading new suggestions
+    try {
+      const response = await ticketApi.getSuggestions(subject, description, formId);
+      const data = response.data as SuggestionResponse;
+      setAiSolution(data.solution);
+      setSolutionTicketCount(data.ticketCount);
+    } catch (error) {
+      console.error('Error fetching suggestions:', error);
+      setAiSolution(null);
+      setSolutionTicketCount(0);
+    } finally {
+      setIsLoadingSuggestions(false);
+    }
+  }, [dismissedSuggestions]);
+
+  // Effect to trigger suggestions search when form values change
+  useEffect(() => {
+    if (!selectedForm || !selectedFormId || dismissedSuggestions) return;
+
+    // Find subject and description fields
+    const subjectField = selectedForm.formFields?.find(ff =>
+      ff.field.label.toLowerCase() === 'subject'
+    );
+    const descriptionField = selectedForm.formFields?.find(ff =>
+      ff.field.label.toLowerCase() === 'description'
+    );
+
+    const subject = subjectField ? formValues[subjectField.fieldId] || '' : '';
+    const description = descriptionField ? formValues[descriptionField.fieldId] || '' : '';
+
+    // Clear existing timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    // Debounce the search by 2 seconds to reduce API costs
+    searchTimeoutRef.current = setTimeout(() => {
+      searchSuggestions(subject, description, selectedFormId);
+    }, 2000);
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [formValues, selectedForm, selectedFormId, searchSuggestions, dismissedSuggestions]);
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -181,7 +249,8 @@ const CreateTicket: React.FC = () => {
       formId: selectedFormId || undefined,
       formResponses,
       relatedTicketId: relatedTicketId || undefined,
-      userAgent: navigator.userAgent
+      userAgent: navigator.userAgent,
+      shownAiSuggestion: aiSolution || undefined
     });
   };
 
@@ -195,6 +264,11 @@ const CreateTicket: React.FC = () => {
       setFormValues({});
       setFormErrors({});
     }
+    // Reset suggestions when form changes
+    setAiSolution(null);
+    setSolutionTicketCount(0);
+    setDismissedSuggestions(false);
+    setAcknowledgedSuggestion(false);
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -219,9 +293,129 @@ const CreateTicket: React.FC = () => {
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   };
 
+  // Render the form selector component
+  const renderFormSelector = () => (
+    <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+      <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+        Select Request Type <span className="text-red-500">*</span>
+      </h2>
+      <div>
+        <label htmlFor="formId" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          Please select the type of request you want to submit
+        </label>
+        <select
+          id="formId"
+          value={selectedFormId || ''}
+          onChange={(e) => handleFormSelection(e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+          required
+        >
+          <option value="">-- Select a form --</option>
+          {forms?.map((form) => (
+            <option key={form.id} value={form.id}>
+              {form.name}
+            </option>
+          ))}
+        </select>
+      </div>
+    </div>
+  );
+
+  // Render the AI solution panel component
+  const renderSuggestionsPanel = () => {
+    if (!selectedFormId || dismissedSuggestions || (!aiSolution && !isLoadingSuggestions)) {
+      return null;
+    }
+
+    return (
+      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6 shadow-sm">
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-100 dark:bg-blue-800 rounded-full flex items-center justify-center">
+              <svg className="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-300">
+                Suggested Solution
+              </h3>
+              <p className="text-sm text-blue-700 dark:text-blue-400">
+                Based on {solutionTicketCount} similar resolved {solutionTicketCount === 1 ? 'ticket' : 'tickets'}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setDismissedSuggestions(true)}
+            className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 p-1"
+            title="Dismiss suggestion"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {isLoadingSuggestions ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 dark:border-blue-400"></div>
+            <span className="ml-3 text-sm text-blue-700 dark:text-blue-400">Analyzing similar issues...</span>
+          </div>
+        ) : aiSolution && (
+          <div className="space-y-4">
+            <div className="bg-white dark:bg-gray-800 rounded-lg border border-blue-200 dark:border-blue-700 p-4">
+              <div className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed whitespace-pre-line">
+                {aiSolution}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  toast.success('Glad this helped! No ticket needed.');
+                  navigate(-1);
+                }}
+                className="w-full inline-flex justify-center items-center gap-2 px-4 py-2.5 text-sm font-medium text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/50 hover:bg-green-200 dark:hover:bg-green-900 border border-green-300 dark:border-green-700 rounded-lg transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                This solved my issue
+              </button>
+
+              {!acknowledgedSuggestion && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAcknowledgedSuggestion(true);
+                    toast('You can now submit your ticket', { icon: '📝' });
+                  }}
+                  className="w-full inline-flex justify-center items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 border border-gray-300 dark:border-gray-600 rounded-lg transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  This did not solve my issue
+                </button>
+              )}
+
+              {acknowledgedSuggestion && (
+                <p className="text-xs text-center text-gray-500 dark:text-gray-400">
+                  You can now submit your ticket using the button below.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <Layout>
-      <div className="max-w-3xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Create New Ticket</h1>
           <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
@@ -254,84 +448,62 @@ const CreateTicket: React.FC = () => {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Form Selection - REQUIRED */}
-          {forms && forms.length > 0 && (
-            <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                Select Request Type <span className="text-red-500">*</span>
-              </h2>
-              <div>
-                <label htmlFor="formId" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Please select the type of request you want to submit
-                </label>
-                <select
-                  id="formId"
-                  value={selectedFormId || ''}
-                  onChange={(e) => handleFormSelection(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                  required
-                >
-                  <option value="">-- Select a form --</option>
-                  {forms.map((form) => (
-                    <option key={form.id} value={form.id}>
-                      {form.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          )}
-
-          {/* Important Support Information - Only show when no form is selected */}
+        <form onSubmit={handleSubmit}>
+          {/* Single column layout before form selection */}
           {!selectedFormId && (
-            <div className="bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-400 dark:border-yellow-600 p-6 rounded-r-lg shadow-sm">
-              <div className="flex items-start">
-                <div className="flex-shrink-0">
-                  <svg className="h-6 w-6 text-yellow-600 dark:text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-                </div>
-                <div className="ml-4 flex-1">
-                  <h3 className="text-lg font-semibold text-yellow-800 dark:text-yellow-200 mb-3">
-                    ⚠️ Important Support Information
-                  </h3>
-                  <div className="text-sm text-yellow-700 dark:text-yellow-300 space-y-3">
-                    <p>
-                      Please note that we can only assist with issues directly related to <strong>Klever Wallet</strong> and <strong>Klever Exchange</strong>.
-                      Requests submitted under the correct category will be processed faster.
-                    </p>
+            <div className="max-w-3xl mx-auto space-y-6">
+              {/* Form Selection - REQUIRED */}
+              {forms && forms.length > 0 && renderFormSelector()}
 
-                    <div>
-                      <p className="font-semibold mb-1">⏱ Processing Time</p>
-                      <p>Requests are generally processed within 1–12 hours.</p>
-                    </div>
+              {/* Important Support Information - Only show when no form is selected */}
+              <div className="bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-400 dark:border-yellow-600 p-6 rounded-r-lg shadow-sm">
+                <div className="flex items-start">
+                  <div className="flex-shrink-0">
+                    <svg className="h-6 w-6 text-yellow-600 dark:text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                  </div>
+                  <div className="ml-4 flex-1">
+                    <h3 className="text-lg font-semibold text-yellow-800 dark:text-yellow-200 mb-3">
+                      Important Support Information
+                    </h3>
+                    <div className="text-sm text-yellow-700 dark:text-yellow-300 space-y-3">
+                      <p>
+                        Please note that we can only assist with issues directly related to <strong>Klever Wallet</strong> and <strong>Klever Exchange</strong>.
+                        Requests submitted under the correct category will be processed faster.
+                      </p>
 
-                    <div>
-                      <p className="font-semibold mb-1">🏷 Request Category</p>
-                      <p>If your request is related to the <strong>EXCHANGE</strong> or <strong>WALLET</strong>, please clearly mention this in your message.</p>
-                    </div>
+                      <div>
+                        <p className="font-semibold mb-1">Processing Time</p>
+                        <p>Requests are generally processed within 1–12 hours.</p>
+                      </div>
 
-                    <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-3 mt-3">
-                      <p className="font-semibold text-red-800 dark:text-red-200 mb-2">🔐 Security Notice</p>
-                      <p className="text-red-700 dark:text-red-300 mb-2">KLEVER will NEVER ask you to:</p>
-                      <ul className="list-disc list-inside space-y-1 text-red-700 dark:text-red-300 ml-2">
-                        <li>Transfer funds to any address</li>
-                        <li>Share private information of any kind</li>
-                      </ul>
-                      <p className="text-red-700 dark:text-red-300 mt-2 font-medium">If anyone asks you to do so, this is a scam.</p>
+                      <div>
+                        <p className="font-semibold mb-1">Request Category</p>
+                        <p>If your request is related to the <strong>EXCHANGE</strong> or <strong>WALLET</strong>, please clearly mention this in your message.</p>
+                      </div>
 
-                      <p className="font-semibold text-red-800 dark:text-red-200 mt-3 mb-1">🚫 Never Share:</p>
-                      <ul className="list-disc list-inside space-y-1 text-red-700 dark:text-red-300 ml-2">
-                        <li>Your private key</li>
-                        <li>Your mnemonic / recovery phrase</li>
-                        <li>Any other sensitive personal information</li>
-                      </ul>
-                    </div>
+                      <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-3 mt-3">
+                        <p className="font-semibold text-red-800 dark:text-red-200 mb-2">Security Notice</p>
+                        <p className="text-red-700 dark:text-red-300 mb-2">KLEVER will NEVER ask you to:</p>
+                        <ul className="list-disc list-inside space-y-1 text-red-700 dark:text-red-300 ml-2">
+                          <li>Transfer funds to any address</li>
+                          <li>Share private information of any kind</li>
+                        </ul>
+                        <p className="text-red-700 dark:text-red-300 mt-2 font-medium">If anyone asks you to do so, this is a scam.</p>
 
-                    <div>
-                      <p className="font-semibold mb-1">🌍 Supported Languages</p>
-                      <p>English (fastest support), German, Hindi, Persian, Dutch</p>
+                        <p className="font-semibold text-red-800 dark:text-red-200 mt-3 mb-1">Never Share:</p>
+                        <ul className="list-disc list-inside space-y-1 text-red-700 dark:text-red-300 ml-2">
+                          <li>Your private key</li>
+                          <li>Your mnemonic / recovery phrase</li>
+                          <li>Any other sensitive personal information</li>
+                        </ul>
+                      </div>
+
+                      <div>
+                        <p className="font-semibold mb-1">Supported Languages</p>
+                        <p>English (fastest support), German, Hindi, Persian, Dutch</p>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -339,156 +511,196 @@ const CreateTicket: React.FC = () => {
             </div>
           )}
 
-          {/* Show form description and fields if a form is selected */}
-          {selectedForm && (
-            <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-              {selectedForm.description && (
-                <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
-                  <p className="text-sm text-blue-800 dark:text-blue-200">
-                    {selectedForm.description}
-                  </p>
-                </div>
-              )}
-
-              {selectedForm.formFields && selectedForm.formFields.length > 0 && (
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                    Request Details
-                  </h3>
-                  <FormRenderer
-                    fields={selectedForm.formFields.sort((a, b) => a.order - b.order)}
-                    values={formValues}
-                    onChange={handleFormFieldChange}
-                    errors={formErrors}
-                  />
-                </div>
-              )}
+          {/* Loading state when form is being fetched */}
+          {selectedFormId && isLoadingForm && (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              <span className="ml-3 text-sm text-gray-600 dark:text-gray-400">Loading form...</span>
             </div>
           )}
 
-          {/* Attachments Section */}
-          {selectedFormId && (
-            <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                Attachments
-              </h2>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Add images or videos (optional)
-                  </label>
-                  <div className="flex items-center justify-center w-full">
-                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 dark:hover:bg-gray-700 dark:bg-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:hover:border-gray-500">
-                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                        <svg className="w-8 h-8 mb-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                        </svg>
-                        <p className="mb-2 text-sm text-gray-500 dark:text-gray-400">
-                          <span className="font-semibold">Click to upload</span> or drag and drop
-                        </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                          PNG, JPG, GIF, WEBP, SVG, MP4, WEBM, MOV (Max 5MB each)
-                        </p>
-                      </div>
-                      <input
-                        type="file"
-                        className="hidden"
-                        multiple
-                        accept={ALLOWED_EXTENSIONS}
-                        onChange={handleFileSelect}
+          {/* Two-column layout after form selection (desktop only) */}
+          {selectedFormId && selectedForm && !isLoadingForm && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Left Column - Form Fields (2/3 width on desktop) */}
+              <div className="lg:col-span-2 space-y-6">
+                {/* Form Fields */}
+                <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                  {selectedForm.description && (
+                    <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
+                      <p className="text-sm text-blue-800 dark:text-blue-200">
+                        {selectedForm.description}
+                      </p>
+                    </div>
+                  )}
+
+                  {selectedForm.formFields && selectedForm.formFields.length > 0 && (
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                        Request Details
+                      </h3>
+                      <FormRenderer
+                        fields={selectedForm.formFields.sort((a, b) => a.order - b.order)}
+                        values={formValues}
+                        onChange={handleFormFieldChange}
+                        errors={formErrors}
                       />
-                    </label>
+                    </div>
+                  )}
+                </div>
+
+                {/* Attachments Section */}
+                <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                    Attachments
+                  </h2>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Add images or videos (optional)
+                      </label>
+                      <div className="flex items-center justify-center w-full">
+                        <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 dark:hover:bg-gray-700 dark:bg-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:hover:border-gray-500">
+                          <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                            <svg className="w-8 h-8 mb-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                            </svg>
+                            <p className="mb-2 text-sm text-gray-500 dark:text-gray-400">
+                              <span className="font-semibold">Click to upload</span> or drag and drop
+                            </p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              PNG, JPG, GIF, WEBP, SVG, MP4, WEBM, MOV (Max 5MB each)
+                            </p>
+                          </div>
+                          <input
+                            type="file"
+                            className="hidden"
+                            multiple
+                            accept={ALLOWED_EXTENSIONS}
+                            onChange={handleFileSelect}
+                          />
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Selected files list */}
+                    {selectedFiles.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Selected files ({selectedFiles.length})
+                        </p>
+                        <ul className="divide-y divide-gray-200 dark:divide-gray-600 border border-gray-200 dark:border-gray-600 rounded-lg">
+                          {selectedFiles.map((file, index) => (
+                            <li key={index} className="flex items-center justify-between px-4 py-3">
+                              <div className="flex items-center gap-3">
+                                {file.type.startsWith('image/') ? (
+                                  <svg className="w-5 h-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                  </svg>
+                                ) : (
+                                  <svg className="w-5 h-5 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                  </svg>
+                                )}
+                                <div>
+                                  <p className="text-sm font-medium text-gray-900 dark:text-white truncate max-w-xs">
+                                    {file.name}
+                                  </p>
+                                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                                    {formatFileSize(file.size)}
+                                  </p>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => removeFile(index)}
+                                className="text-red-500 hover:text-red-700 p-1"
+                              >
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                {/* Selected files list */}
-                {selectedFiles.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Selected files ({selectedFiles.length})
-                    </p>
-                    <ul className="divide-y divide-gray-200 dark:divide-gray-600 border border-gray-200 dark:border-gray-600 rounded-lg">
-                      {selectedFiles.map((file, index) => (
-                        <li key={index} className="flex items-center justify-between px-4 py-3">
-                          <div className="flex items-center gap-3">
-                            {file.type.startsWith('image/') ? (
-                              <svg className="w-5 h-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                              </svg>
-                            ) : (
-                              <svg className="w-5 h-5 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                              </svg>
-                            )}
-                            <div>
-                              <p className="text-sm font-medium text-gray-900 dark:text-white truncate max-w-xs">
-                                {file.name}
-                              </p>
-                              <p className="text-xs text-gray-500 dark:text-gray-400">
-                                {formatFileSize(file.size)}
-                              </p>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => removeFile(index)}
-                            className="text-red-500 hover:text-red-700 p-1"
-                          >
-                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
+                {/* Suggestions Panel - Mobile only (below attachments) */}
+                <div className="lg:hidden">
+                  {renderSuggestionsPanel()}
+                </div>
+
+                {/* Priority Selection (Only visible for agents/admins) */}
+                {isAgentOrAdmin && (
+                  <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                      Priority Level
+                    </h2>
+                    <div>
+                      <label htmlFor="priority" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        How urgent is your request?
+                      </label>
+                      <select
+                        id="priority"
+                        value={priority}
+                        onChange={(e) => setPriority(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                      >
+                        <option value="LOW">Low - General inquiry</option>
+                        <option value="NORMAL">Normal - Standard request</option>
+                        <option value="HIGH">High - Important issue</option>
+                        <option value="URGENT">Urgent - Critical problem</option>
+                      </select>
+                    </div>
                   </div>
                 )}
-              </div>
-            </div>
-          )}
 
-          {/* Priority Selection (Only visible for agents/admins when form is selected) */}
-          {selectedFormId && isAgentOrAdmin && (
-            <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                Priority Level
-              </h2>
-              <div>
-                <label htmlFor="priority" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  How urgent is your request?
-                </label>
-                <select
-                  id="priority"
-                  value={priority}
-                  onChange={(e) => setPriority(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                >
-                  <option value="LOW">Low - General inquiry</option>
-                  <option value="NORMAL">Normal - Standard request</option>
-                  <option value="HIGH">High - Important issue</option>
-                  <option value="URGENT">Urgent - Critical problem</option>
-                </select>
-              </div>
-            </div>
-          )}
+                {/* Form actions */}
+                <div className="flex flex-col gap-3">
+                  {/* Warning when AI suggestion needs acknowledgment */}
+                  {aiSolution && !dismissedSuggestions && !acknowledgedSuggestion && (
+                    <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                      <svg className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      <p className="text-sm text-amber-800 dark:text-amber-200">
+                        Please review the suggested solution above and confirm whether it solved your issue before submitting.
+                      </p>
+                    </div>
+                  )}
 
-          {/* Form actions - Only show after form is selected */}
-          {selectedFormId && (
-            <div className="flex gap-4">
-              <button
-                type="submit"
-                disabled={createMutation.isPending || isUploading}
-                className="flex-1 inline-flex justify-center items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {isUploading ? 'Uploading attachments...' : createMutation.isPending ? 'Creating...' : 'Create Ticket'}
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate(-1)}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors"
-              >
-                Cancel
-              </button>
+                  <div className="flex gap-4">
+                    <button
+                      type="submit"
+                      disabled={createMutation.isPending || isUploading || (!!aiSolution && !dismissedSuggestions && !acknowledgedSuggestion)}
+                      className="flex-1 inline-flex justify-center items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {isUploading ? 'Uploading attachments...' : createMutation.isPending ? 'Creating...' : 'Create Ticket'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => navigate(-1)}
+                      className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column - Form Selector + Suggestions (1/3 width on desktop, appears first on mobile) */}
+              <div className="lg:col-span-1 space-y-6 lg:sticky lg:top-4 lg:self-start order-first lg:order-none">
+                {/* Form Selection */}
+                {forms && forms.length > 0 && renderFormSelector()}
+
+                {/* Suggestions Panel - Desktop only */}
+                <div className="hidden lg:block">
+                  {renderSuggestionsPanel()}
+                </div>
+              </div>
             </div>
           )}
         </form>

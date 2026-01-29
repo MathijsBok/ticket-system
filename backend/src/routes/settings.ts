@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth, requireAdmin, requireAgent } from '../middleware/auth';
+import { refreshKnowledgeCache } from '../services/aiService';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -66,6 +67,32 @@ router.patch('/:id', requireAuth, requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('Error updating settings:', error);
     return res.status(500).json({ error: 'Failed to update settings' });
+  }
+});
+
+// Refresh AI knowledge cache
+router.post('/refresh-knowledge-cache', requireAuth, requireAdmin, async (_req, res) => {
+  try {
+    const settings = await prisma.settings.findFirst();
+
+    if (!settings) {
+      return res.status(404).json({ error: 'Settings not found' });
+    }
+
+    if (!settings.aiKnowledgeUrls) {
+      return res.status(400).json({ error: 'No knowledge URLs configured' });
+    }
+
+    const content = await refreshKnowledgeCache(settings.id, settings.aiKnowledgeUrls);
+
+    return res.json({
+      success: true,
+      cacheLength: content?.length ?? 0,
+      updatedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Error refreshing knowledge cache:', error);
+    return res.status(500).json({ error: 'Failed to refresh knowledge cache' });
   }
 });
 

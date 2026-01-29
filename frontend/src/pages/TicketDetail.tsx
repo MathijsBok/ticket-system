@@ -611,69 +611,6 @@ const TicketDetail: React.FC = () => {
             )}
           </div>
 
-          {/* AI Summary Section - Agents and Admins only, when AI is enabled */}
-          {(userRole === 'AGENT' || userRole === 'ADMIN') && aiSettings?.enabled && aiSettings?.configured && (
-            <div className="mt-4 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <svg className="w-5 h-5 text-indigo-600 dark:text-indigo-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                </svg>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <h4 className="text-sm font-semibold text-indigo-800 dark:text-indigo-300">
-                      AI Summary
-                    </h4>
-                    <button
-                      onClick={() => generateSummaryMutation.mutate()}
-                      disabled={generateSummaryMutation.isPending}
-                      className="inline-flex items-center px-2 py-1 text-xs font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900/50 rounded hover:bg-indigo-200 dark:hover:bg-indigo-800/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                      {generateSummaryMutation.isPending ? (
-                        <>
-                          <svg className="animate-spin -ml-0.5 mr-1.5 h-3 w-3" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          Generating...
-                        </>
-                      ) : ticket.aiSummary ? (
-                        <>
-                          <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                          </svg>
-                          Regenerate
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                          </svg>
-                          Generate
-                        </>
-                      )}
-                    </button>
-                  </div>
-                  {ticket.aiSummary ? (
-                    <div>
-                      <p className="text-sm text-indigo-700 dark:text-indigo-300 leading-relaxed">
-                        {ticket.aiSummary}
-                      </p>
-                      {ticket.aiSummaryGeneratedAt && (
-                        <p className="mt-2 text-xs text-indigo-500 dark:text-indigo-400">
-                          Generated {format(new Date(ticket.aiSummaryGeneratedAt), 'MMM d, yyyy h:mm a')}
-                        </p>
-                      )}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-indigo-600 dark:text-indigo-400 italic">
-                      Click "Generate" to create an AI-powered summary of this ticket.
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Merged into another ticket banner */}
           {ticket.mergedInto && (
             <div className="mt-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4">
@@ -700,42 +637,6 @@ const TicketDetail: React.FC = () => {
             </div>
           )}
 
-          {/* Tickets merged into this one */}
-          {ticket.mergedTickets && ticket.mergedTickets.length > 0 && (
-            <div className="mt-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <svg className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                </svg>
-                <div className="flex-1">
-                  <h4 className="text-sm font-semibold text-blue-800 dark:text-blue-300 mb-2">
-                    Merged tickets ({ticket.mergedTickets.length})
-                  </h4>
-                  <div className="space-y-2">
-                    {ticket.mergedTickets.map((merged: any) => (
-                      <div key={merged.id} className="text-sm text-blue-700 dark:text-blue-400">
-                        <div className="flex flex-wrap items-center gap-1 sm:gap-2">
-                          <Link
-                            to={`/tickets/${merged.id}`}
-                            className="font-medium underline hover:text-blue-900 dark:hover:text-blue-200 flex-shrink-0"
-                          >
-                            #{merged.ticketNumber}
-                          </Link>
-                          <span className="text-blue-600 dark:text-blue-500 hidden sm:inline">-</span>
-                          <span className="truncate max-w-full sm:max-w-xs">{merged.subject}</span>
-                        </div>
-                        {merged.mergedAt && (
-                          <span className="text-xs text-blue-500 dark:text-blue-500 block sm:inline sm:ml-2">
-                            merged {format(new Date(merged.mergedAt), 'MMM d, yyyy')}
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* Closed ticket warning */}
           {ticketClosed && !isAgent && !ticket.mergedIntoId && (
@@ -804,73 +705,113 @@ const TicketDetail: React.FC = () => {
             )}
           </div>
 
-          {/* Device/Environment Information - Only visible to agents/admins */}
+          {/* Merged tickets + User Environment Row - Only visible to agents/admins */}
           {isAgent && (
-            <div className="mt-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-              <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
-                {ticket.userAgent ? (() => {
-                  const deviceInfo = parseUserAgent(ticket.userAgent);
-                  return deviceInfo.deviceType === 'Mobile' ? (
-                    <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+            <div className={`mt-4 grid grid-cols-1 ${ticket.mergedTickets && ticket.mergedTickets.length > 0 ? 'lg:grid-cols-4' : ''} gap-4`}>
+              {/* Merged tickets - only show if there are merged tickets (1/4 width) */}
+              {ticket.mergedTickets && ticket.mergedTickets.length > 0 && (
+                <div className="lg:col-span-1 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <svg className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                     </svg>
-                  ) : deviceInfo.deviceType === 'Tablet' ? (
-                    <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                    </svg>
-                  ) : (
+                    <div className="flex-1">
+                      <h4 className="text-sm font-semibold text-blue-800 dark:text-blue-300 mb-2">
+                        Merged tickets ({ticket.mergedTickets.length})
+                      </h4>
+                      <div className="space-y-2 max-h-24 overflow-y-auto">
+                        {ticket.mergedTickets.map((merged: any) => (
+                          <div key={merged.id} className="text-sm text-blue-700 dark:text-blue-400">
+                            <div className="flex flex-wrap items-center gap-1 sm:gap-2">
+                              <Link
+                                to={`/tickets/${merged.id}`}
+                                className="font-medium underline hover:text-blue-900 dark:hover:text-blue-200 flex-shrink-0"
+                              >
+                                #{merged.ticketNumber}
+                              </Link>
+                              <span className="text-blue-600 dark:text-blue-500 hidden sm:inline">-</span>
+                              <span className="truncate max-w-full sm:max-w-xs">{merged.subject}</span>
+                            </div>
+                            {merged.mergedAt && (
+                              <span className="text-xs text-blue-500 dark:text-blue-500 block sm:inline sm:ml-2">
+                                merged {format(new Date(merged.mergedAt), 'MMM d, yyyy')}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* User Environment (3/4 width when merged tickets exist, full width otherwise) */}
+              <div className={`${ticket.mergedTickets && ticket.mergedTickets.length > 0 ? 'lg:col-span-3' : ''} bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4`}>
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+                  {ticket.userAgent ? (() => {
+                    const deviceInfo = parseUserAgent(ticket.userAgent);
+                    return deviceInfo.deviceType === 'Mobile' ? (
+                      <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                      </svg>
+                    ) : deviceInfo.deviceType === 'Tablet' ? (
+                      <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
+                    );
+                  })() : (
                     <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                     </svg>
+                  )}
+                  User Environment
+                </h4>
+                {(() => {
+                  const deviceInfo = ticket.userAgent ? parseUserAgent(ticket.userAgent) : null;
+                  const channelLabels: Record<string, string> = {
+                    'EMAIL': 'Email',
+                    'WEB': 'Web',
+                    'API': 'API',
+                    'SLACK': 'Slack',
+                    'INTERNAL': 'Internal'
+                  };
+                  return (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 text-sm">
+                      <div className="min-w-0">
+                        <span className="text-gray-500 dark:text-gray-400 block text-xs sm:text-sm">Contacted By</span>
+                        <span className="text-gray-900 dark:text-white font-medium truncate block">{channelLabels[ticket.channel] || ticket.channel}</span>
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-gray-500 dark:text-gray-400 block text-xs sm:text-sm">Device</span>
+                        <span className="text-gray-900 dark:text-white font-medium truncate block">{deviceInfo?.deviceType || 'Unknown'}</span>
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-gray-500 dark:text-gray-400 block text-xs sm:text-sm">OS</span>
+                        <span className="text-gray-900 dark:text-white font-medium truncate block">{deviceInfo?.os || 'Unknown'}</span>
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-gray-500 dark:text-gray-400 block text-xs sm:text-sm">Browser</span>
+                        <span className="text-gray-900 dark:text-white font-medium truncate block">{deviceInfo?.browser || 'Unknown'}</span>
+                      </div>
+                      <div className="min-w-0 col-span-2 sm:col-span-1">
+                        <span className="text-gray-500 dark:text-gray-400 block text-xs sm:text-sm">Country</span>
+                        <span className="text-gray-900 dark:text-white font-medium truncate block">
+                          {ticket.country || 'Unknown'}{' '}
+                          {ticket.requester?.timezoneOffset && (
+                            <span className="text-gray-500 dark:text-gray-400">
+                              {ticket.requester.timezoneOffset.replace('GMT', 'UTC')}
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                    </div>
                   );
-                })() : (
-                  <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                  </svg>
-                )}
-                User Environment
-              </h4>
-              {(() => {
-                const deviceInfo = ticket.userAgent ? parseUserAgent(ticket.userAgent) : null;
-                const channelLabels: Record<string, string> = {
-                  'EMAIL': 'Email',
-                  'WEB': 'Web',
-                  'API': 'API',
-                  'SLACK': 'Slack',
-                  'INTERNAL': 'Internal'
-                };
-                return (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 text-sm">
-                    <div className="min-w-0">
-                      <span className="text-gray-500 dark:text-gray-400 block text-xs sm:text-sm">Contacted By</span>
-                      <span className="text-gray-900 dark:text-white font-medium truncate block">{channelLabels[ticket.channel] || ticket.channel}</span>
-                    </div>
-                    <div className="min-w-0">
-                      <span className="text-gray-500 dark:text-gray-400 block text-xs sm:text-sm">Device</span>
-                      <span className="text-gray-900 dark:text-white font-medium truncate block">{deviceInfo?.deviceType || 'Unknown'}</span>
-                    </div>
-                    <div className="min-w-0">
-                      <span className="text-gray-500 dark:text-gray-400 block text-xs sm:text-sm">OS</span>
-                      <span className="text-gray-900 dark:text-white font-medium truncate block">{deviceInfo?.os || 'Unknown'}</span>
-                    </div>
-                    <div className="min-w-0">
-                      <span className="text-gray-500 dark:text-gray-400 block text-xs sm:text-sm">Browser</span>
-                      <span className="text-gray-900 dark:text-white font-medium truncate block">{deviceInfo?.browser || 'Unknown'}</span>
-                    </div>
-                    <div className="min-w-0 col-span-2 sm:col-span-1">
-                      <span className="text-gray-500 dark:text-gray-400 block text-xs sm:text-sm">Country</span>
-                      <span className="text-gray-900 dark:text-white font-medium truncate block">
-                        {ticket.country || 'Unknown'}{' '}
-                        {ticket.requester?.timezoneOffset && (
-                          <span className="text-gray-500 dark:text-gray-400">
-                            {ticket.requester.timezoneOffset.replace('GMT', 'UTC')}
-                          </span>
-                        )}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })()}
+                })()}
+              </div>
             </div>
           )}
 
@@ -927,6 +868,69 @@ const TicketDetail: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
           {/* Left Column - Form Details, Macros, Activity Log (sticky on desktop) */}
           <div className="lg:col-span-1 space-y-6 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto lg:pb-4">
+            {/* AI Summary Section - Agents and Admins only, when AI is enabled */}
+            {(userRole === 'AGENT' || userRole === 'ADMIN') && aiSettings?.enabled && aiSettings?.configured && (
+              <div className="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <svg className="w-5 h-5 text-indigo-600 dark:text-indigo-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                  </svg>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <h4 className="text-sm font-semibold text-indigo-800 dark:text-indigo-300">
+                        AI Summary
+                      </h4>
+                      <button
+                        onClick={() => generateSummaryMutation.mutate()}
+                        disabled={generateSummaryMutation.isPending}
+                        className="inline-flex items-center px-2 py-1 text-xs font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900/50 rounded hover:bg-indigo-200 dark:hover:bg-indigo-800/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {generateSummaryMutation.isPending ? (
+                          <>
+                            <svg className="animate-spin -ml-0.5 mr-1.5 h-3 w-3" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Generating...
+                          </>
+                        ) : ticket.aiSummary ? (
+                          <>
+                            <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            Regenerate
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                            Generate
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    {ticket.aiSummary ? (
+                      <div>
+                        <p className="text-sm text-indigo-700 dark:text-indigo-300 leading-relaxed">
+                          {ticket.aiSummary}
+                        </p>
+                        {ticket.aiSummaryGeneratedAt && (
+                          <p className="mt-2 text-xs text-indigo-500 dark:text-indigo-400">
+                            Generated {format(new Date(ticket.aiSummaryGeneratedAt), 'MMM d, yyyy h:mm a')}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-indigo-600 dark:text-indigo-400 italic">
+                        Click "Generate" to create an AI-powered summary of this ticket.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Form Responses */}
             {ticket.formResponses && ticket.formResponses.length > 0 && (
               <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
@@ -1059,8 +1063,13 @@ const TicketDetail: React.FC = () => {
             {/* Activity Log - Desktop only (agents/admins only) */}
             {isAgent && ticket.activities && ticket.activities.length > 0 && (
               <div className="hidden lg:block bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Activity Log</h3>
-                <div className="space-y-3">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Activity Log</h3>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    {ticket.activities.length} {ticket.activities.length === 1 ? 'activity' : 'activities'}
+                  </span>
+                </div>
+                <div className="max-h-64 overflow-y-auto space-y-3">
                   {ticket.activities.map((activity: any) => (
                     <div key={activity.id} className="flex items-start gap-3 text-sm">
                       <div className="w-2 h-2 mt-1.5 rounded-full bg-primary flex-shrink-0"></div>
@@ -1160,6 +1169,31 @@ const TicketDetail: React.FC = () => {
                   </div>
                         );
                       })}
+
+                      {/* AI Suggestion shown during ticket creation - displayed at the bottom as it was shown before user submitted */}
+                      {ticket.shownAiSuggestion && (
+                        <div className="p-5 rounded-lg bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 border-l-4 border-l-purple-500 dark:border-l-purple-400 border border-purple-200 dark:border-purple-800/50">
+                          <div className="flex justify-between items-start mb-3">
+                            <div className="flex items-center gap-2">
+                              <svg className="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                              </svg>
+                              <span className="font-semibold text-purple-800 dark:text-purple-300">
+                                AI Suggestion
+                              </span>
+                              <span className="px-2 py-0.5 bg-purple-200 dark:bg-purple-700 text-purple-800 dark:text-purple-100 text-xs font-medium rounded-full">
+                                Shown at ticket creation
+                              </span>
+                            </div>
+                            <span className="text-xs text-purple-600 dark:text-purple-400">
+                              {format(new Date(ticket.createdAt), 'MMM d, yyyy HH:mm')}
+                            </span>
+                          </div>
+                          <div className="prose prose-sm max-w-none text-purple-900 dark:text-purple-100 whitespace-pre-wrap">
+                            {ticket.shownAiSuggestion}
+                          </div>
+                        </div>
+                      )}
                     </div>
                     {/* Show more button */}
                     {hasMore && (
@@ -1303,8 +1337,13 @@ const TicketDetail: React.FC = () => {
         {/* Activity Log - Mobile only (at bottom, agents/admins only) */}
         {isAgent && ticket.activities && ticket.activities.length > 0 && (
           <div className="lg:hidden bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Activity Log</h3>
-            <div className="space-y-3">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Activity Log</h3>
+              <span className="text-sm text-gray-500 dark:text-gray-400">
+                {ticket.activities.length} {ticket.activities.length === 1 ? 'activity' : 'activities'}
+              </span>
+            </div>
+            <div className="max-h-64 overflow-y-auto space-y-3">
               {ticket.activities.map((activity: any) => (
                 <div key={activity.id} className="flex items-start gap-3 text-sm">
                   <div className="w-2 h-2 mt-1.5 rounded-full bg-primary flex-shrink-0"></div>

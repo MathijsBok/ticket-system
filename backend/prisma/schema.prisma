@@ -117,6 +117,7 @@ model Ticket {
   updatedAt       DateTime       @updatedAt
   aiSummary             String?   @db.Text
   aiSummaryGeneratedAt  DateTime?
+  shownAiSuggestion     String?   @db.Text  // AI suggestion shown during ticket creation
 
   requester       User              @relation("TicketRequester", fields: [requesterId], references: [id])
   assignee        User?             @relation("TicketAssignee", fields: [assigneeId], references: [id])
@@ -132,6 +133,7 @@ model Ticket {
   activities      TicketActivity[]
   timeEntries     TicketTimeEntry[]
   formResponses   FormResponse[]
+  emailThread     EmailThread?
 
   @@index([ticketNumber], name: "idx_tickets_number")
   @@index([status], name: "idx_tickets_status")
@@ -144,16 +146,18 @@ model Ticket {
 }
 
 model Comment {
-  id         String         @id @default(uuid()) @db.Uuid
-  ticketId   String         @db.Uuid
-  authorId   String         @db.Uuid
-  body       String         @db.Text
-  bodyPlain  String         @db.Text
-  isInternal Boolean        @default(false)
-  isSystem   Boolean        @default(false)
-  channel    CommentChannel
-  createdAt  DateTime       @default(now())
-  updatedAt  DateTime       @updatedAt
+  id             String         @id @default(uuid()) @db.Uuid
+  ticketId       String         @db.Uuid
+  authorId       String         @db.Uuid
+  body           String         @db.Text
+  bodyPlain      String         @db.Text
+  isInternal     Boolean        @default(false)
+  isSystem       Boolean        @default(false)
+  channel        CommentChannel
+  emailMessageId String?        @db.VarChar(255) // Message-ID of incoming email
+  emailFrom      String?        @db.VarChar(255) // Original sender email
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 
   ticket      Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   author      User         @relation(fields: [authorId], references: [id])
@@ -336,6 +340,12 @@ model Settings {
   // AI Settings
   aiSummaryEnabled            Boolean  @default(false)
   anthropicApiKey             String?  @db.VarChar(255)
+  ticketSuggestionsEnabled    Boolean  @default(false)
+  ticketSuggestionsApiKey     String?  @db.VarChar(255)
+  aiKnowledgeUrls             String?  @db.Text  // URLs (one per line) to fetch content for AI education
+  aiKnowledgeCache            String?  @db.Text  // Cached content from URLs
+  aiKnowledgeCacheUpdatedAt   DateTime?          // When the cache was last updated
+  aiKnowledgeRefreshDays      Int      @default(7) // Days between cache refreshes
 
   createdAt                   DateTime @default(now())
   updatedAt                   DateTime @updatedAt
@@ -487,4 +497,18 @@ model BacklogSnapshot {
 
   @@unique([date])
   @@index([date])
+}
+
+// Email thread tracking for reply routing
+model EmailThread {
+  id         String   @id @default(uuid()) @db.Uuid
+  ticketId   String   @unique @db.Uuid
+  replyToken String   @unique @db.VarChar(64) // Unique token for reply-to address
+  messageId  String?  @db.VarChar(255)        // Last outbound Message-ID
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([replyToken])
 }

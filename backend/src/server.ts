@@ -21,6 +21,7 @@ import adminAnalyticsRoutes from './routes/adminAnalytics';
 import sessionRoutes from './routes/sessions';
 import timeTrackingRoutes from './routes/timeTracking';
 import webhookRoutes from './routes/webhooks';
+import sendgridWebhookRoutes from './routes/sendgridWebhook';
 import userRoutes from './routes/users';
 import settingsRoutes from './routes/settings';
 import zendeskImportRoutes from './routes/zendesk-import';
@@ -50,6 +51,7 @@ app.use(morgan('dev'));
 
 // Webhook routes (before JSON parsing and Clerk middleware)
 app.use('/webhooks', webhookRoutes);
+app.use('/webhooks/sendgrid', sendgridWebhookRoutes);
 
 app.use(express.json({ limit: '250mb' }));
 app.use(express.urlencoded({ extended: true, limit: '250mb' }));

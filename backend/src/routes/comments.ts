@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import { prisma } from '../lib/prisma';
 import { requireAuth, AuthRequest } from '../middleware/auth';
+import { sendAgentReplyEmail } from '../services/emailService';
 
 const router = Router();
 
@@ -153,6 +154,44 @@ router.post('/',
             where: { id: activeSession.id },
             data: { replyCount: { increment: 1 } }
           });
+        }
+
+        // Send email notification to requester for public replies
+        if (!isInternalNote) {
+          // Fetch ticket with requester info for email
+          const ticketWithRequester = await prisma.ticket.findUnique({
+            where: { id: ticketId },
+            include: {
+              requester: {
+                select: {
+                  email: true,
+                  firstName: true,
+                  lastName: true
+                }
+              }
+            }
+          });
+
+          if (ticketWithRequester) {
+            // Send email asynchronously (don't wait for it)
+            sendAgentReplyEmail(
+              {
+                id: ticketWithRequester.id,
+                ticketNumber: ticketWithRequester.ticketNumber,
+                subject: ticketWithRequester.subject,
+                requester: ticketWithRequester.requester
+              },
+              {
+                bodyPlain: bodyPlain,
+                author: {
+                  firstName: comment.author.firstName,
+                  lastName: comment.author.lastName
+                }
+              }
+            ).catch(err => {
+              console.error('[Email] Failed to send agent reply email:', err);
+            });
+          }
         }
       }
 

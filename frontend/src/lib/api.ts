@@ -61,7 +61,10 @@ export const ticketApi = {
     api.get(`/tickets/merge-candidates/${ticketId}`),
 
   generateSummary: (ticketId: string) =>
-    api.post(`/tickets/${ticketId}/generate-summary`)
+    api.post(`/tickets/${ticketId}/generate-summary`),
+
+  getSuggestions: (subject: string, description: string, formId?: string) =>
+    api.get('/tickets/suggestions', { params: { subject, description, formId } })
 };
 
 // Comment API
@@ -310,7 +313,10 @@ export const settingsApi = {
     api.patch(`/settings/${id}`, data),
 
   getAIStatus: () =>
-    api.get('/settings/ai-status')
+    api.get('/settings/ai-status'),
+
+  refreshKnowledgeCache: () =>
+    api.post('/settings/refresh-knowledge-cache')
 };
 
 // Zendesk Import API
