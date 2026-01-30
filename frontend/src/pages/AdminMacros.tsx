@@ -28,7 +28,8 @@ const AdminMacros: React.FC = () => {
 
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [sortBy, setSortBy] = useState<'order' | 'name-asc' | 'name-desc' | 'active-first' | 'inactive-first'>('name-asc');
+  const [sortBy, setSortBy] = useState<'order' | 'name-asc' | 'name-desc'>('name-asc');
+  const [activeTab, setActiveTab] = useState<'active' | 'inactive'>('active');
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; macro: Macro | null }>({
     isOpen: false,
     macro: null
@@ -235,13 +236,31 @@ const AdminMacros: React.FC = () => {
     setFormData({ ...formData, content: currentContent });
   };
 
-  // Get unique categories for display
-  const categories = macros
-    ? [...new Set(macros.filter(m => m.category).map(m => m.category!))].sort()
-    : [];
+  // Count active/inactive macros for tabs
+  const activeMacrosCount = macros?.filter(m => m.isActive).length || 0;
+  const inactiveMacrosCount = macros?.filter(m => !m.isActive).length || 0;
 
-  // Filter macros by category and search query
+  // Get macros for the current tab
+  const macrosInCurrentTab = macros?.filter(m => activeTab === 'active' ? m.isActive : !m.isActive) || [];
+
+  // Get unique categories for display (filtered by current tab)
+  const categories = [...new Set(macrosInCurrentTab.filter(m => m.category).map(m => m.category!))].sort();
+
+  // Reset category filter when switching tabs if current category doesn't exist in new tab
+  useEffect(() => {
+    if (categoryFilter !== 'all' && categoryFilter !== 'uncategorized') {
+      const categoryExistsInTab = macrosInCurrentTab.some(m => m.category === categoryFilter);
+      if (!categoryExistsInTab) {
+        setCategoryFilter('all');
+      }
+    }
+  }, [activeTab, macrosInCurrentTab, categoryFilter]);
+
+  // Filter macros by tab, category and search query
   const filteredMacros = macros?.filter(macro => {
+    // Filter by active tab
+    const matchesActiveTab = activeTab === 'active' ? macro.isActive : !macro.isActive;
+
     const matchesCategory =
       categoryFilter === 'all' ? true :
       categoryFilter === 'uncategorized' ? !macro.category :
@@ -251,18 +270,12 @@ const AdminMacros: React.FC = () => {
       macro.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (macro.category && macro.category.toLowerCase().includes(searchQuery.toLowerCase()));
 
-    return matchesCategory && matchesSearch;
+    return matchesActiveTab && matchesCategory && matchesSearch;
   }).sort((a, b) => {
     if (sortBy === 'name-asc') {
       return a.name.localeCompare(b.name);
     } else if (sortBy === 'name-desc') {
       return b.name.localeCompare(a.name);
-    } else if (sortBy === 'active-first') {
-      if (a.isActive === b.isActive) return a.name.localeCompare(b.name);
-      return a.isActive ? -1 : 1;
-    } else if (sortBy === 'inactive-first') {
-      if (a.isActive === b.isActive) return a.name.localeCompare(b.name);
-      return a.isActive ? 1 : -1;
     }
     return a.order - b.order;
   });
@@ -522,6 +535,48 @@ const AdminMacros: React.FC = () => {
           </div>
         )}
 
+        {/* Tabs (List mode only) */}
+        {isListMode && macros && macros.length > 0 && (
+          <div className="border-b border-gray-200 dark:border-gray-700">
+            <nav className="-mb-px flex gap-6" aria-label="Tabs">
+              <button
+                onClick={() => setActiveTab('active')}
+                className={`py-3 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'active'
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300'
+                }`}
+              >
+                Active
+                <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${
+                  activeTab === 'active'
+                    ? 'bg-primary/10 text-primary'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                }`}>
+                  {activeMacrosCount}
+                </span>
+              </button>
+              <button
+                onClick={() => setActiveTab('inactive')}
+                className={`py-3 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'inactive'
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300'
+                }`}
+              >
+                Inactive
+                <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${
+                  activeTab === 'inactive'
+                    ? 'bg-primary/10 text-primary'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                }`}>
+                  {inactiveMacrosCount}
+                </span>
+              </button>
+            </nav>
+          </div>
+        )}
+
         {/* Search and Filter Bar (List mode only) */}
         {isListMode && macros && macros.length > 0 && (
           <div className="flex flex-col sm:flex-row gap-3">
@@ -561,18 +616,18 @@ const AdminMacros: React.FC = () => {
                 onChange={(e) => setCategoryFilter(e.target.value)}
                 className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
               >
-                <option value="all">All Categories ({macros.length})</option>
+                <option value="all">All Categories ({macrosInCurrentTab.length})</option>
                 {categories.map((category) => {
-                  const count = macros.filter(m => m.category === category).length;
+                  const count = macrosInCurrentTab.filter(m => m.category === category).length;
                   return (
                     <option key={category} value={category}>
                       {category} ({count})
                     </option>
                   );
                 })}
-                {macros.some(m => !m.category) && (
+                {macrosInCurrentTab.some(m => !m.category) && (
                   <option value="uncategorized">
-                    Uncategorized ({macros.filter(m => !m.category).length})
+                    Uncategorized ({macrosInCurrentTab.filter(m => !m.category).length})
                   </option>
                 )}
               </select>
@@ -581,14 +636,12 @@ const AdminMacros: React.FC = () => {
             {/* Sort Dropdown */}
             <select
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as 'order' | 'name-asc' | 'name-desc' | 'active-first' | 'inactive-first')}
+              onChange={(e) => setSortBy(e.target.value as 'order' | 'name-asc' | 'name-desc')}
               className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
             >
               <option value="order">Sort by Order</option>
               <option value="name-asc">Name A-Z</option>
               <option value="name-desc">Name Z-A</option>
-              <option value="active-first">Active First</option>
-              <option value="inactive-first">Inactive First</option>
             </select>
           </div>
         )}
@@ -626,8 +679,19 @@ const AdminMacros: React.FC = () => {
                   {/* Content Preview */}
                   <div className="min-w-0">
                     <span className="text-sm text-gray-500 dark:text-gray-400 truncate block">
-                      {macro.content.replace(/<[^>]*>/g, '').substring(0, 100)}
-                      {macro.content.replace(/<[^>]*>/g, '').length > 100 ? '...' : ''}
+                      {(() => {
+                        const text = macro.content
+                          .replace(/<[^>]*>/g, ' ')
+                          .replace(/&nbsp;/g, ' ')
+                          .replace(/&amp;/g, '&')
+                          .replace(/&lt;/g, '<')
+                          .replace(/&gt;/g, '>')
+                          .replace(/&quot;/g, '"')
+                          .replace(/&#39;/g, "'")
+                          .replace(/\s+/g, ' ')
+                          .trim();
+                        return text.length > 100 ? text.substring(0, 100) + '...' : text;
+                      })()}
                     </span>
                   </div>
 
