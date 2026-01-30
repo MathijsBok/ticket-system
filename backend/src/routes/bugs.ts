@@ -1,5 +1,5 @@
-import { Router, Response } from 'express';
-import multer from 'multer';
+import { Router, Response, NextFunction } from 'express';
+import multer, { MulterError } from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { prisma } from '../lib/prisma';
@@ -53,6 +53,26 @@ const upload = multer({
     cb(null, true);
   }
 });
+
+// Wrapper to handle multer errors
+const handleUpload = (req: AuthRequest, res: Response, next: NextFunction) => {
+  upload.array('attachments', 5)(req, res, (err: any) => {
+    if (err) {
+      console.error('Multer error:', err);
+      if (err instanceof MulterError) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(400).json({ error: 'File too large. Maximum size is 10MB.' });
+        }
+        if (err.code === 'LIMIT_FILE_COUNT') {
+          return res.status(400).json({ error: 'Too many files. Maximum is 5 files.' });
+        }
+        return res.status(400).json({ error: `Upload error: ${err.message}` });
+      }
+      return res.status(400).json({ error: err.message || 'File upload failed' });
+    }
+    next();
+  });
+};
 
 // Helper to serialize bug with attachments (convert BigInt to string)
 const serializeBug = (bug: any) => ({
@@ -114,19 +134,25 @@ router.post(
   '/',
   requireAuth,
   requireAgent,
-  upload.array('attachments', 5), // Allow up to 5 files
+  handleUpload,
   async (req: AuthRequest, res: Response) => {
     try {
+      console.log('[Bug Create] Request body:', JSON.stringify(req.body));
+      console.log('[Bug Create] Files received:', (req.files as Express.Multer.File[] | undefined)?.length || 0);
+
       const { title, description, type } = req.body;
 
       // Manual validation since we're using multer
       if (!title?.trim()) {
+        console.log('[Bug Create] Validation failed: Title is required');
         return res.status(400).json({ error: 'Title is required' });
       }
       if (!description?.trim()) {
+        console.log('[Bug Create] Validation failed: Description is required');
         return res.status(400).json({ error: 'Description is required' });
       }
       if (!['TECHNICAL', 'VISUAL'].includes(type)) {
+        console.log('[Bug Create] Validation failed: Invalid type:', type);
         return res.status(400).json({ error: 'Type must be TECHNICAL or VISUAL' });
       }
 
