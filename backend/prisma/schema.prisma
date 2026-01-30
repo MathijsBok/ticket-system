@@ -431,6 +431,12 @@ enum BugStatus {
   SOLVED
 }
 
+// Bug type
+enum BugType {
+  TECHNICAL
+  VISUAL
+}
+
 // Notification types
 enum NotificationType {
   MENTION
@@ -467,6 +473,7 @@ model Bug {
   title       String    @db.VarChar(255)
   description String    @db.Text
   status      BugStatus @default(OPEN)
+  type        BugType   @default(TECHNICAL)
   reportedById String   @db.Uuid
   solvedById  String?   @db.Uuid
   createdAt   DateTime  @default(now())
@@ -477,6 +484,7 @@ model Bug {
   solvedBy   User? @relation("BugSolver", fields: [solvedById], references: [id])
 
   @@index([status])
+  @@index([type])
   @@index([reportedById])
   @@index([createdAt])
 }

@@ -446,7 +446,7 @@ export const bugApi = {
   getAll: () =>
     api.get('/bugs'),
 
-  create: (data: { title: string; description: string }) =>
+  create: (data: { title: string; description: string; type: 'TECHNICAL' | 'VISUAL' }) =>
     api.post('/bugs', data),
 
   solve: (id: string) =>

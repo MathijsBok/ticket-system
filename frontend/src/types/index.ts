@@ -245,6 +245,9 @@ export type NotificationType = 'MENTION' | 'TICKET_ASSIGNED' | 'TICKET_UPDATED' 
 // Bug status
 export type BugStatus = 'OPEN' | 'SOLVED';
 
+// Bug type
+export type BugType = 'TECHNICAL' | 'VISUAL';
+
 // Notification for users
 export interface Notification {
   id: string;
@@ -275,6 +278,7 @@ export interface Bug {
   title: string;
   description: string;
   status: BugStatus;
+  type: BugType;
   reportedById: string;
   solvedById?: string;
   createdAt: string;

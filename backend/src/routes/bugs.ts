@@ -49,7 +49,8 @@ router.post(
   requireAgent,
   [
     body('title').trim().notEmpty().withMessage('Title is required'),
-    body('description').trim().notEmpty().withMessage('Description is required')
+    body('description').trim().notEmpty().withMessage('Description is required'),
+    body('type').isIn(['TECHNICAL', 'VISUAL']).withMessage('Type must be TECHNICAL or VISUAL')
   ],
   async (req: AuthRequest, res: Response) => {
     try {
@@ -58,7 +59,7 @@ router.post(
         return res.status(400).json({ errors: errors.array() });
       }
 
-      const { title, description } = req.body;
+      const { title, description, type } = req.body;
       const reportedById = req.userId!;
 
       // Create the bug
@@ -66,6 +67,7 @@ router.post(
         data: {
           title,
           description,
+          type,
           reportedById
         },
         include: {
