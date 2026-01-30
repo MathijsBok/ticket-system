@@ -1,7 +1,14 @@
 import { Router, Response } from 'express';
 import { body, validationResult } from 'express-validator';
+import multer from 'multer';
 import { prisma } from '../lib/prisma';
 import { requireAuth, requireAdmin, requireAgent, AuthRequest } from '../middleware/auth';
+
+// Configure multer for file uploads
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit
+});
 
 const router = Router();
 
@@ -59,6 +66,132 @@ router.patch('/reorder', requireAuth, requireAdmin, async (req: AuthRequest, res
   } catch (error) {
     console.error('Error reordering macros:', error);
     return res.status(500).json({ error: 'Failed to reorder macros' });
+  }
+});
+
+// Import macros from Zendesk JSON (admin only)
+router.post('/import', requireAuth, requireAdmin, upload.single('file'), async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const fileContent = req.file.buffer.toString('utf-8');
+    let data: any;
+
+    try {
+      data = JSON.parse(fileContent);
+    } catch (parseError) {
+      return res.status(400).json({ error: 'Invalid JSON file' });
+    }
+
+    // Handle Zendesk macro export format
+    const macros = data.macros || data;
+
+    if (!Array.isArray(macros)) {
+      return res.status(400).json({ error: 'Invalid format: expected an array of macros or object with macros property' });
+    }
+
+    let imported = 0;
+    let skipped = 0;
+    let updated = 0;
+    const errors: string[] = [];
+
+    // Get the current highest order
+    const lastMacro = await prisma.macro.findFirst({
+      orderBy: { order: 'desc' }
+    });
+    let nextOrder = lastMacro ? lastMacro.order + 1 : 0;
+
+    for (const macro of macros) {
+      try {
+        // Extract name from title or raw_title (truncate to 255 chars for DB column limit)
+        const rawName = macro.title || macro.raw_title || macro.name;
+        if (!rawName) {
+          errors.push(`Skipped macro without name`);
+          skipped++;
+          continue;
+        }
+        const name = rawName.substring(0, 255);
+
+        // Extract content from actions (look for comment_value_html or comment_value)
+        let content = '';
+        if (macro.actions && Array.isArray(macro.actions)) {
+          const commentAction = macro.actions.find((a: any) =>
+            a.field === 'comment_value_html' || a.field === 'comment_value'
+          );
+          if (commentAction) {
+            content = commentAction.value || '';
+          }
+        }
+        // Fallback to direct content field
+        if (!content && macro.content) {
+          content = macro.content;
+        }
+
+        if (!content) {
+          errors.push(`Skipped macro "${name}" - no content found`);
+          skipped++;
+          continue;
+        }
+
+        // Only use explicit category field (description is explanatory text, not a category)
+        const rawCategory = macro.category || null;
+        const category = rawCategory ? rawCategory.substring(0, 100) : null;
+        const isActive = macro.active !== undefined ? macro.active : (macro.isActive !== undefined ? macro.isActive : true);
+        const order = macro.position !== undefined ? macro.position : (macro.order !== undefined ? macro.order : nextOrder++);
+
+        // Check if macro with same name already exists
+        const existingMacro = await prisma.macro.findFirst({
+          where: { name }
+        });
+
+        if (existingMacro) {
+          // Update existing macro
+          await prisma.macro.update({
+            where: { id: existingMacro.id },
+            data: {
+              content,
+              category,
+              isActive,
+              order
+            }
+          });
+          updated++;
+        } else {
+          // Create new macro
+          await prisma.macro.create({
+            data: {
+              name,
+              content,
+              category,
+              isActive,
+              order
+            }
+          });
+          imported++;
+        }
+      } catch (macroError) {
+        const errorMessage = macroError instanceof Error ? macroError.message : 'Unknown error';
+        errors.push(`Error processing macro: ${errorMessage}`);
+        skipped++;
+      }
+    }
+
+    return res.json({
+      success: true,
+      imported,
+      updated,
+      skipped,
+      total: macros.length,
+      errors: errors.length > 0 ? errors : undefined
+    });
+  } catch (error) {
+    console.error('Error importing macros:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to import macros'
+    });
   }
 });
 

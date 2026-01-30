@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { macroApi } from '../lib/api';
 import Layout from '../components/Layout';
 import RichTextEditor from '../components/RichTextEditor';
+import ConfirmModal from '../components/ConfirmModal';
 import toast from 'react-hot-toast';
 import { Macro } from '../types';
 
@@ -18,27 +19,113 @@ const PLACEHOLDERS = [
 const AdminMacros: React.FC = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const location = useLocation();
-  const { id: urlMacroId } = useParams<{ id: string }>();
+  const { id: macroId } = useParams<{ id: string }>();
 
   // Determine mode from URL
-  const isCreating = location.pathname === '/admin/macros/new' || urlMacroId !== undefined;
-  const editingMacroId = urlMacroId || null;
+  const isEditMode = macroId !== undefined && macroId !== 'new';
+  const isNewMode = macroId === 'new';
+  const isListMode = !macroId;
 
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [sortBy, setSortBy] = useState<'order' | 'name-asc' | 'name-desc' | 'active-first' | 'inactive-first'>('name-asc');
+  const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; macro: Macro | null }>({
+    isOpen: false,
+    macro: null
+  });
+
+  // Query for the list of macros (only used on list page)
+  const { data: macros, isLoading: isLoadingList } = useQuery({
+    queryKey: ['macros'],
+    queryFn: async () => {
+      const response = await macroApi.getAll();
+      return response.data as Macro[];
+    },
+    enabled: isListMode,
+    staleTime: 0,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true
+  });
+
+  // Query for a single macro when editing (separate from the list!)
+  const { data: singleMacro, isLoading: isLoadingSingle, isFetched } = useQuery({
+    queryKey: ['macro', macroId],
+    queryFn: async () => {
+      const response = await macroApi.getById(macroId!);
+      return response.data as Macro;
+    },
+    enabled: isEditMode && !!macroId,
+    staleTime: 0,
+    refetchOnMount: 'always'
+  });
+
+  // Form state - initialized from singleMacro when available
   const [formData, setFormData] = useState({
     name: '',
     content: '',
     category: ''
   });
-  const [categoryFilter, setCategoryFilter] = useState<string>('all');
 
-  const { data: macros, isLoading } = useQuery({
-    queryKey: ['macros'],
+  // Track if we've initialized from the loaded macro
+  const [initializedFromMacro, setInitializedFromMacro] = useState<string | null>(null);
+
+  // Track new category input
+  const [newCategoryInput, setNewCategoryInput] = useState('');
+
+  // Category dropdown state
+  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
+  const categoryDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(event.target as Node)) {
+        setIsCategoryDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Query for all categories (needed on edit/new pages)
+  const { data: allMacrosForCategories } = useQuery({
+    queryKey: ['macros-categories'],
     queryFn: async () => {
       const response = await macroApi.getAll();
       return response.data as Macro[];
-    }
+    },
+    enabled: isEditMode || isNewMode,
+    staleTime: 60000 // Cache for 1 minute
   });
+
+  // Get unique categories from all macros
+  const allCategories = allMacrosForCategories
+    ? [...new Set(allMacrosForCategories.filter(m => m.category).map(m => m.category!.toUpperCase()))].sort()
+    : [];
+
+  // Populate form when single macro data is loaded
+  useEffect(() => {
+    if (isEditMode && singleMacro && initializedFromMacro !== singleMacro.id) {
+      setFormData({
+        name: singleMacro.name,
+        content: singleMacro.content,
+        category: singleMacro.category?.toUpperCase() || ''
+      });
+      setInitializedFromMacro(singleMacro.id);
+      setNewCategoryInput('');
+      setIsCategoryDropdownOpen(false);
+    }
+  }, [isEditMode, singleMacro, initializedFromMacro]);
+
+  // Reset form and tracking when entering new mode or going back to list
+  useEffect(() => {
+    if (isNewMode || isListMode) {
+      setFormData({ name: '', content: '', category: '' });
+      setInitializedFromMacro(null);
+      setNewCategoryInput('');
+      setIsCategoryDropdownOpen(false);
+    }
+  }, [isNewMode, isListMode]);
 
   const createMutation = useMutation({
     mutationFn: (data: { name: string; content: string; category?: string }) =>
@@ -59,10 +146,22 @@ const AdminMacros: React.FC = () => {
     onSuccess: () => {
       toast.success('Macro updated successfully');
       queryClient.invalidateQueries({ queryKey: ['macros'] });
+      queryClient.invalidateQueries({ queryKey: ['macro', macroId] });
       navigate('/admin/macros');
     },
     onError: () => {
       toast.error('Failed to update macro');
+    }
+  });
+
+  const toggleActiveMutation = useMutation({
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
+      macroApi.update(id, { isActive }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['macros'] });
+    },
+    onError: () => {
+      toast.error('Failed to update macro status');
     }
   });
 
@@ -84,57 +183,47 @@ const AdminMacros: React.FC = () => {
       return;
     }
 
+    const categoryValue = formData.category.trim().toUpperCase();
     const data = {
       name: formData.name.trim(),
       content: formData.content.trim(),
-      category: formData.category.trim() || undefined
+      category: categoryValue || undefined
     };
 
-    if (editingMacroId) {
-      updateMutation.mutate({ id: editingMacroId, data });
+    if (isEditMode && macroId) {
+      updateMutation.mutate({ id: macroId, data });
     } else {
       createMutation.mutate(data);
     }
   };
 
   const handleEdit = (macro: Macro) => {
-    // Navigate to the edit URL
     navigate(`/admin/macros/${macro.id}`);
   };
 
-  // Populate form when editing (URL changes to /admin/macros/:id)
-  useEffect(() => {
-    if (editingMacroId && macros) {
-      const macro = macros.find(m => m.id === editingMacroId);
-      if (macro) {
-        setFormData({
-          name: macro.name,
-          content: macro.content,
-          category: macro.category || ''
-        });
-      }
-    } else if (!editingMacroId && location.pathname === '/admin/macros') {
-      // Reset form when back on list view
-      setFormData({ name: '', content: '', category: '' });
-    }
-  }, [editingMacroId, macros, location.pathname]);
-
   const handleDelete = (macro: Macro) => {
-    if (window.confirm(`Are you sure you want to delete "${macro.name}"?`)) {
-      deleteMutation.mutate(macro.id);
+    setDeleteModal({ isOpen: true, macro });
+  };
+
+  const confirmDelete = () => {
+    if (deleteModal.macro) {
+      deleteMutation.mutate(deleteModal.macro.id);
     }
+    setDeleteModal({ isOpen: false, macro: null });
+  };
+
+  const cancelDelete = () => {
+    setDeleteModal({ isOpen: false, macro: null });
   };
 
   const handleToggleActive = (macro: Macro) => {
-    updateMutation.mutate({
+    toggleActiveMutation.mutate({
       id: macro.id,
-      data: { isActive: !macro.isActive }
+      isActive: !macro.isActive
     });
   };
 
   const insertPlaceholder = (placeholder: string) => {
-    // For rich text editor, we append the placeholder to the content
-    // Remove trailing </p> tag if present to insert before it, or just append
     let currentContent = formData.content;
     if (currentContent.endsWith('</p>')) {
       currentContent = currentContent.slice(0, -4) + placeholder + '</p>';
@@ -151,25 +240,97 @@ const AdminMacros: React.FC = () => {
     ? [...new Set(macros.filter(m => m.category).map(m => m.category!))].sort()
     : [];
 
-  // Filter macros by category
+  // Filter macros by category and search query
   const filteredMacros = macros?.filter(macro => {
-    if (categoryFilter === 'all') return true;
-    if (categoryFilter === 'uncategorized') return !macro.category;
-    return macro.category === categoryFilter;
+    const matchesCategory =
+      categoryFilter === 'all' ? true :
+      categoryFilter === 'uncategorized' ? !macro.category :
+      macro.category === categoryFilter;
+
+    const matchesSearch = !searchQuery ||
+      macro.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (macro.category && macro.category.toLowerCase().includes(searchQuery.toLowerCase()));
+
+    return matchesCategory && matchesSearch;
+  }).sort((a, b) => {
+    if (sortBy === 'name-asc') {
+      return a.name.localeCompare(b.name);
+    } else if (sortBy === 'name-desc') {
+      return b.name.localeCompare(a.name);
+    } else if (sortBy === 'active-first') {
+      if (a.isActive === b.isActive) return a.name.localeCompare(b.name);
+      return a.isActive ? -1 : 1;
+    } else if (sortBy === 'inactive-first') {
+      if (a.isActive === b.isActive) return a.name.localeCompare(b.name);
+      return a.isActive ? 1 : -1;
+    }
+    return a.order - b.order;
   });
+
+  // Show loading when editing and waiting for single macro data OR form not yet populated
+  if (isEditMode && (isLoadingSingle || (singleMacro && initializedFromMacro !== singleMacro.id))) {
+    return (
+      <Layout>
+        <div className="text-center py-12">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          <p className="mt-2 text-gray-600 dark:text-gray-400">Loading macro...</p>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Show error if macro not found
+  if (isEditMode && isFetched && !singleMacro) {
+    return (
+      <Layout>
+        <div className="text-center py-12">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Macro not found</h2>
+          <p className="mt-2 text-gray-600 dark:text-gray-400">The macro you're looking for doesn't exist.</p>
+          <button
+            onClick={() => navigate('/admin/macros')}
+            className="mt-4 inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:opacity-90"
+          >
+            Back to Macros
+          </button>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Macros</h1>
-            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-              Create pre-built reply templates for agents to use
-            </p>
+        {(isEditMode || isNewMode) ? (
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => navigate('/admin/macros')}
+              className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+              title="Back to Macros"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+            </button>
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+                {isEditMode ? 'Edit Macro' : 'Create New Macro'}
+              </h1>
+              {isEditMode && singleMacro && (
+                <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                  {singleMacro.name}
+                </p>
+              )}
+            </div>
           </div>
-          {!isCreating && (
+        ) : (
+          <div className="flex justify-between items-start">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Macros</h1>
+              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                Create pre-built reply templates for agents to use
+              </p>
+            </div>
             <button
               onClick={() => navigate('/admin/macros/new')}
               className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
@@ -179,16 +340,13 @@ const AdminMacros: React.FC = () => {
               </svg>
               Create Macro
             </button>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Create/Edit Form */}
-        {isCreating && (
+        {(isEditMode || isNewMode) && (
           <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-              {editingMacroId ? 'Edit Macro' : 'Create New Macro'}
-            </h2>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form key={macroId || 'new'} onSubmit={handleSubmit} className="space-y-5">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Name <span className="text-red-500">*</span>
@@ -202,43 +360,116 @@ const AdminMacros: React.FC = () => {
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Category <span className="text-gray-400">(optional)</span>
-                </label>
-                <input
-                  type="text"
-                  value={formData.category}
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  placeholder="e.g., General, Billing, Technical"
-                  list="categories"
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                />
-                <datalist id="categories">
-                  {categories.map(cat => (
-                    <option key={cat} value={cat} />
-                  ))}
-                </datalist>
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Categorize macros for easier organization
-                </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Category Dropdown */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Category <span className="text-gray-400">(optional)</span>
+                  </label>
+                  <div className="relative" ref={categoryDropdownRef}>
+                    <button
+                      type="button"
+                      onClick={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
+                      className="w-full px-3 py-2 text-left border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent flex items-center justify-between"
+                    >
+                      <span className={formData.category ? '' : 'text-gray-400 dark:text-gray-500'}>
+                        {formData.category || 'Select category'}
+                      </span>
+                      <svg
+                        className={`w-4 h-4 text-gray-400 transition-transform ${isCategoryDropdownOpen ? 'rotate-180' : ''}`}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+
+                    {isCategoryDropdownOpen && (
+                      <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-auto">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFormData({ ...formData, category: '' });
+                            setIsCategoryDropdownOpen(false);
+                          }}
+                          className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                            !formData.category ? 'bg-primary/10 text-primary' : 'text-gray-700 dark:text-gray-300'
+                          }`}
+                        >
+                          No category
+                        </button>
+                        {allCategories.map((cat) => (
+                          <button
+                            key={cat}
+                            type="button"
+                            onClick={() => {
+                              setFormData({ ...formData, category: cat });
+                              setIsCategoryDropdownOpen(false);
+                            }}
+                            className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                              formData.category === cat ? 'bg-primary/10 text-primary' : 'text-gray-700 dark:text-gray-300'
+                            }`}
+                          >
+                            {cat}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Select an existing category
+                  </p>
+                </div>
+
+                {/* New Category Input */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Or create new
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newCategoryInput}
+                      onChange={(e) => setNewCategoryInput(e.target.value.toUpperCase())}
+                      placeholder="NEW CATEGORY"
+                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent uppercase placeholder:normal-case"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (newCategoryInput.trim()) {
+                          setFormData({ ...formData, category: newCategoryInput.trim().toUpperCase() });
+                          setNewCategoryInput('');
+                        }
+                      }}
+                      disabled={!newCategoryInput.trim()}
+                      className="px-3 py-2 text-sm font-medium text-white bg-primary rounded-md hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Use
+                    </button>
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Type and click Use to set
+                  </p>
+                </div>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Content <span className="text-red-500">*</span>
                 </label>
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
                   <div className="lg:col-span-2">
                     <RichTextEditor
                       value={formData.content}
                       onChange={(value) => setFormData({ ...formData, content: value })}
                       placeholder="Enter the macro content here. This text will be inserted into the reply field when an agent selects this macro."
-                      minHeight="200px"
+                      minHeight="320px"
                     />
                   </div>
-                  <div className="lg:col-span-1">
-                    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-md border border-gray-200 dark:border-gray-600 p-4">
+                  <div className="lg:col-span-1 flex">
+                    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-md border border-gray-200 dark:border-gray-600 p-4 w-full min-h-[320px] max-h-fit overflow-y-auto">
                       <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
                         Available Placeholders
                       </h4>
@@ -270,7 +501,7 @@ const AdminMacros: React.FC = () => {
               <div className="flex justify-end gap-3">
                 <button
                   type="button"
-                  onClick={() => navigate(-1)}
+                  onClick={() => navigate('/admin/macros')}
                   className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
                 >
                   Cancel
@@ -282,7 +513,7 @@ const AdminMacros: React.FC = () => {
                 >
                   {createMutation.isPending || updateMutation.isPending
                     ? 'Saving...'
-                    : editingMacroId
+                    : isEditMode
                     ? 'Update Macro'
                     : 'Create Macro'}
                 </button>
@@ -291,89 +522,154 @@ const AdminMacros: React.FC = () => {
           </div>
         )}
 
-        {/* Category Tabs */}
-        {!isCreating && macros && macros.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => setCategoryFilter('all')}
-              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                categoryFilter === 'all'
-                  ? 'bg-primary text-white'
-                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
-              }`}
-            >
-              All ({macros.length})
-            </button>
-            {categories.map((category) => {
-              const count = macros.filter(m => m.category === category).length;
-              return (
-                <button
-                  key={category}
-                  onClick={() => setCategoryFilter(category)}
-                  className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                    categoryFilter === category
-                      ? 'bg-primary text-white'
-                      : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
-                  }`}
-                >
-                  {category} ({count})
-                </button>
-              );
-            })}
-            {macros.some(m => !m.category) && (
-              <button
-                onClick={() => setCategoryFilter('uncategorized')}
-                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                  categoryFilter === 'uncategorized'
-                    ? 'bg-primary text-white'
-                    : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
-                }`}
+        {/* Search and Filter Bar (List mode only) */}
+        {isListMode && macros && macros.length > 0 && (
+          <div className="flex flex-col sm:flex-row gap-3">
+            {/* Search Input */}
+            <div className="relative flex-1">
+              <svg
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
               >
-                Uncategorized ({macros.filter(m => !m.category).length})
-              </button>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input
+                type="text"
+                placeholder="Search macros..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+
+            {/* Category Dropdown */}
+            {categories.length > 0 && (
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              >
+                <option value="all">All Categories ({macros.length})</option>
+                {categories.map((category) => {
+                  const count = macros.filter(m => m.category === category).length;
+                  return (
+                    <option key={category} value={category}>
+                      {category} ({count})
+                    </option>
+                  );
+                })}
+                {macros.some(m => !m.category) && (
+                  <option value="uncategorized">
+                    Uncategorized ({macros.filter(m => !m.category).length})
+                  </option>
+                )}
+              </select>
             )}
+
+            {/* Sort Dropdown */}
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as 'order' | 'name-asc' | 'name-desc' | 'active-first' | 'inactive-first')}
+              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+            >
+              <option value="order">Sort by Order</option>
+              <option value="name-asc">Name A-Z</option>
+              <option value="name-desc">Name Z-A</option>
+              <option value="active-first">Active First</option>
+              <option value="inactive-first">Inactive First</option>
+            </select>
           </div>
         )}
 
-        {/* Macros List */}
-        {isLoading ? (
+        {/* Macros List (List mode only) */}
+        {isListMode && (isLoadingList ? (
           <div className="text-center py-12">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
             <p className="mt-2 text-gray-600 dark:text-gray-400">Loading macros...</p>
           </div>
         ) : filteredMacros && filteredMacros.length > 0 ? (
           <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+            {/* Table Header */}
+            <div className="grid grid-cols-[minmax(200px,1fr)_minmax(200px,2fr)_100px_80px_80px] gap-4 px-4 py-3 bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <div>Name</div>
+              <div>Content Preview</div>
+              <div>Category</div>
+              <div className="text-center">Status</div>
+              <div className="text-center">Actions</div>
+            </div>
             <div className="divide-y divide-gray-200 dark:divide-gray-700">
               {filteredMacros.map((macro) => (
                 <div
                   key={macro.id}
                   onClick={() => handleEdit(macro)}
-                  className={`flex items-center justify-between px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer ${
-                    !macro.isActive ? 'opacity-60' : ''
-                  }`}
+                  className="grid grid-cols-[minmax(200px,1fr)_minmax(200px,2fr)_100px_80px_80px] gap-4 items-center px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer"
                 >
-                  <div className="flex items-center min-w-0 flex-1">
-                    <div className="w-28 flex-shrink-0">
-                      {macro.category ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                          {macro.category}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-gray-400 dark:text-gray-500">—</span>
-                      )}
-                    </div>
-                    <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                  {/* Name */}
+                  <div className="min-w-0">
+                    <span className={`text-sm font-medium truncate block ${!macro.isActive ? 'text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-white'}`}>
                       {macro.name}
                     </span>
-                    {!macro.isActive && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 flex-shrink-0 ml-2">
-                        Inactive
+                  </div>
+
+                  {/* Content Preview */}
+                  <div className="min-w-0">
+                    <span className="text-sm text-gray-500 dark:text-gray-400 truncate block">
+                      {macro.content.replace(/<[^>]*>/g, '').substring(0, 100)}
+                      {macro.content.replace(/<[^>]*>/g, '').length > 100 ? '...' : ''}
+                    </span>
+                  </div>
+
+                  {/* Category */}
+                  <div className="min-w-0">
+                    {macro.category ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 max-w-full truncate">
+                        {macro.category}
                       </span>
+                    ) : (
+                      <span className="text-xs text-gray-400 dark:text-gray-500">—</span>
                     )}
                   </div>
-                  <div className="flex items-center gap-1 ml-4 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+
+                  {/* Status Toggle */}
+                  <div className="flex justify-center" onClick={(e) => e.stopPropagation()}>
                     <button
-                      onClick={() => handleEdit(macro)}
+                      type="button"
+                      onClick={() => handleToggleActive(macro)}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
+                        macro.isActive
+                          ? 'bg-green-500'
+                          : 'bg-gray-300 dark:bg-gray-600'
+                      }`}
+                      title={macro.isActive ? 'Click to deactivate' : 'Click to activate'}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+                          macro.isActive ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEdit(macro);
+                      }}
                       className="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md transition-colors"
                       title="Edit"
                     >
@@ -382,24 +678,11 @@ const AdminMacros: React.FC = () => {
                       </svg>
                     </button>
                     <button
-                      onClick={() => handleToggleActive(macro)}
-                      className={`p-1.5 rounded-md transition-colors ${
-                        macro.isActive
-                          ? 'text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20'
-                          : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
-                      }`}
-                      title={macro.isActive ? 'Deactivate' : 'Activate'}
-                    >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        {macro.isActive ? (
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        ) : (
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        )}
-                      </svg>
-                    </button>
-                    <button
-                      onClick={() => handleDelete(macro)}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(macro);
+                      }}
                       className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
                       title="Delete"
                     >
@@ -441,8 +724,20 @@ const AdminMacros: React.FC = () => {
               Create Macro
             </button>
           </div>
-        )}
+        ))}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={deleteModal.isOpen}
+        title="Delete Macro"
+        message={`Are you sure you want to delete "${deleteModal.macro?.name}"? This action cannot be undone.`}
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        confirmVariant="danger"
+        onConfirm={confirmDelete}
+        onCancel={cancelDelete}
+      />
     </Layout>
   );
 };

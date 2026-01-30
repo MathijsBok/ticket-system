@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { settingsApi, zendeskApi, exportApi, apiKeyApi, analyticsApi, adminAnalyticsApi, aiAnalyticsApi } from '../lib/api';
+import { settingsApi, zendeskApi, exportApi, apiKeyApi, analyticsApi, adminAnalyticsApi, aiAnalyticsApi, macroApi } from '../lib/api';
 import Layout from '../components/Layout';
 
 type TabType = 'notifications' | 'automation' | 'sendgrid' | 'import' | 'export' | 'api' | 'maintenance' | 'widget';
@@ -37,6 +37,7 @@ const AdminSettings: React.FC = () => {
   const ticketFileInputRef = useRef<HTMLInputElement>(null);
   const userFileInputRef = useRef<HTMLInputElement>(null);
   const backlogFileInputRef = useRef<HTMLInputElement>(null);
+  const macroFileInputRef = useRef<HTMLInputElement>(null);
 
   // Get active tab from URL, default to 'notifications'
   const tabParam = searchParams.get('tab') as TabType | null;
@@ -47,9 +48,11 @@ const AdminSettings: React.FC = () => {
   };
   const [isImportingTickets, setIsImportingTickets] = useState(false);
   const [isImportingUsers, setIsImportingUsers] = useState(false);
+  const [isImportingMacros, setIsImportingMacros] = useState(false);
   const [isResettingSequence, setIsResettingSequence] = useState(false);
   const [ticketImportResult, setTicketImportResult] = useState<any>(null);
   const [userImportResult, setUserImportResult] = useState<any>(null);
+  const [macroImportResult, setMacroImportResult] = useState<any>(null);
   const [sequenceResetResult, setSequenceResetResult] = useState<any>(null);
   const [isExportingAnalytics, setIsExportingAnalytics] = useState(false);
   const [isExportingTickets, setIsExportingTickets] = useState(false);
@@ -871,6 +874,48 @@ const AdminSettings: React.FC = () => {
       setIsImportingUsers(false);
       if (userFileInputRef.current) {
         userFileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleMacroFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith('.json')) {
+      toast.error('Please select a JSON file');
+      return;
+    }
+
+    setIsImportingMacros(true);
+    setMacroImportResult(null);
+
+    try {
+      const response = await macroApi.import(file);
+      const result = response.data;
+
+      setMacroImportResult(result);
+
+      if (result.success) {
+        toast.success(`Successfully imported ${result.imported} macros`);
+        if (result.updated > 0) {
+          toast.success(`Updated ${result.updated} existing macros`);
+        }
+        queryClient.invalidateQueries({ queryKey: ['macros'] });
+      }
+    } catch (error: any) {
+      const errorMessage = typeof error.response?.data?.error === 'string'
+        ? error.response.data.error
+        : error.response?.data?.message || error.message || 'Failed to import macros';
+      toast.error(errorMessage);
+      setMacroImportResult({
+        success: false,
+        error: error.response?.data?.details || errorMessage
+      });
+    } finally {
+      setIsImportingMacros(false);
+      if (macroFileInputRef.current) {
+        macroFileInputRef.current.value = '';
       }
     }
   };
@@ -1864,6 +1909,90 @@ const AdminSettings: React.FC = () => {
                     {!ticketImportResult.success && (
                       <p className="mt-2 text-sm text-red-700 dark:text-red-400">
                         {ticketImportResult.error}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Macro Import Section */}
+              <div className="border-b border-gray-200 dark:border-gray-700 pb-8">
+                <h3 className="text-md font-medium text-gray-900 dark:text-white mb-2">
+                  Import Macros
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  Import macros from a Zendesk macro export JSON file. Macros with the same name will be updated.
+                </p>
+
+                <input
+                  ref={macroFileInputRef}
+                  type="file"
+                  accept=".json"
+                  onChange={handleMacroFileSelect}
+                  disabled={isImportingMacros}
+                  className="hidden"
+                />
+
+                <button
+                  onClick={() => macroFileInputRef.current?.click()}
+                  disabled={isImportingMacros}
+                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-primary-foreground bg-primary hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isImportingMacros ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Importing Macros...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                      </svg>
+                      Import Macros JSON
+                    </>
+                  )}
+                </button>
+
+                {macroImportResult && (
+                  <div className={`mt-4 p-4 rounded-md ${
+                    macroImportResult.success
+                      ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
+                      : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+                  }`}>
+                    <h3 className={`text-sm font-medium ${
+                      macroImportResult.success
+                        ? 'text-green-800 dark:text-green-300'
+                        : 'text-red-800 dark:text-red-300'
+                    }`}>
+                      {macroImportResult.success ? 'Macro Import Successful' : 'Macro Import Failed'}
+                    </h3>
+                    {macroImportResult.success && (
+                      <div className="mt-2 text-sm text-green-700 dark:text-green-400">
+                        <p>Imported: {macroImportResult.imported} macros</p>
+                        {macroImportResult.updated > 0 && (
+                          <p>Updated: {macroImportResult.updated} macros</p>
+                        )}
+                        {macroImportResult.skipped > 0 && (
+                          <p>Skipped: {macroImportResult.skipped} macros</p>
+                        )}
+                        {macroImportResult.errors && macroImportResult.errors.length > 0 && (
+                          <details className="mt-2">
+                            <summary className="cursor-pointer">View errors</summary>
+                            <ul className="list-disc list-inside mt-1 space-y-1">
+                              {macroImportResult.errors.map((error: string, index: number) => (
+                                <li key={index} className="text-xs">{error}</li>
+                              ))}
+                            </ul>
+                          </details>
+                        )}
+                      </div>
+                    )}
+                    {!macroImportResult.success && (
+                      <p className="mt-2 text-sm text-red-700 dark:text-red-400">
+                        {macroImportResult.error}
                       </p>
                     )}
                   </div>

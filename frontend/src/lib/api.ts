@@ -377,7 +377,19 @@ export const macroApi = {
     api.patch('/macros/reorder', { macroIds }),
 
   delete: (id: string) =>
-    api.delete(`/macros/${id}`)
+    api.delete(`/macros/${id}`),
+
+  import: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    return api.post('/macros/import', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      },
+      timeout: 300000 // 5 minutes for imports
+    });
+  }
 };
 
 // Email Template API
