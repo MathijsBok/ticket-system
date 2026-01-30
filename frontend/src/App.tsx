@@ -1,8 +1,9 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ClerkProvider, SignedIn, SignedOut, useUser } from '@clerk/clerk-react';
+import { dark } from '@clerk/themes';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
-import { ThemeProvider } from './contexts/ThemeContext';
+import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { ViewProvider } from './contexts/ViewContext';
 
@@ -56,11 +57,34 @@ function DashboardRouter() {
   return <Navigate to="/user" replace />;
 }
 
+// Clerk provider with theme-aware appearance
+function ClerkProviderWithTheme({ children }: { children: React.ReactNode }) {
+  const { theme } = useTheme();
+
+  return (
+    <ClerkProvider
+      publishableKey={CLERK_PUBLISHABLE_KEY}
+      appearance={{
+        baseTheme: theme === 'dark' ? dark : undefined,
+        variables: theme === 'dark' ? {
+          colorBackground: '#1f2937',
+          colorInputBackground: '#374151',
+          colorText: '#f9fafb',
+          colorTextSecondary: '#9ca3af',
+          colorPrimary: '#3b82f6',
+        } : undefined,
+      }}
+    >
+      {children}
+    </ClerkProvider>
+  );
+}
+
 function App() {
   return (
-    <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY}>
-      <QueryClientProvider client={queryClient}>
-        <ThemeProvider>
+    <ThemeProvider>
+      <ClerkProviderWithTheme>
+        <QueryClientProvider client={queryClient}>
           <NotificationProvider>
             <ViewProvider>
               <BrowserRouter>
@@ -245,9 +269,9 @@ function App() {
               <Toaster position="top-right" />
             </ViewProvider>
           </NotificationProvider>
-        </ThemeProvider>
-      </QueryClientProvider>
-    </ClerkProvider>
+        </QueryClientProvider>
+      </ClerkProviderWithTheme>
+    </ThemeProvider>
   );
 }
 
