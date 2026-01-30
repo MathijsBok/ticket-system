@@ -520,7 +520,7 @@ const CreateTicket: React.FC = () => {
 
                       <div>
                         <p className="font-semibold mb-1">Supported Languages</p>
-                        <p>English (fastest support), German, Hindi, Persian, Dutch</p>
+                        <p>English (fastest support), German, Spanish, Hindi, Persian, Dutch</p>
                       </div>
                     </div>
                   </div>
