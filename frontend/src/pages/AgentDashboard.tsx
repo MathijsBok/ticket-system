@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useClerk, useUser } from '@clerk/clerk-react';
@@ -234,7 +234,7 @@ const AgentDashboard: React.FC = () => {
 
   const handleSelectAll = () => {
     const currentPageIds = paginatedTickets?.map((t: any) => t.id) || [];
-    const allCurrentPageSelected = currentPageIds.every(id => selectedTickets.includes(id));
+    const allCurrentPageSelected = currentPageIds.every((id: string) => selectedTickets.includes(id));
 
     if (allCurrentPageSelected) {
       // Deselect all tickets on current page
@@ -276,7 +276,7 @@ const AgentDashboard: React.FC = () => {
     if (selectedTickets.length === 0) return;
 
     // Get unique requester IDs from selected tickets
-    const selectedTicketData = sortedTickets.filter((t: any) => selectedTickets.includes(t.id));
+    const selectedTicketData = paginatedTickets?.filter((t: any) => selectedTickets.includes(t.id)) || [];
     const requesterIds = [...new Set(selectedTicketData.map((t: any) => t.requesterId))];
 
     const confirmMessage = `Mark ${selectedTickets.length} ticket(s) as spam and block ${requesterIds.length} user(s)?\n\nThis will:\n- Close the selected tickets\n- Block the requester(s) from accessing the system`;
@@ -284,7 +284,7 @@ const AgentDashboard: React.FC = () => {
     if (window.confirm(confirmMessage)) {
       try {
         // Block all unique requesters
-        await Promise.all(requesterIds.map(id => blockUserMutation.mutateAsync(id)));
+        await Promise.all(requesterIds.map(id => blockUserMutation.mutateAsync(id as string)));
         toast.success(`${requesterIds.length} user(s) blocked`);
 
         // Close the tickets

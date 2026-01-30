@@ -35,7 +35,7 @@ const CreateTicket: React.FC = () => {
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [dismissedSuggestions, setDismissedSuggestions] = useState(false);
   const [acknowledgedSuggestion, setAcknowledgedSuggestion] = useState(false);
-  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Allowed file types
   const ALLOWED_EXTENSIONS = '.png,.jpg,.jpeg,.gif,.webp,.bmp,.svg,.mp4,.webm,.mov,.avi';

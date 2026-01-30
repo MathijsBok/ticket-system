@@ -223,7 +223,7 @@ const AdminBugs: React.FC = () => {
   );
 
   // Column component for bug list
-  const BugColumn = ({ title, bugs, type, isSolved = false }: { title: string; bugs: Bug[]; type: 'TECHNICAL' | 'VISUAL'; isSolved?: boolean }) => (
+  const BugColumn = ({ bugs, type, isSolved = false }: { bugs: Bug[]; type: 'TECHNICAL' | 'VISUAL'; isSolved?: boolean }) => (
     <div className="flex-1 min-w-0">
       <div className="flex items-center gap-2 mb-3">
         <span className={`px-2 py-1 text-xs font-medium rounded ${
@@ -419,8 +419,8 @@ const AdminBugs: React.FC = () => {
               </div>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <BugColumn title="Technical" bugs={openTechnicalBugs} type="TECHNICAL" />
-                <BugColumn title="Visual" bugs={openVisualBugs} type="VISUAL" />
+                <BugColumn bugs={openTechnicalBugs} type="TECHNICAL" />
+                <BugColumn bugs={openVisualBugs} type="VISUAL" />
               </div>
             )}
           </div>
@@ -437,8 +437,8 @@ const AdminBugs: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <BugColumn title="Technical" bugs={solvedTechnicalBugs} type="TECHNICAL" isSolved />
-              <BugColumn title="Visual" bugs={solvedVisualBugs} type="VISUAL" isSolved />
+              <BugColumn bugs={solvedTechnicalBugs} type="TECHNICAL" isSolved />
+              <BugColumn bugs={solvedVisualBugs} type="VISUAL" isSolved />
             </div>
           </div>
         )}
