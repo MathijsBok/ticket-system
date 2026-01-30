@@ -11,6 +11,8 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    host: true,
+    allowedHosts: ['dev.kleverchain.cloud', 'support.kleverchain.cloud', 'localhost'],
     proxy: {
       '^/api/': {
         target: 'http://localhost:3001',
