@@ -5,6 +5,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { bugApi } from '../lib/api';
 import { Bug, BugType } from '../types';
 import Layout from '../components/Layout';
+import ConfirmModal from '../components/ConfirmModal';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 
@@ -23,6 +24,8 @@ const AdminBugs: React.FC = () => {
   const [description, setDescription] = useState('');
   const [bugType, setBugType] = useState<BugType>('TECHNICAL');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [bugToDelete, setBugToDelete] = useState<Bug | null>(null);
 
   // Determine state from URL
   const showAddForm = id === 'new';
@@ -223,9 +226,8 @@ const AdminBugs: React.FC = () => {
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (confirm('Are you sure you want to delete this bug?')) {
-                      deleteBugMutation.mutate(bug.id);
-                    }
+                    setBugToDelete(bug);
+                    setDeleteModalOpen(true);
                   }}
                   disabled={deleteBugMutation.isPending}
                   className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors disabled:opacity-50"
@@ -579,6 +581,27 @@ const AdminBugs: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={deleteModalOpen}
+        title="Delete Bug Report"
+        message={`Are you sure you want to delete "${bugToDelete?.title}"? This action cannot be undone.`}
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        confirmVariant="danger"
+        onConfirm={() => {
+          if (bugToDelete) {
+            deleteBugMutation.mutate(bugToDelete.id);
+          }
+          setDeleteModalOpen(false);
+          setBugToDelete(null);
+        }}
+        onCancel={() => {
+          setDeleteModalOpen(false);
+          setBugToDelete(null);
+        }}
+      />
     </Layout>
   );
 };
