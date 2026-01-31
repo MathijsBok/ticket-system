@@ -74,6 +74,11 @@ const TicketDetail: React.FC = () => {
   const [submitStatus, setSubmitStatus] = useState<string>('PENDING');
   const [showSubmitDropdown, setShowSubmitDropdown] = useState(false);
   const submitDropdownRef = useRef<HTMLDivElement>(null);
+  const [isEditingSubject, setIsEditingSubject] = useState(false);
+  const [editedSubject, setEditedSubject] = useState('');
+  const subjectInputRef = useRef<HTMLInputElement>(null);
+  const [showInternalNotes, setShowInternalNotes] = useState(false);
+  const [showActivityLog, setShowActivityLog] = useState(false);
 
   // Close submit dropdown when clicking outside
   useEffect(() => {
@@ -294,6 +299,44 @@ const TicketDetail: React.FC = () => {
       toast.error(errorMessage);
     }
   });
+
+  const updateSubjectMutation = useMutation({
+    mutationFn: async (newSubject: string) => {
+      const response = await ticketApi.update(id!, { subject: newSubject });
+      return response.data;
+    },
+    onSuccess: () => {
+      toast.success('Subject updated');
+      queryClient.invalidateQueries({ queryKey: ['ticket', id] });
+      setIsEditingSubject(false);
+    },
+    onError: () => {
+      toast.error('Failed to update subject');
+    }
+  });
+
+  const handleSubjectEdit = () => {
+    setEditedSubject(ticket?.subject || '');
+    setIsEditingSubject(true);
+    setTimeout(() => subjectInputRef.current?.focus(), 0);
+  };
+
+  const handleSubjectSave = () => {
+    if (editedSubject.trim() && editedSubject.trim() !== ticket?.subject) {
+      updateSubjectMutation.mutate(editedSubject.trim());
+    } else {
+      setIsEditingSubject(false);
+    }
+  };
+
+  const handleSubjectKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSubjectSave();
+    } else if (e.key === 'Escape') {
+      setIsEditingSubject(false);
+    }
+  };
 
   // Helper to strip HTML and convert to plain text
   const htmlToPlainText = (html: string): string => {
@@ -650,7 +693,35 @@ const TicketDetail: React.FC = () => {
           </div>
 
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
-            <h2 className="text-lg sm:text-xl text-gray-700 dark:text-gray-300 break-words">{ticket.subject}</h2>
+            {isEditingSubject ? (
+              <div className="flex items-center gap-2 flex-1">
+                <input
+                  ref={subjectInputRef}
+                  type="text"
+                  value={editedSubject}
+                  onChange={(e) => setEditedSubject(e.target.value)}
+                  onKeyDown={handleSubjectKeyDown}
+                  onBlur={handleSubjectSave}
+                  className="flex-1 text-lg sm:text-xl text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                  placeholder="Enter subject..."
+                />
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg sm:text-xl text-gray-700 dark:text-gray-300 break-words">{ticket.subject}</h2>
+                {isAgent && (
+                  <button
+                    onClick={handleSubjectEdit}
+                    className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                    title="Edit subject"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            )}
 
             {/* Create Follow-up Ticket Button */}
             {ticket.status === 'CLOSED' && (
@@ -990,6 +1061,56 @@ const TicketDetail: React.FC = () => {
               </div>
             )}
 
+            {/* Internal Notes - Desktop only (agents/admins only) */}
+            {isAgent && ticket.comments && ticket.comments.filter((c: any) => c.isInternal).length > 0 && (
+              <div className="hidden lg:block bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+                <button
+                  onClick={() => setShowInternalNotes(!showInternalNotes)}
+                  className="w-full flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Internal Notes</h3>
+                    <span className="text-sm text-gray-500 dark:text-gray-400">
+                      ({ticket.comments.filter((c: any) => c.isInternal).length})
+                    </span>
+                  </div>
+                  <svg
+                    className={`w-5 h-5 text-gray-500 transition-transform ${showInternalNotes ? 'rotate-180' : ''}`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {showInternalNotes && (
+                  <div className="mt-4 max-h-64 overflow-y-auto space-y-3">
+                    {ticket.comments
+                      .filter((c: any) => c.isInternal)
+                      .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                      .map((note: any) => (
+                        <div key={note.id} className="p-3 bg-yellow-50 dark:bg-yellow-950/40 border border-yellow-200 dark:border-yellow-900/50 rounded-lg">
+                          <div className="flex justify-between items-start mb-2">
+                            <span className="text-sm font-medium text-gray-900 dark:text-white">
+                              {note.author?.firstName || note.author?.lastName
+                                ? `${note.author?.firstName || ''} ${note.author?.lastName || ''}`.trim()
+                                : note.author?.email || 'Unknown'}
+                            </span>
+                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                              {format(new Date(note.createdAt), 'MMM d, yyyy HH:mm')}
+                            </span>
+                          </div>
+                          <div
+                            className="text-sm text-gray-700 dark:text-gray-300 break-words [&_a]:text-blue-600 [&_a]:underline [&_a]:hover:text-blue-800 dark:[&_a]:text-blue-400 dark:[&_a]:hover:text-blue-300"
+                            dangerouslySetInnerHTML={{ __html: note.body || note.bodyPlain }}
+                          />
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Form Responses */}
             {ticket.formResponses && ticket.formResponses.length > 0 && (
               <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
@@ -1121,36 +1242,51 @@ const TicketDetail: React.FC = () => {
 
             {/* Activity Log - Desktop only (agents/admins only) */}
             {isAgent && ticket.activities && ticket.activities.length > 0 && (
-              <div className="hidden lg:block bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Activity Log</h3>
-                  <span className="text-sm text-gray-500 dark:text-gray-400">
-                    {ticket.activities.length} {ticket.activities.length === 1 ? 'activity' : 'activities'}
-                  </span>
-                </div>
-                <div className="max-h-64 overflow-y-auto space-y-3">
-                  {ticket.activities.map((activity: any) => (
-                    <div key={activity.id} className="flex items-start gap-3 text-sm">
-                      <div className="w-2 h-2 mt-1.5 rounded-full bg-primary flex-shrink-0"></div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-gray-700 dark:text-gray-300">
-                          {activity.user && (
-                            <span className="font-medium text-gray-900 dark:text-white">
-                              {activity.user.firstName || activity.user.lastName
-                                ? `${activity.user.firstName || ''} ${activity.user.lastName || ''}`.trim()
-                                : activity.user.email}
-                            </span>
-                          )}
-                          {activity.user ? ' - ' : ''}
-                          {formatActivityMessage(activity.action, activity.details)}
-                        </div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                          {format(new Date(activity.createdAt), 'MMM d, yyyy HH:mm:ss')}
+              <div className="hidden lg:block bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+                <button
+                  onClick={() => setShowActivityLog(!showActivityLog)}
+                  className="w-full flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Activity Log</h3>
+                    <span className="text-sm text-gray-500 dark:text-gray-400">
+                      ({ticket.activities.length})
+                    </span>
+                  </div>
+                  <svg
+                    className={`w-5 h-5 text-gray-500 transition-transform ${showActivityLog ? 'rotate-180' : ''}`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {showActivityLog && (
+                  <div className="mt-4 max-h-64 overflow-y-auto space-y-3">
+                    {ticket.activities.map((activity: any) => (
+                      <div key={activity.id} className="flex items-start gap-3 text-sm">
+                        <div className="w-2 h-2 mt-1.5 rounded-full bg-primary flex-shrink-0"></div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-gray-700 dark:text-gray-300">
+                            {activity.user && (
+                              <span className="font-medium text-gray-900 dark:text-white">
+                                {activity.user.firstName || activity.user.lastName
+                                  ? `${activity.user.firstName || ''} ${activity.user.lastName || ''}`.trim()
+                                  : activity.user.email}
+                              </span>
+                            )}
+                            {activity.user ? ' - ' : ''}
+                            {formatActivityMessage(activity.action, activity.details)}
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            {format(new Date(activity.createdAt), 'MMM d, yyyy HH:mm:ss')}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1454,38 +1590,103 @@ const TicketDetail: React.FC = () => {
           </div>
         </div>
 
+        {/* Internal Notes - Mobile only (at bottom, agents/admins only) */}
+        {isAgent && ticket.comments && ticket.comments.filter((c: any) => c.isInternal).length > 0 && (
+          <div className="lg:hidden bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+            <button
+              onClick={() => setShowInternalNotes(!showInternalNotes)}
+              className="w-full flex items-center justify-between"
+            >
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Internal Notes</h3>
+                <span className="text-sm text-gray-500 dark:text-gray-400">
+                  ({ticket.comments.filter((c: any) => c.isInternal).length})
+                </span>
+              </div>
+              <svg
+                className={`w-5 h-5 text-gray-500 transition-transform ${showInternalNotes ? 'rotate-180' : ''}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {showInternalNotes && (
+              <div className="mt-4 max-h-64 overflow-y-auto space-y-3">
+                {ticket.comments
+                  .filter((c: any) => c.isInternal)
+                  .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                  .map((note: any) => (
+                    <div key={note.id} className="p-3 bg-yellow-50 dark:bg-yellow-950/40 border border-yellow-200 dark:border-yellow-900/50 rounded-lg">
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="text-sm font-medium text-gray-900 dark:text-white">
+                          {note.author?.firstName || note.author?.lastName
+                            ? `${note.author?.firstName || ''} ${note.author?.lastName || ''}`.trim()
+                            : note.author?.email || 'Unknown'}
+                        </span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                          {format(new Date(note.createdAt), 'MMM d, yyyy HH:mm')}
+                        </span>
+                      </div>
+                      <div
+                        className="text-sm text-gray-700 dark:text-gray-300 break-words [&_a]:text-blue-600 [&_a]:underline [&_a]:hover:text-blue-800 dark:[&_a]:text-blue-400 dark:[&_a]:hover:text-blue-300"
+                        dangerouslySetInnerHTML={{ __html: note.body || note.bodyPlain }}
+                      />
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Activity Log - Mobile only (at bottom, agents/admins only) */}
         {isAgent && ticket.activities && ticket.activities.length > 0 && (
-          <div className="lg:hidden bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Activity Log</h3>
-              <span className="text-sm text-gray-500 dark:text-gray-400">
-                {ticket.activities.length} {ticket.activities.length === 1 ? 'activity' : 'activities'}
-              </span>
-            </div>
-            <div className="max-h-64 overflow-y-auto space-y-3">
-              {ticket.activities.map((activity: any) => (
-                <div key={activity.id} className="flex items-start gap-3 text-sm">
-                  <div className="w-2 h-2 mt-1.5 rounded-full bg-primary flex-shrink-0"></div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-gray-700 dark:text-gray-300">
-                      {activity.user && (
-                        <span className="font-medium text-gray-900 dark:text-white">
-                          {activity.user.firstName || activity.user.lastName
-                            ? `${activity.user.firstName || ''} ${activity.user.lastName || ''}`.trim()
-                            : activity.user.email}
-                        </span>
-                      )}
-                      {activity.user ? ' - ' : ''}
-                      {formatActivityMessage(activity.action, activity.details)}
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                      {format(new Date(activity.createdAt), 'MMM d, yyyy HH:mm:ss')}
+          <div className="lg:hidden bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+            <button
+              onClick={() => setShowActivityLog(!showActivityLog)}
+              className="w-full flex items-center justify-between"
+            >
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Activity Log</h3>
+                <span className="text-sm text-gray-500 dark:text-gray-400">
+                  ({ticket.activities.length})
+                </span>
+              </div>
+              <svg
+                className={`w-5 h-5 text-gray-500 transition-transform ${showActivityLog ? 'rotate-180' : ''}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {showActivityLog && (
+              <div className="mt-4 max-h-64 overflow-y-auto space-y-3">
+                {ticket.activities.map((activity: any) => (
+                  <div key={activity.id} className="flex items-start gap-3 text-sm">
+                    <div className="w-2 h-2 mt-1.5 rounded-full bg-primary flex-shrink-0"></div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-gray-700 dark:text-gray-300">
+                        {activity.user && (
+                          <span className="font-medium text-gray-900 dark:text-white">
+                            {activity.user.firstName || activity.user.lastName
+                              ? `${activity.user.firstName || ''} ${activity.user.lastName || ''}`.trim()
+                              : activity.user.email}
+                          </span>
+                        )}
+                        {activity.user ? ' - ' : ''}
+                        {formatActivityMessage(activity.action, activity.details)}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                        {format(new Date(activity.createdAt), 'MMM d, yyyy HH:mm:ss')}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

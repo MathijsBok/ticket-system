@@ -50,6 +50,7 @@ export const ticketApi = {
     priority?: string;
     assigneeId?: string;
     categoryId?: string;
+    subject?: string;
   }) =>
     api.patch(`/tickets/${id}`, data),
 

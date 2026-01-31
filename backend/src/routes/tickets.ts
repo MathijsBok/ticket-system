@@ -520,7 +520,8 @@ router.patch('/:id',
     body('status').optional().isIn(['NEW', 'OPEN', 'PENDING', 'ON_HOLD', 'SOLVED', 'CLOSED']),
     body('priority').optional().isIn(['LOW', 'NORMAL', 'HIGH', 'URGENT']),
     body('assigneeId').optional().isUUID(),
-    body('categoryId').optional().isUUID()
+    body('categoryId').optional().isUUID(),
+    body('subject').optional().isString().trim().isLength({ min: 1, max: 500 })
   ],
   async (req: AuthRequest, res: Response) => {
     const errors = validationResult(req);
@@ -530,7 +531,7 @@ router.patch('/:id',
 
     try {
       const { id } = req.params;
-      const { status, priority, assigneeId, categoryId } = req.body;
+      const { status, priority, assigneeId, categoryId, subject } = req.body;
       const userId = req.userId!;
 
       // Fetch current ticket to check status
@@ -567,6 +568,15 @@ router.patch('/:id',
           userId,
           action: 'priority_changed',
           details: { newPriority: priority }
+        });
+      }
+
+      if (subject) {
+        updateData.subject = subject;
+        activities.push({
+          userId,
+          action: 'subject_changed',
+          details: { newSubject: subject }
         });
       }
 
