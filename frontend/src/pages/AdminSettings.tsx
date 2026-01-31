@@ -629,19 +629,21 @@ const AdminSettings: React.FC = () => {
     }
   };
 
-  const handleDbExport = async () => {
+  const handleDbExport = async (format: 'dump' | 'sql' = 'dump') => {
     setDbExportLoading(true);
     try {
-      const response = await databaseApi.export();
+      const response = await databaseApi.export(format);
       // Create download link
-      const blob = new Blob([response.data], { type: 'application/octet-stream' });
+      const contentType = format === 'sql' ? 'text/plain' : 'application/octet-stream';
+      const blob = new Blob([response.data], { type: contentType });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       // Get filename from Content-Disposition header or generate one
       const contentDisposition = response.headers['content-disposition'];
       const filenameMatch = contentDisposition?.match(/filename="([^"]+)"/);
-      const filename = filenameMatch?.[1] || `database_export_${new Date().toISOString().replace(/[:.]/g, '-')}.dump`;
+      const extension = format === 'sql' ? '.sql' : '.dump';
+      const filename = filenameMatch?.[1] || `database_export_${new Date().toISOString().replace(/[:.]/g, '-')}${extension}`;
       link.download = filename;
       document.body.appendChild(link);
       link.click();
@@ -2379,31 +2381,59 @@ const AdminSettings: React.FC = () => {
                     </div>
                     <div>
                       <h3 className="text-md font-medium text-gray-900 dark:text-white">Full Database Backup</h3>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">Download complete database backup (pg_dump format)</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Download complete database backup</p>
                     </div>
                   </div>
-                  <button
-                    onClick={handleDbExport}
-                    disabled={dbExportLoading}
-                    className="w-full inline-flex justify-center items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {dbExportLoading ? (
-                      <>
-                        <svg className="animate-spin -ml-1 mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Exporting...
-                      </>
-                    ) : (
-                      <>
-                        <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                        </svg>
-                        Download Backup
-                      </>
-                    )}
-                  </button>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      onClick={() => handleDbExport('sql')}
+                      disabled={dbExportLoading}
+                      className="inline-flex justify-center items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {dbExportLoading ? (
+                        <>
+                          <svg className="animate-spin -ml-1 mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Exporting...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                          </svg>
+                          SQL Format
+                        </>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => handleDbExport('dump')}
+                      disabled={dbExportLoading}
+                      className="inline-flex justify-center items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {dbExportLoading ? (
+                        <>
+                          <svg className="animate-spin -ml-1 mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Exporting...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                          </svg>
+                          Dump Format
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+                    <strong>SQL Format:</strong> Better cross-version compatibility (recommended for import to different PG versions)<br/>
+                    <strong>Dump Format:</strong> Faster restore, includes indexes/constraints, same PG version recommended
+                  </p>
                 </div>
               </div>
             </div>
@@ -3273,24 +3303,42 @@ const AdminSettings: React.FC = () => {
                       )}
                     </button>
                     <button
-                      onClick={handleDbExport}
+                      onClick={() => handleDbExport('sql')}
                       disabled={dbExportLoading}
-                      className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="SQL format - better cross-version compatibility"
                     >
                       {dbExportLoading ? (
-                        <>
-                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          Exporting...
-                        </>
+                        <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
                       ) : (
                         <>
-                          <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                           </svg>
-                          Export
+                          SQL
+                        </>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => handleDbExport('dump')}
+                      disabled={dbExportLoading}
+                      className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Dump format - faster restore, same PG version recommended"
+                    >
+                      {dbExportLoading ? (
+                        <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                          </svg>
+                          Dump
                         </>
                       )}
                     </button>

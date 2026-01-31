@@ -586,8 +586,8 @@ export const databaseApi = {
     });
   },
 
-  export: () =>
-    api.get('/database/export', {
+  export: (format: 'dump' | 'sql' = 'dump') =>
+    api.get(`/database/export${format === 'sql' ? '?format=sql' : ''}`, {
       responseType: 'blob',
       timeout: 600000 // 10 minute timeout for large exports
     })

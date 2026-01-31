@@ -138,11 +138,15 @@ router.post('/import', requireAuth, requireAdmin, upload.single('file'), async (
 });
 
 // Export database to dump file
-router.get('/export', requireAuth, requireAdmin, async (_req: AuthRequest, res: Response): Promise<void> => {
-  const tempFilePath = path.join(os.tmpdir(), `db_export_${Date.now()}.dump`);
+// Supports ?format=sql for plain SQL format (better cross-version compatibility)
+// Default format is custom dump format
+router.get('/export', requireAuth, requireAdmin, async (req: AuthRequest, res: Response): Promise<void> => {
+  const format = (req.query.format as string)?.toLowerCase() === 'sql' ? 'sql' : 'dump';
+  const extension = format === 'sql' ? '.sql' : '.dump';
+  const tempFilePath = path.join(os.tmpdir(), `db_export_${Date.now()}${extension}`);
 
   try {
-    console.log('[Database Export] Starting export...');
+    console.log(`[Database Export] Starting export (format: ${format})...`);
 
     // Get database connection info from environment
     const databaseUrl = process.env.DATABASE_URL;
@@ -165,8 +169,9 @@ router.get('/export', requireAuth, requireAdmin, async (_req: AuthRequest, res: 
       env.PGPASSWORD = password;
     }
 
-    // Use pg_dump to create a custom format dump
-    const command = `pg_dump -h ${host} -p ${dbPort} -U ${user || 'postgres'} -d ${database} -F c -f "${tempFilePath}"`;
+    // Use pg_dump - format flag: 'c' for custom, 'p' for plain SQL
+    const formatFlag = format === 'sql' ? 'p' : 'c';
+    const command = `pg_dump -h ${host} -p ${dbPort} -U ${user || 'postgres'} -d ${database} -F ${formatFlag} -f "${tempFilePath}"`;
 
     console.log('[Database Export] Running pg_dump...');
     await execAsync(command, { env });
@@ -177,10 +182,10 @@ router.get('/export', requireAuth, requireAdmin, async (_req: AuthRequest, res: 
 
     // Generate filename with timestamp
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const filename = `${database}_${timestamp}.dump`;
+    const filename = `${database}_${timestamp}${extension}`;
 
     // Send the file
-    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Type', format === 'sql' ? 'text/plain' : 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.setHeader('Content-Length', stats.size);
 
