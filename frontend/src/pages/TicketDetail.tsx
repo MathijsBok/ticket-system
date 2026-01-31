@@ -1379,24 +1379,35 @@ const TicketDetail: React.FC = () => {
                     {/* Submit button with status dropdown for agents */}
                     {isAgent && !isInternal ? (
                       <div className="ml-auto relative" ref={submitDropdownRef}>
-                        <div className="flex">
-                          <button
-                            type="submit"
-                            disabled={replyMutation.isPending}
-                            className="inline-flex items-center px-4 py-2 border border-transparent rounded-l-md shadow-sm text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                          >
-                            {replyMutation.isPending ? 'Sending...' : `Submit as ${submitStatus === 'ON_HOLD' ? 'On-hold' : submitStatus.charAt(0) + submitStatus.slice(1).toLowerCase()}`}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setShowSubmitDropdown(!showSubmitDropdown)}
-                            className="inline-flex items-center px-2 py-2 border-l border-primary/30 rounded-r-md bg-primary text-primary-foreground hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors"
-                          >
-                            <svg className={`w-4 h-4 transition-transform ${showSubmitDropdown ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                            </svg>
-                          </button>
-                        </div>
+                        {(() => {
+                          const statusColors: Record<string, { bg: string; border: string; ring: string }> = {
+                            OPEN: { bg: 'bg-red-500 hover:bg-red-600', border: 'border-red-400', ring: 'ring-red-500' },
+                            PENDING: { bg: 'bg-blue-500 hover:bg-blue-600', border: 'border-blue-400', ring: 'ring-blue-500' },
+                            ON_HOLD: { bg: 'bg-gray-500 hover:bg-gray-600', border: 'border-gray-400', ring: 'ring-gray-500' },
+                            SOLVED: { bg: 'bg-green-500 hover:bg-green-600', border: 'border-green-400', ring: 'ring-green-500' }
+                          };
+                          const colors = statusColors[submitStatus] || statusColors.PENDING;
+                          return (
+                            <div className="flex">
+                              <button
+                                type="submit"
+                                disabled={replyMutation.isPending}
+                                className={`inline-flex items-center px-4 py-2 border border-transparent rounded-l-md shadow-sm text-sm font-medium text-white ${colors.bg} focus:outline-none focus:ring-2 focus:ring-offset-2 focus:${colors.ring} disabled:opacity-50 disabled:cursor-not-allowed transition-colors`}
+                              >
+                                {replyMutation.isPending ? 'Sending...' : `Submit as ${submitStatus === 'ON_HOLD' ? 'On-hold' : submitStatus.charAt(0) + submitStatus.slice(1).toLowerCase()}`}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setShowSubmitDropdown(!showSubmitDropdown)}
+                                className={`inline-flex items-center px-2 py-2 border-l ${colors.border} rounded-r-md text-white ${colors.bg} focus:outline-none focus:ring-2 focus:ring-offset-2 focus:${colors.ring} transition-colors`}
+                              >
+                                <svg className={`w-4 h-4 transition-transform ${showSubmitDropdown ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                                </svg>
+                              </button>
+                            </div>
+                          );
+                        })()}
 
                         {/* Status dropdown */}
                         {showSubmitDropdown && (
