@@ -79,6 +79,8 @@ const TicketDetail: React.FC = () => {
   const subjectInputRef = useRef<HTMLInputElement>(null);
   const [showInternalNotes, setShowInternalNotes] = useState(false);
   const [showActivityLog, setShowActivityLog] = useState(false);
+  const [showProblemSearch, setShowProblemSearch] = useState(false);
+  const [problemSearchQuery, setProblemSearchQuery] = useState('');
 
   // Close submit dropdown when clicking outside
   useEffect(() => {
@@ -140,6 +142,16 @@ const TicketDetail: React.FC = () => {
       return response.data;
     },
     enabled: !!id && showMergeModal && (userRole === 'AGENT' || userRole === 'ADMIN')
+  });
+
+  // Fetch problem tickets for linking incidents
+  const { data: problemTickets } = useQuery({
+    queryKey: ['problemTickets', problemSearchQuery, id],
+    queryFn: async () => {
+      const response = await ticketApi.searchProblems(problemSearchQuery, id);
+      return response.data;
+    },
+    enabled: showProblemSearch && (userRole === 'AGENT' || userRole === 'ADMIN')
   });
 
   // Fetch AI settings status
@@ -338,6 +350,36 @@ const TicketDetail: React.FC = () => {
     }
   };
 
+  // Mutation to update ticket type
+  const updateTypeMutation = useMutation({
+    mutationFn: async (newType: string) => {
+      const response = await ticketApi.update(id!, { type: newType });
+      return response.data;
+    },
+    onSuccess: () => {
+      toast.success('Ticket type updated');
+      queryClient.invalidateQueries({ queryKey: ['ticket', id] });
+    },
+    onError: () => {
+      toast.error('Failed to update ticket type');
+    }
+  });
+
+  // Mutation to link/unlink incident to problem
+  const linkToProblemMutation = useMutation({
+    mutationFn: async (problemId: string | null) => {
+      const response = await ticketApi.update(id!, { problemId });
+      return response.data;
+    },
+    onSuccess: () => {
+      toast.success(linkToProblemMutation.variables ? 'Linked to problem ticket' : 'Unlinked from problem ticket');
+      queryClient.invalidateQueries({ queryKey: ['ticket', id] });
+    },
+    onError: () => {
+      toast.error('Failed to update problem link');
+    }
+  });
+
   // Helper to strip HTML and convert to plain text
   const htmlToPlainText = (html: string): string => {
     const temp = document.createElement('div');
@@ -499,6 +541,21 @@ const TicketDetail: React.FC = () => {
         }
         return 'Tickets merged in';
 
+      case 'type_changed':
+        if (details?.newType) {
+          return `Type changed to ${details.newType}`;
+        }
+        return 'Type changed';
+
+      case 'linked_to_problem':
+        if (details?.problemTicketNumber) {
+          return `Linked to Problem #${details.problemTicketNumber}`;
+        }
+        return 'Linked to problem ticket';
+
+      case 'unlinked_from_problem':
+        return 'Unlinked from problem ticket';
+
       default:
         return action.replace('_', ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
     }
@@ -579,6 +636,15 @@ const TicketDetail: React.FC = () => {
               }`}>
                 {ticket.priority}
               </span>
+              {/* Ticket Type Badge */}
+              {ticket.type && ticket.type !== 'NORMAL' && (
+                <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                  ticket.type === 'PROBLEM' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' :
+                  'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200'
+                }`}>
+                  {ticket.type}
+                </span>
+              )}
 
               {/* Agent actions */}
               {isAgent && (
@@ -1237,6 +1303,153 @@ const TicketDetail: React.FC = () => {
                     )}
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* Problem/Incident Management - Desktop only (agents/admins only) */}
+            {isAgent && (
+              <div className="hidden lg:block bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Ticket Type</h3>
+
+                {/* Type selector */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Type</label>
+                  <select
+                    value={ticket.type || 'NORMAL'}
+                    onChange={(e) => updateTypeMutation.mutate(e.target.value)}
+                    disabled={updateTypeMutation.isPending}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+                  >
+                    <option value="NORMAL">Normal</option>
+                    <option value="PROBLEM">Problem</option>
+                    <option value="INCIDENT">Incident</option>
+                  </select>
+                </div>
+
+                {/* For INCIDENT tickets: show linked problem or link button */}
+                {ticket.type === 'INCIDENT' && (
+                  <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Linked Problem</label>
+                    {ticket.problem ? (
+                      <div className="flex items-center justify-between p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg">
+                        <Link
+                          to={`/tickets/${ticket.problem.id}`}
+                          className="text-sm text-purple-700 dark:text-purple-300 hover:underline"
+                        >
+                          #{ticket.problem.ticketNumber} - {ticket.problem.subject}
+                        </Link>
+                        <button
+                          onClick={() => linkToProblemMutation.mutate(null)}
+                          disabled={linkToProblemMutation.isPending}
+                          className="text-red-500 hover:text-red-700 p-1"
+                          title="Unlink from problem"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    ) : (
+                      <div>
+                        {showProblemSearch ? (
+                          <div className="space-y-2">
+                            <input
+                              type="text"
+                              value={problemSearchQuery}
+                              onChange={(e) => setProblemSearchQuery(e.target.value)}
+                              placeholder="Search by ticket # or subject..."
+                              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                            />
+                            <div className="max-h-40 overflow-y-auto space-y-1">
+                              {problemTickets && problemTickets.length > 0 ? (
+                                problemTickets.map((problem: any) => (
+                                  <button
+                                    key={problem.id}
+                                    onClick={() => {
+                                      linkToProblemMutation.mutate(problem.id);
+                                      setShowProblemSearch(false);
+                                      setProblemSearchQuery('');
+                                    }}
+                                    className="w-full text-left p-2 text-sm rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                                  >
+                                    <span className="font-medium">#{problem.ticketNumber}</span>
+                                    <span className="text-gray-600 dark:text-gray-400 ml-2 truncate">{problem.subject}</span>
+                                    <span className="text-xs text-gray-500 ml-2">({problem._count?.incidents || 0} incidents)</span>
+                                  </button>
+                                ))
+                              ) : (
+                                <p className="text-sm text-gray-500 dark:text-gray-400 p-2">
+                                  {problemSearchQuery ? 'No problem tickets found' : 'Type to search...'}
+                                </p>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => {
+                                setShowProblemSearch(false);
+                                setProblemSearchQuery('');
+                              }}
+                              className="text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setShowProblemSearch(true)}
+                            className="w-full px-3 py-2 border border-dashed border-gray-300 dark:border-gray-600 rounded-md text-sm text-gray-600 dark:text-gray-400 hover:border-primary hover:text-primary transition-colors"
+                          >
+                            + Link to Problem Ticket
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* For PROBLEM tickets: show linked incidents */}
+                {ticket.type === 'PROBLEM' && (
+                  <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Linked Incidents ({ticket.incidents?.length || 0})
+                    </label>
+                    {ticket.incidents && ticket.incidents.length > 0 ? (
+                      <div className="max-h-48 overflow-y-auto space-y-2">
+                        {ticket.incidents.map((incident: any) => (
+                          <Link
+                            key={incident.id}
+                            to={`/tickets/${incident.id}`}
+                            className="block p-2 bg-cyan-50 dark:bg-cyan-900/20 border border-cyan-200 dark:border-cyan-800 rounded-lg hover:bg-cyan-100 dark:hover:bg-cyan-900/30 transition-colors"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium text-cyan-700 dark:text-cyan-300">
+                                #{incident.ticketNumber}
+                              </span>
+                              <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                incident.status === 'SOLVED' || incident.status === 'CLOSED'
+                                  ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                                  : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                              }`}>
+                                {incident.status}
+                              </span>
+                            </div>
+                            <p className="text-xs text-gray-600 dark:text-gray-400 truncate mt-1">
+                              {incident.subject}
+                            </p>
+                          </Link>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        No incidents linked to this problem yet.
+                      </p>
+                    )}
+                    {ticket.incidents && ticket.incidents.length > 0 && ticket.status !== 'SOLVED' && ticket.status !== 'CLOSED' && (
+                      <p className="mt-3 text-xs text-purple-600 dark:text-purple-400">
+                        Solving this problem will auto-solve all {ticket.incidents.length} linked incident{ticket.incidents.length !== 1 ? 's' : ''}.
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 

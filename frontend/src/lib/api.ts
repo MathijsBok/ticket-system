@@ -51,6 +51,8 @@ export const ticketApi = {
     assigneeId?: string;
     categoryId?: string;
     subject?: string;
+    type?: string;
+    problemId?: string | null;
   }) =>
     api.patch(`/tickets/${id}`, data),
 
@@ -68,6 +70,9 @@ export const ticketApi = {
 
   getMergeCandidates: (ticketId: string) =>
     api.get(`/tickets/merge-candidates/${ticketId}`),
+
+  searchProblems: (query?: string, excludeId?: string) =>
+    api.get('/tickets/problems/search', { params: { q: query, excludeId } }),
 
   generateSummary: (ticketId: string) =>
     api.post(`/tickets/${ticketId}/generate-summary`),

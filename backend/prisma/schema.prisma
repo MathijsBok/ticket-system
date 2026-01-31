@@ -45,6 +45,12 @@ enum CommentChannel {
   SYSTEM
 }
 
+enum TicketType {
+  NORMAL
+  PROBLEM
+  INCIDENT
+}
+
 model User {
   id             String    @id @default(uuid()) @db.Uuid
   clerkId        String    @unique
@@ -101,6 +107,8 @@ model Ticket {
   status          TicketStatus   @default(NEW)
   priority        TicketPriority @default(NORMAL)
   channel         TicketChannel
+  type            TicketType     @default(NORMAL)
+  problemId       String?        @db.Uuid  // For incident tickets, links to the problem ticket
   requesterId     String         @db.Uuid
   assigneeId      String?        @db.Uuid
   organizationId  String?        @db.Uuid
@@ -131,6 +139,8 @@ model Ticket {
   followUpTickets Ticket[]          @relation("RelatedTickets")
   mergedInto      Ticket?           @relation("MergedTickets", fields: [mergedIntoId], references: [id])
   mergedTickets   Ticket[]          @relation("MergedTickets")
+  problem         Ticket?           @relation("ProblemIncidents", fields: [problemId], references: [id])
+  incidents       Ticket[]          @relation("ProblemIncidents")
   comments        Comment[]
   attachments     Attachment[]
   activities      TicketActivity[]
@@ -146,6 +156,8 @@ model Ticket {
   @@index([createdAt], name: "idx_tickets_created")
   @@index([status, assigneeId], name: "idx_tickets_status_assignee")
   @@index([relatedTicketId], name: "idx_tickets_related")
+  @@index([type], name: "idx_tickets_type")
+  @@index([problemId], name: "idx_tickets_problem")
   @@index([mergedIntoId], name: "idx_tickets_merged")
 }
 

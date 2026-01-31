@@ -290,6 +290,27 @@ router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
               select: { id: true, email: true, firstName: true, lastName: true }
             }
           }
+        },
+        problem: {
+          select: {
+            id: true,
+            ticketNumber: true,
+            subject: true,
+            status: true
+          }
+        },
+        incidents: {
+          select: {
+            id: true,
+            ticketNumber: true,
+            subject: true,
+            status: true,
+            createdAt: true,
+            requester: {
+              select: { id: true, email: true, firstName: true, lastName: true }
+            }
+          },
+          orderBy: { createdAt: 'desc' }
         }
       }
     });
@@ -521,7 +542,9 @@ router.patch('/:id',
     body('priority').optional().isIn(['LOW', 'NORMAL', 'HIGH', 'URGENT']),
     body('assigneeId').optional().isUUID(),
     body('categoryId').optional().isUUID(),
-    body('subject').optional().isString().trim().isLength({ min: 1, max: 500 })
+    body('subject').optional().isString().trim().isLength({ min: 1, max: 500 }),
+    body('type').optional().isIn(['NORMAL', 'PROBLEM', 'INCIDENT']),
+    body('problemId').optional({ nullable: true }).isUUID()
   ],
   async (req: AuthRequest, res: Response) => {
     const errors = validationResult(req);
@@ -531,7 +554,7 @@ router.patch('/:id',
 
     try {
       const { id } = req.params;
-      const { status, priority, assigneeId, categoryId, subject } = req.body;
+      const { status, priority, assigneeId, categoryId, subject, type, problemId } = req.body;
       const userId = req.userId!;
 
       // Fetch current ticket to check status
@@ -622,6 +645,63 @@ router.patch('/:id',
         updateData.categoryId = categoryId;
       }
 
+      // Handle ticket type changes
+      if (type) {
+        updateData.type = type;
+        activities.push({
+          userId,
+          action: 'type_changed',
+          details: { newType: type }
+        });
+
+        // If changing to INCIDENT without a problemId, clear any existing problemId
+        // If changing to NORMAL or PROBLEM, clear problemId
+        if (type !== 'INCIDENT') {
+          updateData.problemId = null;
+        }
+      }
+
+      // Handle linking incident to problem
+      if (problemId !== undefined) {
+        if (problemId === null) {
+          // Unlinking from problem
+          updateData.problemId = null;
+          activities.push({
+            userId,
+            action: 'unlinked_from_problem',
+            details: {}
+          });
+        } else {
+          // Validate the problem ticket exists and is actually a PROBLEM type
+          const problemTicket = await prisma.ticket.findUnique({
+            where: { id: problemId },
+            select: { id: true, ticketNumber: true, type: true, subject: true }
+          });
+
+          if (!problemTicket) {
+            return res.status(400).json({ error: 'Problem ticket not found' });
+          }
+
+          if (problemTicket.type !== 'PROBLEM') {
+            return res.status(400).json({
+              error: 'Can only link incidents to PROBLEM type tickets',
+              details: `Ticket #${problemTicket.ticketNumber} is type ${problemTicket.type}`
+            });
+          }
+
+          updateData.problemId = problemId;
+          // Also ensure this ticket is marked as INCIDENT
+          if (!type) {
+            updateData.type = 'INCIDENT';
+          }
+          activities.push({
+            userId,
+            action: 'linked_to_problem',
+            details: { problemId, problemTicketNumber: problemTicket.ticketNumber }
+          });
+        }
+      }
+
       updateData.updatedAt = new Date();
 
       const ticket = await prisma.ticket.update({
@@ -653,6 +733,79 @@ router.patch('/:id',
         }).catch(err => {
           console.error('[Email] Failed to send ticket resolved email:', err);
         });
+      }
+
+      // Auto-solve all linked incidents when a PROBLEM ticket is solved
+      if (status === 'SOLVED') {
+        const fullTicket = await prisma.ticket.findUnique({
+          where: { id },
+          select: { type: true, incidents: { select: { id: true, status: true, ticketNumber: true, requester: true } } }
+        });
+
+        if (fullTicket?.type === 'PROBLEM' && fullTicket.incidents.length > 0) {
+          // Get the latest comment from this problem ticket to copy to incidents
+          const latestComment = await prisma.comment.findFirst({
+            where: { ticketId: id, isInternal: false },
+            orderBy: { createdAt: 'desc' },
+            select: { body: true, bodyPlain: true }
+          });
+
+          // Solve all linked incidents that aren't already solved
+          const incidentsToSolve = fullTicket.incidents.filter(i => i.status !== 'SOLVED' && i.status !== 'CLOSED');
+
+          for (const incident of incidentsToSolve) {
+            // Update incident status to SOLVED
+            await prisma.ticket.update({
+              where: { id: incident.id },
+              data: {
+                status: 'SOLVED',
+                solvedAt: new Date(),
+                updatedAt: new Date(),
+                activities: {
+                  create: {
+                    userId,
+                    action: 'status_changed',
+                    details: {
+                      newStatus: 'SOLVED',
+                      reason: 'auto_solved_with_problem',
+                      problemTicketId: id,
+                      problemTicketNumber: ticket.ticketNumber
+                    }
+                  }
+                }
+              }
+            });
+
+            // Copy the resolution comment to the incident
+            if (latestComment) {
+              await prisma.comment.create({
+                data: {
+                  ticketId: incident.id,
+                  authorId: userId,
+                  body: `<p><em>Resolution copied from Problem Ticket #${ticket.ticketNumber}:</em></p>${latestComment.body}`,
+                  bodyPlain: `Resolution copied from Problem Ticket #${ticket.ticketNumber}:\n${latestComment.bodyPlain}`,
+                  isInternal: false,
+                  isSystem: true,
+                  channel: 'SYSTEM'
+                }
+              });
+            }
+
+            // Send resolved email for each incident
+            if (incident.requester) {
+              sendTicketResolvedEmail({
+                id: incident.id,
+                ticketNumber: incident.ticketNumber,
+                subject: ticket.subject, // Use problem ticket subject
+                requester: incident.requester as any
+              }).catch(err => {
+                console.error(`[Email] Failed to send resolved email for incident #${incident.ticketNumber}:`, err);
+              });
+            }
+          }
+
+          console.log(`[Problem/Incident] Auto-solved ${incidentsToSolve.length} incidents for problem ticket #${ticket.ticketNumber}`);
+        }
       }
 
       return res.json(ticket);
@@ -1008,6 +1161,58 @@ router.get('/merge-candidates/:ticketId', requireAuth, requireAgent, async (req:
   } catch (error) {
     console.error('Error fetching merge candidates:', error);
     return res.status(500).json({ error: 'Failed to fetch merge candidates' });
+  }
+});
+
+// Search for PROBLEM tickets to link incidents to
+router.get('/problems/search', requireAuth, requireAgent, async (req: AuthRequest, res: Response) => {
+  try {
+    const { q, excludeId } = req.query;
+
+    const where: any = {
+      type: 'PROBLEM',
+      status: { notIn: ['CLOSED'] } // Allow linking to solved problems too
+    };
+
+    // Exclude current ticket if provided
+    if (excludeId && typeof excludeId === 'string') {
+      where.id = { not: excludeId };
+    }
+
+    // Search by ticket number or subject
+    if (q && typeof q === 'string' && q.trim()) {
+      const searchTerm = q.trim();
+      const ticketNumber = parseInt(searchTerm, 10);
+
+      if (!isNaN(ticketNumber)) {
+        // Search by ticket number
+        where.ticketNumber = ticketNumber;
+      } else {
+        // Search by subject
+        where.subject = { contains: searchTerm, mode: 'insensitive' };
+      }
+    }
+
+    const problems = await prisma.ticket.findMany({
+      where,
+      select: {
+        id: true,
+        ticketNumber: true,
+        subject: true,
+        status: true,
+        createdAt: true,
+        _count: {
+          select: { incidents: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 20
+    });
+
+    return res.json(problems);
+  } catch (error) {
+    console.error('Error searching problem tickets:', error);
+    return res.status(500).json({ error: 'Failed to search problem tickets' });
   }
 });
 
