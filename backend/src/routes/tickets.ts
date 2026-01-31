@@ -324,7 +324,8 @@ router.post('/',
     body('formResponses.*.fieldId').optional().isUUID(),
     body('formResponses.*.value').optional().isString(),
     body('userAgent').optional().isString().isLength({ max: 500 }),
-    body('shownAiSuggestion').optional().isString()
+    body('shownAiSuggestion').optional().isString(),
+    body('requesterEmail').optional().isEmail().withMessage('Invalid email format')
   ],
   async (req: AuthRequest, res: Response) => {
     const errors = validationResult(req);
@@ -333,8 +334,32 @@ router.post('/',
     }
 
     try {
-      const { subject, channel, priority, categoryId, formId, relatedTicketId, description, formResponses, userAgent, shownAiSuggestion } = req.body;
+      const { subject, channel, priority, categoryId, formId, relatedTicketId, description, formResponses, userAgent, shownAiSuggestion, requesterEmail } = req.body;
       const userId = req.userId!;
+      const userRole = req.userRole;
+
+      // Determine the requester ID
+      let requesterId = userId;
+
+      // If agent/admin provides a requesterEmail, find or create that user
+      if (requesterEmail && (userRole === 'AGENT' || userRole === 'ADMIN')) {
+        let requesterUser = await prisma.user.findUnique({
+          where: { email: requesterEmail.toLowerCase() }
+        });
+
+        if (!requesterUser) {
+          // Create new user with just the email
+          requesterUser = await prisma.user.create({
+            data: {
+              email: requesterEmail.toLowerCase(),
+              clerkId: `pending_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+              role: 'USER'
+            }
+          });
+        }
+
+        requesterId = requesterUser.id;
+      }
 
       // Get IP address from request
       const ipAddress = (req.headers['x-forwarded-for'] as string)?.split(',')[0] ||
@@ -356,7 +381,7 @@ router.post('/',
             subject,
             channel,
             priority: priority || 'NORMAL',
-            requesterId: userId,
+            requesterId,
             categoryId: categoryId || null,
             formId: formId || null,
             relatedTicketId: relatedTicketId || null,
@@ -366,7 +391,7 @@ router.post('/',
             shownAiSuggestion: shownAiSuggestion || null,
             comments: {
               create: {
-                authorId: userId,
+                authorId: requesterId,
                 body: description,
                 bodyPlain: description,
                 channel: 'WEB',
@@ -375,7 +400,7 @@ router.post('/',
             },
             activities: {
               create: {
-                userId,
+                userId: requesterId,
                 action: 'ticket_created',
                 details: { subject, channel }
               }

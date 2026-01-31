@@ -92,6 +92,42 @@ router.get('/agents/search', requireAuth, async (req: AuthRequest, res: Response
   }
 });
 
+// Search all users (for agents creating tickets on behalf of users)
+router.get('/search', requireAuth, requireAgent, async (req: AuthRequest, res: Response) => {
+  try {
+    const { q } = req.query;
+    const searchQuery = (q as string || '').toLowerCase().trim();
+
+    if (searchQuery.length < 2) {
+      return res.json([]);
+    }
+
+    const users = await prisma.user.findMany({
+      where: {
+        OR: [
+          { firstName: { contains: searchQuery, mode: 'insensitive' } },
+          { lastName: { contains: searchQuery, mode: 'insensitive' } },
+          { email: { contains: searchQuery, mode: 'insensitive' } }
+        ]
+      },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true
+      },
+      orderBy: { email: 'asc' },
+      take: 10
+    });
+
+    return res.json(users);
+  } catch (error) {
+    console.error('Error searching users:', error);
+    return res.status(500).json({ error: 'Failed to search users' });
+  }
+});
+
 // Get all users (admin only)
 router.get('/', requireAuth, requireAdmin, async (_req: AuthRequest, res: Response) => {
   try {

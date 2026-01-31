@@ -46,6 +46,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       // Agent view: show agent-facing navigation
       nav.push(
         { name: 'Tickets', href: '/agent' },
+        { name: 'New Ticket', href: '/tickets/new' },
         { name: 'Macros', href: '/admin/macros' },
         { name: 'Email Templates', href: '/admin/email-templates' },
         { name: 'Bug Reports', href: '/admin/bugs' }
@@ -54,6 +55,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       // Admin view: show all admin navigation in the main nav array
       nav.push(
         { name: 'Dashboard', href: '/agent' },
+        { name: 'New Ticket', href: '/tickets/new' },
         { name: 'Analytics', href: '/admin/analytics' },
         { name: 'Forms', href: '/admin/forms' },
         { name: 'Field Library', href: '/admin/fields' },

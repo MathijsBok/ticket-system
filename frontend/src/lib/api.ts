@@ -294,6 +294,9 @@ export const userApi = {
   searchAgents: (query: string) =>
     api.get('/users/agents/search', { params: { q: query } }),
 
+  searchUsers: (query: string) =>
+    api.get('/users/search', { params: { q: query } }),
+
   getAll: () =>
     api.get('/users'),
 
