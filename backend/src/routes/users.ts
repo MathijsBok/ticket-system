@@ -140,6 +140,7 @@ router.get('/', requireAuth, requireAdmin, async (_req: AuthRequest, res: Respon
         lastName: true,
         role: true,
         timezone: true,
+        timezoneOffset: true,
         country: true,
         lastSeenAt: true,
         isBlocked: true,
