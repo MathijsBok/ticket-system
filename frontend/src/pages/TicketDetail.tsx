@@ -291,11 +291,26 @@ const TicketDetail: React.FC = () => {
     return !plainText.trim();
   };
 
-  const handleReply = (e: React.FormEvent) => {
+  const handleReply = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isHtmlEmpty(replyBody)) {
       toast.error('Reply cannot be empty');
       return;
+    }
+
+    // If ticket is NEW and agent is replying (not internal note), auto-assign and set to OPEN
+    if (ticket?.status === 'NEW' && currentUser?.id && !isInternal) {
+      try {
+        await ticketApi.update(id!, {
+          status: 'OPEN',
+          assigneeId: currentUser.id
+        });
+        queryClient.invalidateQueries({ queryKey: ['ticket', id] });
+        queryClient.invalidateQueries({ queryKey: ['agentTickets'] });
+        queryClient.invalidateQueries({ queryKey: ['ticketStats'] });
+      } catch {
+        // Continue with reply even if assignment fails
+      }
     }
 
     replyMutation.mutate({
