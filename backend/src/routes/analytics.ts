@@ -1,11 +1,11 @@
 import { Router, Response } from 'express';
 import { prisma } from '../lib/prisma';
-import { requireAuth, requireAdmin, AuthRequest } from '../middleware/auth';
+import { requireAuth, requireAdmin, requireAgent, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
 // Get agent performance analytics (admin only)
-router.get('/agents', requireAuth, requireAdmin, async (_req: AuthRequest, res: Response) => {
+router.get('/agents', requireAuth, requireAgent, async (_req: AuthRequest, res: Response) => {
   try {
     const agents = await prisma.user.findMany({
       where: {
@@ -79,7 +79,7 @@ router.get('/agents', requireAuth, requireAdmin, async (_req: AuthRequest, res: 
 });
 
 // Get system-wide statistics (admin only)
-router.get('/system', requireAuth, requireAdmin, async (_req: AuthRequest, res: Response) => {
+router.get('/system', requireAuth, requireAgent, async (_req: AuthRequest, res: Response) => {
   try {
     const [
       totalTickets,
@@ -146,7 +146,7 @@ router.get('/system', requireAuth, requireAdmin, async (_req: AuthRequest, res: 
 });
 
 // Get agent session history (admin only)
-router.get('/agents/:agentId/sessions', requireAuth, requireAdmin, async (req: AuthRequest, res: Response) => {
+router.get('/agents/:agentId/sessions', requireAuth, requireAgent, async (req: AuthRequest, res: Response) => {
   try {
     const { agentId } = req.params;
     const limit = parseInt(req.query.limit as string) || 50;
@@ -170,7 +170,7 @@ router.get('/agents/:agentId/sessions', requireAuth, requireAdmin, async (req: A
 });
 
 // Get tickets solved per month for a specific year
-router.get('/solved-by-month', requireAuth, requireAdmin, async (req: AuthRequest, res: Response) => {
+router.get('/solved-by-month', requireAuth, requireAgent, async (req: AuthRequest, res: Response) => {
   try {
     const year = parseInt(req.query.year as string) || new Date().getFullYear();
 
@@ -743,7 +743,7 @@ router.post('/backfill-forms', requireAuth, requireAdmin, async (_req: AuthReque
 });
 
 // Get tickets by country per year
-router.get('/countries-by-year', requireAuth, requireAdmin, async (req: AuthRequest, res: Response) => {
+router.get('/countries-by-year', requireAuth, requireAgent, async (req: AuthRequest, res: Response) => {
   try {
     const year = parseInt(req.query.year as string) || new Date().getFullYear();
 
@@ -785,7 +785,7 @@ router.get('/countries-by-year', requireAuth, requireAdmin, async (req: AuthRequ
 });
 
 // Get tickets by form per year
-router.get('/forms-by-year', requireAuth, requireAdmin, async (req: AuthRequest, res: Response) => {
+router.get('/forms-by-year', requireAuth, requireAgent, async (req: AuthRequest, res: Response) => {
   try {
     const year = parseInt(req.query.year as string) || new Date().getFullYear();
 
@@ -830,7 +830,7 @@ router.get('/forms-by-year', requireAuth, requireAdmin, async (req: AuthRequest,
 });
 
 // Get tickets by channel with year filter (admin only)
-router.get('/channel-by-year', requireAuth, requireAdmin, async (req: AuthRequest, res: Response) => {
+router.get('/channel-by-year', requireAuth, requireAgent, async (req: AuthRequest, res: Response) => {
   try {
     const year = req.query.year ? parseInt(req.query.year as string) : new Date().getFullYear();
     const startDate = new Date(year, 0, 1);
@@ -871,7 +871,7 @@ router.get('/channel-by-year', requireAuth, requireAdmin, async (req: AuthReques
 });
 
 // Get tickets by priority with year filter (admin only)
-router.get('/priority-by-year', requireAuth, requireAdmin, async (req: AuthRequest, res: Response) => {
+router.get('/priority-by-year', requireAuth, requireAgent, async (req: AuthRequest, res: Response) => {
   try {
     const year = req.query.year ? parseInt(req.query.year as string) : new Date().getFullYear();
     const startDate = new Date(year, 0, 1);
@@ -913,7 +913,7 @@ router.get('/priority-by-year', requireAuth, requireAdmin, async (req: AuthReque
 });
 
 // Get tickets by day of week with year filter (admin only)
-router.get('/weekday-by-year', requireAuth, requireAdmin, async (req: AuthRequest, res: Response) => {
+router.get('/weekday-by-year', requireAuth, requireAgent, async (req: AuthRequest, res: Response) => {
   try {
     const year = req.query.year ? parseInt(req.query.year as string) : new Date().getFullYear();
     const startDate = new Date(year, 0, 1);
@@ -955,7 +955,7 @@ router.get('/weekday-by-year', requireAuth, requireAdmin, async (req: AuthReques
 });
 
 // Get tickets by hour of day with year filter (admin only)
-router.get('/hourly-by-year', requireAuth, requireAdmin, async (req: AuthRequest, res: Response) => {
+router.get('/hourly-by-year', requireAuth, requireAgent, async (req: AuthRequest, res: Response) => {
   try {
     const year = req.query.year ? parseInt(req.query.year as string) : new Date().getFullYear();
     const startDate = new Date(year, 0, 1);
@@ -997,7 +997,7 @@ router.get('/hourly-by-year', requireAuth, requireAdmin, async (req: AuthRequest
 });
 
 // Get dashboard analytics with detailed charts data (admin only)
-router.get('/dashboard', requireAuth, requireAdmin, async (_req: AuthRequest, res: Response) => {
+router.get('/dashboard', requireAuth, requireAgent, async (_req: AuthRequest, res: Response) => {
   try {
     const [
       totalTickets,
@@ -1331,7 +1331,7 @@ router.get('/dashboard', requireAuth, requireAdmin, async (_req: AuthRequest, re
 
 // Get historical backlog by status (daily for 30 days, weekly for 12 weeks)
 // Now reads from BacklogSnapshot table for accurate historical data
-router.get('/backlog-history', requireAuth, requireAdmin, async (_req: AuthRequest, res: Response) => {
+router.get('/backlog-history', requireAuth, requireAgent, async (_req: AuthRequest, res: Response) => {
   try {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -1585,7 +1585,7 @@ router.post('/import-backlog', requireAuth, requireAdmin, async (req: AuthReques
 });
 
 // Debug endpoint to investigate a specific ticket's country data issue
-router.get('/debug-ticket/:ticketNumber', requireAuth, requireAdmin, async (req: AuthRequest, res: Response) => {
+router.get('/debug-ticket/:ticketNumber', requireAuth, requireAgent, async (req: AuthRequest, res: Response) => {
   try {
     const ticketNumber = parseInt(req.params.ticketNumber);
 

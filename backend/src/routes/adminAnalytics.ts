@@ -1,11 +1,11 @@
 import { Router, Response } from 'express';
 import { prisma } from '../lib/prisma';
-import { requireAuth, requireAdmin, AuthRequest } from '../middleware/auth';
+import { requireAuth, requireAdmin, requireAgent, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
 // Get comprehensive ticket analytics with agent contributions
-router.get('/ticket-contributions', requireAuth, requireAdmin, async (_req: AuthRequest, res: Response) => {
+router.get('/ticket-contributions', requireAuth, requireAgent, async (_req: AuthRequest, res: Response) => {
   try {
     // Get all tickets with their time entries and comments
     const tickets = await prisma.ticket.findMany({
@@ -127,7 +127,7 @@ router.get('/ticket-contributions', requireAuth, requireAdmin, async (_req: Auth
 });
 
 // Get agent performance metrics
-router.get('/agent-performance', requireAuth, requireAdmin, async (req: AuthRequest, res: Response) => {
+router.get('/agent-performance', requireAuth, requireAgent, async (req: AuthRequest, res: Response) => {
   try {
     const year = parseInt(req.query.year as string) || new Date().getFullYear();
     const startDate = new Date(year, 0, 1);
