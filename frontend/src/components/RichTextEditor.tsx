@@ -71,14 +71,14 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
           border-color: rgb(75, 85, 99);
         }
         .dark .rich-text-editor .ql-container {
-          background-color: white;
+          background-color: rgb(31, 41, 55);
           border-color: rgb(75, 85, 99);
         }
         .dark .rich-text-editor .ql-editor {
-          color: #1e293b;
+          color: rgb(229, 231, 235);
         }
         .dark .rich-text-editor .ql-editor.ql-blank::before {
-          color: rgb(148, 163, 184);
+          color: rgb(107, 114, 128);
         }
         .dark .rich-text-editor .ql-stroke {
           stroke: rgb(209, 213, 219) !important;

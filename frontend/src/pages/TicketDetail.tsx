@@ -1383,14 +1383,14 @@ const TicketDetail: React.FC = () => {
                           <button
                             type="submit"
                             disabled={replyMutation.isPending}
-                            className="inline-flex items-center px-4 py-2 border border-transparent rounded-l-md shadow-sm text-sm font-medium bg-gray-800 dark:bg-gray-700 text-white hover:bg-gray-700 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            className="inline-flex items-center px-4 py-2 border border-transparent rounded-l-md shadow-sm text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                           >
                             {replyMutation.isPending ? 'Sending...' : `Submit as ${submitStatus === 'ON_HOLD' ? 'On-hold' : submitStatus.charAt(0) + submitStatus.slice(1).toLowerCase()}`}
                           </button>
                           <button
                             type="button"
                             onClick={() => setShowSubmitDropdown(!showSubmitDropdown)}
-                            className="inline-flex items-center px-2 py-2 border-l border-gray-600 rounded-r-md bg-gray-800 dark:bg-gray-700 text-white hover:bg-gray-700 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors"
+                            className="inline-flex items-center px-2 py-2 border-l border-primary/30 rounded-r-md bg-primary text-primary-foreground hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors"
                           >
                             <svg className={`w-4 h-4 transition-transform ${showSubmitDropdown ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
@@ -1404,8 +1404,8 @@ const TicketDetail: React.FC = () => {
                             {[
                               { value: 'OPEN', label: 'Open', color: 'bg-red-500' },
                               { value: 'PENDING', label: 'Pending', color: 'bg-blue-500' },
-                              { value: 'ON_HOLD', label: 'On-hold', color: 'bg-gray-800 dark:bg-gray-400' },
-                              { value: 'SOLVED', label: 'Solved', color: 'bg-olive-500 bg-[#6b7280]' }
+                              { value: 'ON_HOLD', label: 'On-hold', color: 'bg-gray-500' },
+                              { value: 'SOLVED', label: 'Solved', color: 'bg-green-500' }
                             ].map((status) => (
                               <button
                                 key={status.value}
