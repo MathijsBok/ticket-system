@@ -277,7 +277,7 @@ const UserTable: React.FC<UserTableProps> = ({
                 {user._count?.ticketsCreated || 0}
               </td>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                {user.timezone || '-'}
+                {user.timezoneOffset ? `UTC${user.timezoneOffset.startsWith('-') ? '' : '+'}${user.timezoneOffset.replace(':00', '').replace(':30', '.5')}` : '-'}
               </td>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                 {user.country || '-'}
@@ -491,8 +491,8 @@ const AdminUsers: React.FC = () => {
           bValue = b.lastSeenAt ? new Date(b.lastSeenAt).getTime() : 0;
           break;
         case 'timezone':
-          aValue = (a.timezone || '').toLowerCase();
-          bValue = (b.timezone || '').toLowerCase();
+          aValue = a.timezoneOffset || '';
+          bValue = b.timezoneOffset || '';
           break;
         case 'country':
           aValue = (a.country || '').toLowerCase();
