@@ -573,3 +573,22 @@ export const chatApi = {
   getSession: (id: string) =>
     api.get(`/chat/sessions/${id}`)
 };
+
+// Database API (admin only)
+export const databaseApi = {
+  import: (file: File, confirmImport: string) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('confirmImport', confirmImport);
+    return api.post('/database/import', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 600000 // 10 minute timeout for large imports
+    });
+  },
+
+  export: () =>
+    api.get('/database/export', {
+      responseType: 'blob',
+      timeout: 600000 // 10 minute timeout for large exports
+    })
+};

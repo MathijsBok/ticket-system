@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { settingsApi, zendeskApi, exportApi, apiKeyApi, analyticsApi, adminAnalyticsApi, aiAnalyticsApi, macroApi } from '../lib/api';
+import { settingsApi, zendeskApi, exportApi, apiKeyApi, analyticsApi, adminAnalyticsApi, aiAnalyticsApi, macroApi, databaseApi } from '../lib/api';
 import Layout from '../components/Layout';
 
 type TabType = 'notifications' | 'automation' | 'sendgrid' | 'import' | 'export' | 'api' | 'maintenance' | 'widget';
@@ -38,6 +38,7 @@ const AdminSettings: React.FC = () => {
   const userFileInputRef = useRef<HTMLInputElement>(null);
   const backlogFileInputRef = useRef<HTMLInputElement>(null);
   const macroFileInputRef = useRef<HTMLInputElement>(null);
+  const databaseFileInputRef = useRef<HTMLInputElement>(null);
 
   // Get active tab from URL, default to 'notifications'
   const tabParam = searchParams.get('tab') as TabType | null;
@@ -118,6 +119,18 @@ const AdminSettings: React.FC = () => {
     message: string;
     results: Array<{ date: string; new: number; open: number; pending: number; hold: number; total: number; status: string }>;
   } | null>(null);
+  // Database Import/Export state
+  const [dbImportLoading, setDbImportLoading] = useState(false);
+  const [dbExportLoading, setDbExportLoading] = useState(false);
+  const [dbImportResult, setDbImportResult] = useState<{
+    success: boolean;
+    message: string;
+    filename?: string;
+    size?: number;
+    warnings?: string;
+  } | null>(null);
+  const [showDbImportConfirm, setShowDbImportConfirm] = useState(false);
+  const [pendingDbFile, setPendingDbFile] = useState<File | null>(null);
   // Widget state
   const [widgetForm, setWidgetForm] = useState({
     chatWidgetEnabled: false,
@@ -575,6 +588,71 @@ const AdminSettings: React.FC = () => {
       });
     } finally {
       setBackfillAiSummaryLoading(false);
+    }
+  };
+
+  const handleDbFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setPendingDbFile(file);
+      setShowDbImportConfirm(true);
+    }
+    // Reset the input
+    if (databaseFileInputRef.current) {
+      databaseFileInputRef.current.value = '';
+    }
+  };
+
+  const handleDbImport = async () => {
+    if (!pendingDbFile) return;
+
+    setDbImportLoading(true);
+    setDbImportResult(null);
+    setShowDbImportConfirm(false);
+
+    try {
+      const response = await databaseApi.import(pendingDbFile, 'CONFIRM_DATABASE_IMPORT');
+      setDbImportResult(response.data);
+      toast.success(response.data.message);
+    } catch (error: any) {
+      console.error('Failed to import database:', error);
+      const errorMsg = error.response?.data?.error || 'Failed to import database';
+      toast.error(errorMsg);
+      setDbImportResult({
+        success: false,
+        message: errorMsg,
+        warnings: error.response?.data?.details
+      });
+    } finally {
+      setDbImportLoading(false);
+      setPendingDbFile(null);
+    }
+  };
+
+  const handleDbExport = async () => {
+    setDbExportLoading(true);
+    try {
+      const response = await databaseApi.export();
+      // Create download link
+      const blob = new Blob([response.data], { type: 'application/octet-stream' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      // Get filename from Content-Disposition header or generate one
+      const contentDisposition = response.headers['content-disposition'];
+      const filenameMatch = contentDisposition?.match(/filename="([^"]+)"/);
+      const filename = filenameMatch?.[1] || `database_export_${new Date().toISOString().replace(/[:.]/g, '-')}.dump`;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      toast.success('Database exported successfully');
+    } catch (error) {
+      console.error('Failed to export database:', error);
+      toast.error('Failed to export database');
+    } finally {
+      setDbExportLoading(false);
     }
   };
 
@@ -3131,6 +3209,148 @@ const AdminSettings: React.FC = () => {
                   </div>
                 )}
               </div>
+
+              {/* Database Import/Export */}
+              <div className="p-6 border border-red-200 dark:border-red-700 rounded-lg bg-red-50/50 dark:bg-red-900/10">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-lg">
+                        <svg className="w-6 h-6 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+                        </svg>
+                      </div>
+                      <h3 className="text-md font-medium text-gray-900 dark:text-white">Database Import/Export</h3>
+                    </div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                      Import or export the entire database. Useful for migrations and backups.
+                    </p>
+                    <p className="text-xs text-red-600 dark:text-red-400 font-medium">
+                      Warning: Importing a database will REPLACE ALL existing data!
+                    </p>
+                  </div>
+                  <div className="flex gap-2 ml-4">
+                    <input
+                      ref={databaseFileInputRef}
+                      type="file"
+                      accept=".dump,.sql,.backup"
+                      onChange={handleDbFileSelect}
+                      className="hidden"
+                    />
+                    <button
+                      onClick={() => databaseFileInputRef.current?.click()}
+                      disabled={dbImportLoading}
+                      className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {dbImportLoading ? (
+                        <>
+                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Importing...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                          </svg>
+                          Import
+                        </>
+                      )}
+                    </button>
+                    <button
+                      onClick={handleDbExport}
+                      disabled={dbExportLoading}
+                      className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {dbExportLoading ? (
+                        <>
+                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Exporting...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                          </svg>
+                          Export
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {dbImportResult && (
+                  <div className={`mt-4 p-4 rounded-md ${
+                    dbImportResult.success
+                      ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
+                      : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+                  }`}>
+                    <p className={`text-sm font-medium ${
+                      dbImportResult.success
+                        ? 'text-green-800 dark:text-green-300'
+                        : 'text-red-800 dark:text-red-300'
+                    }`}>
+                      {dbImportResult.message}
+                    </p>
+                    {dbImportResult.filename && (
+                      <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                        File: {dbImportResult.filename} ({dbImportResult.size ? (dbImportResult.size / 1024 / 1024).toFixed(2) + ' MB' : ''})
+                      </p>
+                    )}
+                    {dbImportResult.warnings && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+                        Warnings: {dbImportResult.warnings}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Import Confirmation Modal */}
+              {showDbImportConfirm && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full">
+                        <svg className="w-6 h-6 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                      </div>
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                        Confirm Database Import
+                      </h3>
+                    </div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                      You are about to import: <strong>{pendingDbFile?.name}</strong>
+                    </p>
+                    <p className="text-sm text-red-600 dark:text-red-400 font-medium mb-6">
+                      This action will PERMANENTLY REPLACE ALL DATA in the database. This cannot be undone!
+                    </p>
+                    <div className="flex gap-3 justify-end">
+                      <button
+                        onClick={() => {
+                          setShowDbImportConfirm(false);
+                          setPendingDbFile(null);
+                        }}
+                        className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleDbImport}
+                        className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                      >
+                        Yes, Replace Database
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

@@ -34,6 +34,7 @@ import apiKeyRoutes from './routes/apiKeys';
 import externalApiRoutes from './routes/externalApi';
 import aiSummaryAnalyticsRoutes from './routes/aiSummaryAnalytics';
 import chatRoutes from './routes/chat';
+import databaseRoutes from './routes/database';
 
 // Import automation jobs
 import { initializeTicketAutomation } from './jobs/ticketAutomation';
@@ -85,6 +86,7 @@ app.use('/api/export', exportRoutes);
 app.use('/api/api-keys', apiKeyRoutes);
 app.use('/api/ai-summary-analytics', aiSummaryAnalyticsRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/database', databaseRoutes);
 
 // Health check
 app.get('/health', (_req, res) => {
