@@ -372,16 +372,7 @@ router.post('/',
                        (req.headers['x-country'] as string) ||
                        null;
 
-      console.log('[Ticket Create] IP detection:', {
-        xForwardedFor: req.headers['x-forwarded-for'],
-        remoteAddress: req.socket.remoteAddress,
-        resolvedIP: ipAddress,
-        cfCountry,
-        xCountry: req.headers['x-country']
-      });
-
       const country = await getCountryFromIP(ipAddress, cfCountry);
-      console.log('[Ticket Create] Country resolved:', country);
 
       // Update user's country if not already set
       if (country && requesterId) {
