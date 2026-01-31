@@ -638,10 +638,7 @@ const TicketDetail: React.FC = () => {
               </span>
               {/* Ticket Type Badge */}
               {ticket.type && ticket.type !== 'NORMAL' && (
-                <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                  ticket.type === 'PROBLEM' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' :
-                  'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200'
-                }`}>
+                <span className="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-purple-50 text-purple-600 dark:bg-purple-800 dark:text-purple-200">
                   {ticket.type}
                 </span>
               )}
