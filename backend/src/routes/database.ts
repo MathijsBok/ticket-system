@@ -65,24 +65,46 @@ router.post('/import', requireAuth, requireAdmin, upload.single('file'), async (
     const [, user, password, host, port, database] = urlMatch;
     const dbPort = port || '5432';
 
-    // Determine if it's a custom format dump or SQL
-    const ext = path.extname(req.file.originalname).toLowerCase();
-    let command: string;
-
     // Build environment with password if provided
     const env = { ...process.env };
     if (password) {
       env.PGPASSWORD = password;
     }
 
+    const psqlUser = user || 'postgres';
+
+    // Step 1: Drop all tables in public schema to ensure clean import
+    console.log('[Database Import] Dropping all existing tables...');
+    const dropTablesSQL = `
+      DO $$ DECLARE
+        r RECORD;
+      BEGIN
+        FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP
+          EXECUTE 'DROP TABLE IF EXISTS public.' || quote_ident(r.tablename) || ' CASCADE';
+        END LOOP;
+      END $$;
+    `;
+    const dropCommand = `psql -h ${host} -p ${dbPort} -U ${psqlUser} -d ${database} -c "${dropTablesSQL.replace(/\n/g, ' ')}"`;
+
+    try {
+      await execAsync(dropCommand, { env });
+      console.log('[Database Import] All tables dropped successfully');
+    } catch (dropError: any) {
+      console.log('[Database Import] Warning during drop tables:', dropError.message);
+      // Continue anyway - tables might not exist
+    }
+
+    // Step 2: Import the database
+    const ext = path.extname(req.file.originalname).toLowerCase();
+    let command: string;
+
     if (ext === '.sql') {
       // Plain SQL file - use psql
-      command = `psql -h ${host} -p ${dbPort} -U ${user || 'postgres'} -d ${database} -f "${tempFilePath}"`;
+      command = `psql -h ${host} -p ${dbPort} -U ${psqlUser} -d ${database} -f "${tempFilePath}"`;
     } else {
       // Custom format dump - use pg_restore
-      // --clean drops existing objects, --if-exists prevents errors if objects don't exist
       // --no-owner and --no-acl ignore ownership and permissions
-      command = `pg_restore -h ${host} -p ${dbPort} -U ${user || 'postgres'} -d ${database} --clean --if-exists --no-owner --no-acl "${tempFilePath}"`;
+      command = `pg_restore -h ${host} -p ${dbPort} -U ${psqlUser} -d ${database} --no-owner --no-acl "${tempFilePath}"`;
     }
 
     console.log(`[Database Import] Executing: ${ext === '.sql' ? 'psql' : 'pg_restore'}...`);
