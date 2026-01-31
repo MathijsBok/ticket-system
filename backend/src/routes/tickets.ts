@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma';
 import { requireAuth, requireAgent, AuthRequest } from '../middleware/auth';
 import { generateTicketSummary, generateKnowledgeBasedSolution, getKnowledgeContent } from '../services/aiService';
 import { getOrCreateEmailThread, sendTicketCreatedEmail, sendTicketResolvedEmail } from '../services/emailService';
-import { getCountryFromIP } from '../lib/geolocation';
+import { getCountryFromIP, getTimezoneFromCountry, getCountryFromTimezone } from '../lib/geolocation';
 
 const router = Router();
 
@@ -374,17 +374,45 @@ router.post('/',
 
       const country = await getCountryFromIP(ipAddress, cfCountry);
 
-      // Update user's country if not already set
-      if (country && requesterId) {
+      // Always update user's country and fill in missing timezone data
+      if (requesterId) {
         const requesterUser = await prisma.user.findUnique({
           where: { id: requesterId },
-          select: { country: true }
+          select: { country: true, timezoneOffset: true }
         });
-        if (requesterUser && !requesterUser.country) {
-          await prisma.user.update({
-            where: { id: requesterId },
-            data: { country }
-          });
+
+        if (requesterUser) {
+          const updateData: { country?: string; timezoneOffset?: string } = {};
+
+          // Always update country if we detected one
+          if (country) {
+            updateData.country = country;
+          }
+
+          // If user has country but no timezone, derive timezone from country
+          const effectiveCountry = country || requesterUser.country;
+          if (effectiveCountry && !requesterUser.timezoneOffset) {
+            const derivedTimezone = getTimezoneFromCountry(effectiveCountry);
+            if (derivedTimezone) {
+              updateData.timezoneOffset = derivedTimezone;
+            }
+          }
+
+          // If user has timezone but no country, derive country from timezone
+          if (!effectiveCountry && requesterUser.timezoneOffset) {
+            const derivedCountry = getCountryFromTimezone(requesterUser.timezoneOffset);
+            if (derivedCountry) {
+              updateData.country = derivedCountry;
+            }
+          }
+
+          // Update if we have any data to update
+          if (Object.keys(updateData).length > 0) {
+            await prisma.user.update({
+              where: { id: requesterId },
+              data: updateData
+            });
+          }
         }
       }
 
