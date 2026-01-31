@@ -277,7 +277,7 @@ const UserTable: React.FC<UserTableProps> = ({
                 {user._count?.ticketsCreated || 0}
               </td>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                {user.timezoneOffset ? `UTC${user.timezoneOffset.startsWith('-') ? '' : '+'}${user.timezoneOffset.replace(':00', '').replace(':30', '.5')}` : '-'}
+                {user.timezoneOffset || '-'}
               </td>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                 {user.country || '-'}
