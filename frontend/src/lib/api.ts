@@ -29,6 +29,10 @@ export const ticketApi = {
     sortField?: string;
     sortDirection?: string;
     search?: string;
+    myRequests?: boolean;
+    myAssigned?: boolean;
+    unassigned?: boolean;
+    solvedAfter?: string;
   }) =>
     api.get('/tickets', { params }),
 
@@ -57,7 +61,7 @@ export const ticketApi = {
   }) =>
     api.patch(`/tickets/${id}`, data),
 
-  bulkUpdate: (data: { ticketIds: string[]; status?: string }) =>
+  bulkUpdate: (data: { ticketIds: string[]; status?: string; assigneeId?: string | null }) =>
     api.patch('/tickets/bulk/update', data),
 
   bulkDelete: (ticketIds: string[]) =>

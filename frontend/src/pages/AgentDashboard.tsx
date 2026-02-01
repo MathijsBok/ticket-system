@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useClerk, useUser } from '@clerk/clerk-react';
 import { ticketApi, sessionApi, userApi } from '../lib/api';
 import Layout from '../components/Layout';
+import ViewsSidebar from '../components/ViewsSidebar';
 import { format } from 'date-fns';
 import { useNotification } from '../contexts/NotificationContext';
 import { useView } from '../contexts/ViewContext';
@@ -25,12 +26,21 @@ const AgentDashboard: React.FC = () => {
   // Use currentView for admins (respects "View as" switcher), userRole for others
   const effectiveRole = userRole === 'ADMIN' ? currentView : userRole;
   const [statusFilter, setStatusFilter] = useState<string>('OPEN');
+  const [viewBaseStatus, setViewBaseStatus] = useState<string>('OPEN'); // Track view's base status
   const [typeFilter, setTypeFilter] = useState<string>('');
+  const [myRequests, setMyRequests] = useState<boolean>(false);
+  const [myAssigned, setMyAssigned] = useState<boolean>(false);
+  const [unassigned, setUnassigned] = useState<boolean>(false);
+  const [solvedAfter, setSolvedAfter] = useState<string | undefined>(undefined);
+  const [activeViewId, setActiveViewId] = useState<string>('open');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [selectedTickets, setSelectedTickets] = useState<string[]>([]);
   const [bulkStatus, setBulkStatus] = useState<string>('');
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  const [bulkAssignee, setBulkAssignee] = useState<string>('');
+  const [showAssignDropdown, setShowAssignDropdown] = useState(false);
   const [sortField, setSortField] = useState<SortField>('updatedAt');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [currentPage, setCurrentPage] = useState(1);
@@ -140,7 +150,7 @@ const AgentDashboard: React.FC = () => {
   }, [searchQuery]);
 
   const { data: ticketResponse, isLoading } = useQuery({
-    queryKey: ['agentTickets', statusFilter, typeFilter, currentPage, itemsPerPage, sortField, sortDirection, debouncedSearch],
+    queryKey: ['agentTickets', statusFilter, typeFilter, currentPage, itemsPerPage, sortField, sortDirection, debouncedSearch, myRequests, myAssigned, unassigned, solvedAfter],
     queryFn: async () => {
       const response = await ticketApi.getAll({
         status: statusFilter || undefined,
@@ -149,7 +159,11 @@ const AgentDashboard: React.FC = () => {
         limit: itemsPerPage,
         sortField,
         sortDirection,
-        search: debouncedSearch || undefined
+        search: debouncedSearch || undefined,
+        myRequests: myRequests || undefined,
+        myAssigned: myAssigned || undefined,
+        unassigned: unassigned || undefined,
+        solvedAfter: solvedAfter || undefined
       });
       return response.data;
     },
@@ -167,6 +181,15 @@ const AgentDashboard: React.FC = () => {
     }
   });
 
+  // Fetch agents for bulk assign dropdown
+  const { data: agents } = useQuery({
+    queryKey: ['agents'],
+    queryFn: async () => {
+      const response = await userApi.getAgents();
+      return response.data;
+    }
+  });
+
   const handleSort = (field: SortField) => {
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
@@ -180,7 +203,7 @@ const AgentDashboard: React.FC = () => {
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [statusFilter, typeFilter, debouncedSearch]);
+  }, [statusFilter, typeFilter, debouncedSearch, myRequests, myAssigned, unassigned, solvedAfter]);
 
   // Pagination from server response
   const totalTickets = pagination?.totalCount || 0;
@@ -204,13 +227,14 @@ const AgentDashboard: React.FC = () => {
   };
 
   const bulkUpdateMutation = useMutation({
-    mutationFn: async (data: { ticketIds: string[]; status?: string }) => {
+    mutationFn: async (data: { ticketIds: string[]; status?: string; assigneeId?: string | null }) => {
       return await ticketApi.bulkUpdate(data);
     },
     onSuccess: () => {
       toast.success('Tickets updated successfully');
       setSelectedTickets([]);
       setBulkStatus('');
+      setBulkAssignee('');
       queryClient.invalidateQueries({ queryKey: ['agentTickets'] });
       queryClient.invalidateQueries({ queryKey: ['ticketStats'] });
     },
@@ -259,6 +283,13 @@ const AgentDashboard: React.FC = () => {
   const handleBulkStatusChange = () => {
     if (!bulkStatus || selectedTickets.length === 0) return;
     bulkUpdateMutation.mutate({ ticketIds: selectedTickets, status: bulkStatus });
+  };
+
+  const handleBulkAssign = () => {
+    if (selectedTickets.length === 0) return;
+    // Empty string means unassign, otherwise assign to selected agent
+    const assigneeId = bulkAssignee === '' ? null : bulkAssignee;
+    bulkUpdateMutation.mutate({ ticketIds: selectedTickets, assigneeId });
   };
 
   const handleBulkDelete = () => {
@@ -331,22 +362,6 @@ const AgentDashboard: React.FC = () => {
     return colors[status] || colors.NEW;
   };
 
-  const statusFilters = [
-    { value: '', label: 'All Tickets' },
-    { value: 'NEW', label: 'New' },
-    { value: 'OPEN', label: 'Open' },
-    { value: 'PENDING', label: 'Pending' },
-    { value: 'ON_HOLD', label: 'On Hold' },
-    { value: 'SOLVED', label: 'Solved' },
-    { value: 'CLOSED', label: 'Closed' }
-  ];
-
-  // Helper to get the correct stats key for a status value
-  const getStatsKey = (status: string): string => {
-    if (status === 'ON_HOLD') return 'onHold';
-    return status.toLowerCase();
-  };
-
   const handleToggleNotifications = async () => {
     if (!isSupported) {
       return;
@@ -362,10 +377,40 @@ const AgentDashboard: React.FC = () => {
     }
   };
 
+  // Handle view change from sidebar
+  const handleViewChange = (viewId: string, filter: { status?: string | string[]; type?: string; assignee?: string; createdByMe?: boolean; solvedAfter?: string }) => {
+    setActiveViewId(viewId);
+    // Handle status filter - can be string, array, or empty
+    // Also track the view's base status so "All" button respects view constraints
+    const baseStatus = Array.isArray(filter.status) ? filter.status.join(',') : (filter.status || '');
+    setStatusFilter(baseStatus);
+    setViewBaseStatus(baseStatus);
+    setTypeFilter(filter.type || '');
+    // Handle personal filters
+    setMyRequests(filter.createdByMe === true);
+    setMyAssigned(filter.assignee === 'me');
+    setUnassigned(filter.assignee === 'unassigned');
+    // Handle date filters
+    setSolvedAfter(filter.solvedAfter);
+    setCurrentPage(1);
+  };
+
   return (
-    <Layout>
-      <div className="space-y-6">
-        {/* Header */}
+    <Layout hidePadding>
+      <div className="flex h-[calc(100vh-64px)]">
+        {/* Views Sidebar */}
+        <ViewsSidebar
+          stats={stats}
+          activeView={activeViewId}
+          onViewChange={handleViewChange}
+          isCollapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+        />
+
+        {/* Main Content */}
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="space-y-6">
+            {/* Header */}
         <div className="flex justify-between items-start">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{effectiveRole === 'ADMIN' ? 'Admin Dashboard' : 'Agent Dashboard'}</h1>
@@ -427,44 +472,62 @@ const AgentDashboard: React.FC = () => {
           )}
         </div>
 
-        {/* Statistics Cards */}
-        {stats && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <button
-              onClick={() => setStatusFilter('NEW')}
-              className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-            >
-              <div className="text-sm font-medium text-gray-600 dark:text-gray-400">New</div>
-              <div className="mt-1 text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.byStatus.new || 0}</div>
-            </button>
-            <button
-              onClick={() => setStatusFilter('OPEN')}
-              className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-            >
-              <div className="text-sm font-medium text-gray-600 dark:text-gray-400">Open</div>
-              <div className="mt-1 text-2xl font-bold text-green-600 dark:text-green-400">{stats.byStatus.open || 0}</div>
-            </button>
-            <button
-              onClick={() => setStatusFilter('PENDING')}
-              className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-            >
-              <div className="text-sm font-medium text-gray-600 dark:text-gray-400">Pending</div>
-              <div className="mt-1 text-2xl font-bold text-yellow-600 dark:text-yellow-400">{stats.byStatus.pending || 0}</div>
-            </button>
-            <button
-              onClick={() => setStatusFilter('ON_HOLD')}
-              className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-            >
-              <div className="text-sm font-medium text-gray-600 dark:text-gray-400">On Hold</div>
-              <div className="mt-1 text-2xl font-bold text-orange-600 dark:text-orange-400">{stats.byStatus.onHold || 0}</div>
-            </button>
-          </div>
-        )}
-
         {/* Search and Status Filters */}
-        <div className="flex flex-col sm:flex-row gap-4">
-          {/* Search Input */}
-          <div className="relative">
+        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center sm:justify-between">
+          {/* Status Filter Buttons - Hidden for views that filter by single status or assignee only */}
+          {!['unassigned', 'pending', 'on-hold', 'open', 'solved'].includes(activeViewId) && (
+            <div className="flex gap-2 flex-wrap order-2 sm:order-1">
+              {/* "All" button resets to the view's base status */}
+              <button
+                onClick={() => setStatusFilter(viewBaseStatus)}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  statusFilter === viewBaseStatus
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
+                }`}
+              >
+                All
+              </button>
+              {/* Show different options based on the active view */}
+              {(activeViewId === 'your-unsolved' || activeViewId === 'all-unsolved'
+                ? [
+                    { value: 'OPEN', label: 'Open' },
+                    { value: 'PENDING', label: 'Pending' },
+                    { value: 'ON_HOLD', label: 'On Hold' }
+                  ]
+                : activeViewId === 'incident' || activeViewId === 'problem'
+                ? [
+                    { value: 'OPEN', label: 'Open' },
+                    { value: 'PENDING', label: 'Pending' },
+                    { value: 'ON_HOLD', label: 'On Hold' },
+                    { value: 'SOLVED', label: 'Solved' }
+                  ]
+                : [
+                    { value: 'NEW', label: 'New' },
+                    { value: 'OPEN', label: 'Open' },
+                    { value: 'PENDING', label: 'Pending' },
+                    { value: 'ON_HOLD', label: 'On Hold' },
+                    { value: 'SOLVED', label: 'Solved' },
+                    { value: 'CLOSED', label: 'Closed' }
+                  ]
+              ).map((filter) => (
+                <button
+                  key={filter.value}
+                  onClick={() => setStatusFilter(filter.value)}
+                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                    statusFilter === filter.value
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
+                  }`}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Search Input - Right side on desktop */}
+          <div className="relative order-1 sm:order-2 sm:ml-auto">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -475,7 +538,7 @@ const AgentDashboard: React.FC = () => {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search tickets..."
-              className="block w-full sm:w-[512px] pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary text-sm"
+              className="block w-full sm:w-96 pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary text-sm"
             />
             {searchQuery && (
               <button
@@ -488,42 +551,6 @@ const AgentDashboard: React.FC = () => {
               </button>
             )}
           </div>
-        </div>
-
-        {/* Status Filters */}
-        <div className="flex justify-between items-center gap-2 flex-wrap">
-          <div className="flex gap-2 flex-wrap">
-            {statusFilters.map((filter) => (
-              <button
-                key={filter.value}
-                onClick={() => setStatusFilter(filter.value)}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  statusFilter === filter.value
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
-                }`}
-              >
-                {filter.label}
-                {stats && filter.value && (
-                  <span className="ml-2 px-2 py-0.5 rounded-full bg-white/20 text-xs">
-                    {stats.byStatus[getStatsKey(filter.value)] || 0}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-
-          {/* Problem Filter */}
-          <button
-            onClick={() => setTypeFilter(typeFilter === 'PROBLEM' ? '' : 'PROBLEM')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              typeFilter === 'PROBLEM'
-                ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200 border border-purple-300 dark:border-purple-700'
-                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
-            }`}
-          >
-            Problem Tickets
-          </button>
         </div>
 
         {/* Bulk Actions Toolbar - Fixed at bottom */}
@@ -617,6 +644,66 @@ const AgentDashboard: React.FC = () => {
                   className="px-4 py-2 bg-white text-blue-600 rounded-md hover:bg-gray-100 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   Apply
+                </button>
+              </div>
+
+              {/* Assign to Agent Dropdown */}
+              <div className="flex items-center gap-2 relative">
+                <div className="relative">
+                  <button
+                    onClick={() => setShowAssignDropdown(!showAssignDropdown)}
+                    className="px-3 py-2 border border-blue-500 dark:border-blue-800 rounded-md shadow-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-white flex items-center gap-2 min-w-[160px] justify-between"
+                  >
+                    <span>
+                      {bulkAssignee
+                        ? agents?.find((a: any) => a.id === bulkAssignee)?.email || 'Select Agent...'
+                        : 'Assign to...'}
+                    </span>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+
+                  {showAssignDropdown && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-10"
+                        onClick={() => setShowAssignDropdown(false)}
+                      />
+                      <div className="absolute bottom-full left-0 mb-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg z-20 max-h-48 overflow-y-auto">
+                        <button
+                          onClick={() => {
+                            setBulkAssignee('');
+                            setShowAssignDropdown(false);
+                          }}
+                          className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 first:rounded-t-md"
+                        >
+                          Unassign
+                        </button>
+                        {agents?.map((agent: any) => (
+                          <button
+                            key={agent.id}
+                            onClick={() => {
+                              setBulkAssignee(agent.id);
+                              setShowAssignDropdown(false);
+                            }}
+                            className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 last:rounded-b-md"
+                          >
+                            {agent.firstName && agent.lastName
+                              ? `${agent.firstName} ${agent.lastName}`
+                              : agent.email}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+                <button
+                  onClick={handleBulkAssign}
+                  disabled={bulkUpdateMutation.isPending}
+                  className="px-4 py-2 bg-white text-blue-600 rounded-md hover:bg-gray-100 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Assign
                 </button>
               </div>
 
@@ -942,6 +1029,8 @@ const AgentDashboard: React.FC = () => {
             </p>
           </div>
         )}
+          </div>
+        </div>
       </div>
     </Layout>
   );

@@ -11,7 +11,7 @@ const router = Router();
 // Get all tickets (with filters and pagination for agents)
 router.get('/', requireAuth, async (req: AuthRequest, res) => {
   try {
-    const { status, assigneeId, requesterId, page, limit, sortField, sortDirection, search, type } = req.query;
+    const { status, assigneeId, requesterId, page, limit, sortField, sortDirection, search, type, myRequests, myAssigned, unassigned, solvedAfter } = req.query;
     const userRole = req.userRole;
     const userId = req.userId;
 
@@ -27,9 +27,38 @@ router.get('/', requireAuth, async (req: AuthRequest, res) => {
       where.requesterId = userId;
     }
 
+    // Filter for tickets where current user is the requester (My Tickets)
+    if (myRequests === 'true' && (userRole === 'AGENT' || userRole === 'ADMIN')) {
+      where.requesterId = userId;
+    }
+
+    // Filter for tickets assigned to current user
+    if (myAssigned === 'true' && (userRole === 'AGENT' || userRole === 'ADMIN')) {
+      where.assigneeId = userId;
+    }
+
+    // Filter for unassigned tickets (no assignee)
+    if (unassigned === 'true' && (userRole === 'AGENT' || userRole === 'ADMIN')) {
+      where.assigneeId = null;
+    }
+
+    // Filter for tickets solved after a certain date (for "Recently solved" view)
+    if (solvedAfter && typeof solvedAfter === 'string') {
+      const solvedAfterDate = new Date(solvedAfter);
+      if (!isNaN(solvedAfterDate.getTime())) {
+        where.solvedAt = { gte: solvedAfterDate };
+      }
+    }
+
     // Agents can see all tickets (optional filtering)
+    // Support comma-separated status values (e.g., "OPEN,PENDING,ON_HOLD")
     if (status && typeof status === 'string') {
-      where.status = status.toUpperCase();
+      const statuses = status.split(',').map(s => s.trim().toUpperCase());
+      if (statuses.length === 1) {
+        where.status = statuses[0];
+      } else {
+        where.status = { in: statuses };
+      }
     }
 
     // Filter by ticket type (NORMAL, PROBLEM, INCIDENT)
@@ -50,12 +79,27 @@ router.get('/', requireAuth, async (req: AuthRequest, res) => {
       const searchTerm = search.trim();
       const searchNum = parseInt(searchTerm);
 
+      // Build numeric conditions for partial ticket number matching
+      // If user searches "1", find tickets #1, #10-19, #100-199, etc.
+      // If user searches "12", find tickets #12, #120-129, #1200-1299, etc.
+      const numericConditions: any[] = [];
+      if (!isNaN(searchNum) && searchNum > 0) {
+        for (let i = 0; i <= 5; i++) {
+          const multiplier = Math.pow(10, i);
+          const minVal = searchNum * multiplier;
+          const maxVal = (searchNum + 1) * multiplier;
+          numericConditions.push({
+            ticketNumber: { gte: minVal, lt: maxVal }
+          });
+        }
+      }
+
       where.OR = [
         { subject: { contains: searchTerm, mode: 'insensitive' } },
         { requester: { email: { contains: searchTerm, mode: 'insensitive' } } },
         { requester: { firstName: { contains: searchTerm, mode: 'insensitive' } } },
         { requester: { lastName: { contains: searchTerm, mode: 'insensitive' } } },
-        ...(isNaN(searchNum) ? [] : [{ ticketNumber: searchNum }])
+        ...numericConditions
       ];
     }
 
@@ -844,7 +888,8 @@ router.patch('/bulk/update',
   [
     body('ticketIds').isArray().notEmpty(),
     body('ticketIds.*').isUUID(),
-    body('status').optional().isIn(['NEW', 'OPEN', 'PENDING', 'ON_HOLD', 'SOLVED', 'CLOSED'])
+    body('status').optional().isIn(['NEW', 'OPEN', 'PENDING', 'ON_HOLD', 'SOLVED', 'CLOSED']),
+    body('assigneeId').optional().isUUID()
   ],
   async (req: AuthRequest, res: Response) => {
     const errors = validationResult(req);
@@ -853,7 +898,7 @@ router.patch('/bulk/update',
     }
 
     try {
-      const { ticketIds, status } = req.body;
+      const { ticketIds, status, assigneeId } = req.body;
       const userId = req.userId!;
 
       const updateData: any = { updatedAt: new Date() };
@@ -866,15 +911,21 @@ router.patch('/bulk/update',
         }
       }
 
+      if (assigneeId !== undefined) {
+        updateData.assigneeId = assigneeId;
+      }
+
       await prisma.ticket.updateMany({
         where: { id: { in: ticketIds } },
         data: updateData
       });
 
       // Create activity logs for each ticket
+      const activityPromises: Promise<any>[] = [];
+
       if (status) {
-        await Promise.all(
-          ticketIds.map((ticketId: string) =>
+        ticketIds.forEach((ticketId: string) => {
+          activityPromises.push(
             prisma.ticketActivity.create({
               data: {
                 ticketId,
@@ -883,8 +934,27 @@ router.patch('/bulk/update',
                 details: { newStatus: status }
               }
             })
-          )
-        );
+          );
+        });
+      }
+
+      if (assigneeId !== undefined) {
+        ticketIds.forEach((ticketId: string) => {
+          activityPromises.push(
+            prisma.ticketActivity.create({
+              data: {
+                ticketId,
+                userId,
+                action: 'assigned',
+                details: { assigneeId: assigneeId || 'unassigned' }
+              }
+            })
+          );
+        });
+      }
+
+      if (activityPromises.length > 0) {
+        await Promise.all(activityPromises);
       }
 
       return res.json({ success: true, updated: ticketIds.length });
@@ -1295,19 +1365,41 @@ router.get('/problems/search', requireAuth, requireAgent, async (req: AuthReques
 });
 
 // Get ticket statistics (for dashboard)
-router.get('/stats/overview', requireAuth, requireAgent, async (_req: AuthRequest, res) => {
+router.get('/stats/overview', requireAuth, requireAgent, async (req: AuthRequest, res) => {
   try {
+    const userId = req.userId;
     // Agents and Admins see all ticket stats
     const where = {};
 
-    const [total, newCount, openCount, pendingCount, onHoldCount, solvedCount, closedCount] = await Promise.all([
+    const [
+      total,
+      newCount,
+      openCount,
+      pendingCount,
+      onHoldCount,
+      solvedCount,
+      closedCount,
+      myUnsolvedCount,
+      myRequestsCount,
+      problemCount,
+      incidentCount,
+      unassignedCount
+    ] = await Promise.all([
       prisma.ticket.count({ where }),
       prisma.ticket.count({ where: { ...where, status: 'NEW' } }),
       prisma.ticket.count({ where: { ...where, status: 'OPEN' } }),
       prisma.ticket.count({ where: { ...where, status: 'PENDING' } }),
       prisma.ticket.count({ where: { ...where, status: 'ON_HOLD' } }),
       prisma.ticket.count({ where: { ...where, status: 'SOLVED' } }),
-      prisma.ticket.count({ where: { ...where, status: 'CLOSED' } })
+      prisma.ticket.count({ where: { ...where, status: 'CLOSED' } }),
+      // Count unsolved tickets assigned to current user
+      prisma.ticket.count({ where: { assigneeId: userId, status: { in: ['OPEN', 'PENDING', 'ON_HOLD'] } } }),
+      // Count tickets where current user is the requester
+      prisma.ticket.count({ where: { requesterId: userId } }),
+      prisma.ticket.count({ where: { ...where, type: 'PROBLEM' } }),
+      prisma.ticket.count({ where: { ...where, type: 'INCIDENT' } }),
+      // Count tickets with no assignee
+      prisma.ticket.count({ where: { ...where, assigneeId: null } })
     ]);
 
     return res.json({
@@ -1319,7 +1411,14 @@ router.get('/stats/overview', requireAuth, requireAgent, async (_req: AuthReques
         onHold: onHoldCount,
         solved: solvedCount,
         closed: closedCount
-      }
+      },
+      byType: {
+        problem: problemCount,
+        incident: incidentCount
+      },
+      myUnsolvedCount,
+      myRequestsCount,
+      unassignedCount
     });
   } catch (error) {
     console.error('Error fetching ticket stats:', error);

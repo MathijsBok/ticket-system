@@ -10,9 +10,10 @@ import ChatWidget from './ChatWidget';
 
 interface LayoutProps {
   children: React.ReactNode;
+  hidePadding?: boolean;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children }) => {
+const Layout: React.FC<LayoutProps> = ({ children, hidePadding = false }) => {
   const { user } = useUser();
   const { theme, toggleTheme } = useTheme();
   const { currentView, setCurrentView } = useView();
@@ -263,7 +264,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       </header>
 
       {/* Main content */}
-      <main className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className={hidePadding ? '' : 'max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-8'}>
         {children}
       </main>
 
