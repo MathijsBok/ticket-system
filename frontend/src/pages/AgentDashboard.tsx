@@ -34,6 +34,7 @@ const AgentDashboard: React.FC = () => {
   const [solvedAfter, setSolvedAfter] = useState<string | undefined>(undefined);
   const [activeViewId, setActiveViewId] = useState<string>('open');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [selectedTickets, setSelectedTickets] = useState<string[]>([]);
@@ -406,25 +407,39 @@ const AgentDashboard: React.FC = () => {
           onViewChange={handleViewChange}
           isCollapsed={sidebarCollapsed}
           onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+          isMobileOpen={mobileSidebarOpen}
+          onMobileClose={() => setMobileSidebarOpen(false)}
         />
 
         {/* Main Content */}
-        <div className="flex-1 overflow-y-auto p-6">
-          <div className="space-y-6">
+        <div className="flex-1 overflow-y-auto p-3 sm:p-6">
+          <div className="space-y-4 sm:space-y-6">
             {/* Header */}
-        <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{effectiveRole === 'ADMIN' ? 'Admin Dashboard' : 'Agent Dashboard'}</h1>
-            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-              Manage and respond to customer tickets
-            </p>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            {/* Mobile hamburger button */}
+            <button
+              onClick={() => setMobileSidebarOpen(true)}
+              className="md:hidden p-2 -ml-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+              title="Open views menu"
+            >
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+            <div>
+              <h1 className="text-xl sm:text-3xl font-bold text-gray-900 dark:text-white">{effectiveRole === 'ADMIN' ? 'Admin Dashboard' : 'Agent Dashboard'}</h1>
+              <p className="hidden sm:block mt-1 text-sm text-gray-600 dark:text-gray-400">
+                Manage and respond to customer tickets
+              </p>
+            </div>
           </div>
 
           {/* Notification Settings */}
           {isSupported && (
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
               {isPolling && (
-                <div className="flex items-center gap-2 px-3 py-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md">
+                <div className="hidden sm:flex items-center gap-2 px-3 py-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md">
                   <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                   <span className="text-sm text-green-700 dark:text-green-300">
                     {newTicketCount > 0 ? `${newTicketCount} new` : 'Monitoring'}
@@ -433,7 +448,7 @@ const AgentDashboard: React.FC = () => {
               )}
               <button
                 onClick={handleToggleNotifications}
-                className={`relative inline-flex items-center px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                className={`relative inline-flex items-center justify-center p-2 sm:px-4 sm:py-2 rounded-md text-sm font-medium transition-colors ${
                   notificationsEnabled
                     ? 'bg-primary text-primary-foreground hover:opacity-90'
                     : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
@@ -447,7 +462,7 @@ const AgentDashboard: React.FC = () => {
                 }
                 disabled={permission === 'denied'}
               >
-                <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-5 h-5 sm:mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -467,21 +482,47 @@ const AgentDashboard: React.FC = () => {
                     />
                   )}
                 </svg>
-                {notificationsEnabled ? 'Notifications On' : 'Enable Notifications'}
+                <span className="hidden sm:inline">{notificationsEnabled ? 'Notifications On' : 'Enable Notifications'}</span>
               </button>
             </div>
           )}
         </div>
 
         {/* Search and Status Filters */}
-        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3">
+          {/* Search Input - Full width on mobile, right side on desktop */}
+          <div className="relative w-full sm:w-auto sm:ml-auto sm:order-2">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search tickets..."
+              className="block w-full sm:w-96 pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary text-sm"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
+
           {/* Status Filter Buttons - Hidden for views that filter by single status or assignee only */}
           {!['unassigned', 'pending', 'on-hold', 'open', 'solved'].includes(activeViewId) && (
-            <div className="flex gap-2 flex-wrap order-2 sm:order-1">
+            <div className="flex gap-1.5 sm:gap-2 flex-wrap sm:order-1 -mx-1 sm:mx-0 overflow-x-auto pb-1 sm:pb-0">
               {/* "All" button resets to the view's base status */}
               <button
                 onClick={() => setStatusFilter(viewBaseStatus)}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
                   statusFilter === viewBaseStatus
                     ? 'bg-primary text-primary-foreground'
                     : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
@@ -515,7 +556,7 @@ const AgentDashboard: React.FC = () => {
                 <button
                   key={filter.value}
                   onClick={() => setStatusFilter(filter.value)}
-                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
                     statusFilter === filter.value
                       ? 'bg-primary text-primary-foreground'
                       : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
@@ -526,210 +567,263 @@ const AgentDashboard: React.FC = () => {
               ))}
             </div>
           )}
-
-          {/* Search Input - Right side on desktop */}
-          <div className="relative order-1 sm:order-2 sm:ml-auto">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </div>
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search tickets..."
-              className="block w-full sm:w-96 pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary text-sm"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-              >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            )}
-          </div>
         </div>
 
         {/* Bulk Actions Toolbar - Fixed at bottom */}
         {selectedTickets.length > 0 && (
-          <div className="fixed bottom-0 left-0 right-0 z-50 bg-blue-500 dark:bg-blue-600 border-t-2 border-blue-600 dark:border-blue-500 shadow-lg p-4">
-            <div className="max-w-7xl mx-auto flex items-center gap-4 flex-wrap">
-              <span className="text-sm font-medium text-white">
-                {selectedTickets.length} ticket(s) selected
-              </span>
-
-              <div className="flex items-center gap-2 relative">
-                <div className="relative">
-                  <button
-                    onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                    className="px-3 py-2 border border-blue-500 dark:border-blue-800 rounded-md shadow-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-white flex items-center gap-2 min-w-[160px] justify-between"
-                  >
-                    <span>{bulkStatus ? bulkStatus.replace('_', ' ') : 'Change Status...'}</span>
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-
-                  {showStatusDropdown && (
-                    <>
-                      <div
-                        className="fixed inset-0 z-10"
-                        onClick={() => setShowStatusDropdown(false)}
-                      />
-                      <div className="absolute bottom-full left-0 mb-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg z-20">
-                        <button
-                          onClick={() => {
-                            setBulkStatus('');
-                            setShowStatusDropdown(false);
-                          }}
-                          className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 first:rounded-t-md"
-                        >
-                          Change Status...
-                        </button>
-                        <button
-                          onClick={() => {
-                            setBulkStatus('NEW');
-                            setShowStatusDropdown(false);
-                          }}
-                          className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                        >
-                          New
-                        </button>
-                        <button
-                          onClick={() => {
-                            setBulkStatus('OPEN');
-                            setShowStatusDropdown(false);
-                          }}
-                          className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                        >
-                          Open
-                        </button>
-                        <button
-                          onClick={() => {
-                            setBulkStatus('PENDING');
-                            setShowStatusDropdown(false);
-                          }}
-                          className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                        >
-                          Pending
-                        </button>
-                        <button
-                          onClick={() => {
-                            setBulkStatus('ON_HOLD');
-                            setShowStatusDropdown(false);
-                          }}
-                          className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                        >
-                          On Hold
-                        </button>
-                        <button
-                          onClick={() => {
-                            setBulkStatus('SOLVED');
-                            setShowStatusDropdown(false);
-                          }}
-                          className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 last:rounded-b-md"
-                        >
-                          Solved
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
+          <div className="fixed bottom-0 left-0 right-0 z-50 bg-blue-500 dark:bg-blue-600 border-t-2 border-blue-600 dark:border-blue-500 shadow-lg p-3 sm:p-4">
+            <div className="max-w-7xl mx-auto">
+              {/* Mobile: Compact layout */}
+              <div className="flex items-center justify-between mb-2 sm:mb-0 sm:hidden">
+                <span className="text-sm font-medium text-white">
+                  {selectedTickets.length} selected
+                </span>
                 <button
-                  onClick={handleBulkStatusChange}
-                  disabled={!bulkStatus || bulkUpdateMutation.isPending}
-                  className="px-4 py-2 bg-white text-blue-600 rounded-md hover:bg-gray-100 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  onClick={() => setSelectedTickets([])}
+                  className="px-3 py-1 text-white hover:text-gray-200 text-sm font-medium transition-colors"
                 >
-                  Apply
+                  Clear
                 </button>
               </div>
 
-              {/* Assign to Agent Dropdown */}
-              <div className="flex items-center gap-2 relative">
-                <div className="relative">
-                  <button
-                    onClick={() => setShowAssignDropdown(!showAssignDropdown)}
-                    className="px-3 py-2 border border-blue-500 dark:border-blue-800 rounded-md shadow-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-white flex items-center gap-2 min-w-[160px] justify-between"
+              {/* Mobile: Scrollable actions */}
+              <div className="flex sm:hidden gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <select
+                    value={bulkStatus}
+                    onChange={(e) => setBulkStatus(e.target.value)}
+                    className="px-2 py-1.5 border border-blue-400 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-white"
                   >
-                    <span>
-                      {bulkAssignee
-                        ? agents?.find((a: any) => a.id === bulkAssignee)?.email || 'Select Agent...'
-                        : 'Assign to...'}
-                    </span>
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
+                    <option value="">Status...</option>
+                    <option value="NEW">New</option>
+                    <option value="OPEN">Open</option>
+                    <option value="PENDING">Pending</option>
+                    <option value="ON_HOLD">On Hold</option>
+                    <option value="SOLVED">Solved</option>
+                  </select>
+                  <button
+                    onClick={handleBulkStatusChange}
+                    disabled={!bulkStatus || bulkUpdateMutation.isPending}
+                    className="px-2 py-1.5 bg-white text-blue-600 rounded-md text-xs font-medium disabled:opacity-50"
+                  >
+                    Apply
                   </button>
+                </div>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <select
+                    value={bulkAssignee}
+                    onChange={(e) => setBulkAssignee(e.target.value)}
+                    className="px-2 py-1.5 border border-blue-400 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-white max-w-[120px]"
+                  >
+                    <option value="">Assign...</option>
+                    <option value="">Unassign</option>
+                    {agents?.map((agent: any) => (
+                      <option key={agent.id} value={agent.id}>
+                        {agent.firstName && agent.lastName
+                          ? `${agent.firstName} ${agent.lastName}`
+                          : agent.email}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={handleBulkAssign}
+                    disabled={bulkUpdateMutation.isPending}
+                    className="px-2 py-1.5 bg-white text-blue-600 rounded-md text-xs font-medium disabled:opacity-50"
+                  >
+                    Assign
+                  </button>
+                </div>
+                <button
+                  onClick={handleMarkAsSpam}
+                  disabled={bulkUpdateMutation.isPending}
+                  className="px-3 py-1.5 bg-orange-500 text-white rounded-md text-xs font-medium disabled:opacity-50 flex-shrink-0"
+                >
+                  Spam
+                </button>
+                <button
+                  onClick={handleBulkDelete}
+                  disabled={bulkDeleteMutation.isPending}
+                  className="px-3 py-1.5 bg-red-600 text-white rounded-md text-xs font-medium disabled:opacity-50 flex-shrink-0"
+                >
+                  Delete
+                </button>
+              </div>
 
-                  {showAssignDropdown && (
-                    <>
-                      <div
-                        className="fixed inset-0 z-10"
-                        onClick={() => setShowAssignDropdown(false)}
-                      />
-                      <div className="absolute bottom-full left-0 mb-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg z-20 max-h-48 overflow-y-auto">
-                        <button
-                          onClick={() => {
-                            setBulkAssignee('');
-                            setShowAssignDropdown(false);
-                          }}
-                          className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 first:rounded-t-md"
-                        >
-                          Unassign
-                        </button>
-                        {agents?.map((agent: any) => (
+              {/* Desktop: Original layout */}
+              <div className="hidden sm:flex items-center gap-4 flex-wrap">
+                <span className="text-sm font-medium text-white">
+                  {selectedTickets.length} ticket(s) selected
+                </span>
+
+                <div className="flex items-center gap-2 relative">
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+                      className="px-3 py-2 border border-blue-500 dark:border-blue-800 rounded-md shadow-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-white flex items-center gap-2 min-w-[160px] justify-between"
+                    >
+                      <span>{bulkStatus ? bulkStatus.replace('_', ' ') : 'Change Status...'}</span>
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+
+                    {showStatusDropdown && (
+                      <>
+                        <div
+                          className="fixed inset-0 z-10"
+                          onClick={() => setShowStatusDropdown(false)}
+                        />
+                        <div className="absolute bottom-full left-0 mb-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg z-20">
                           <button
-                            key={agent.id}
                             onClick={() => {
-                              setBulkAssignee(agent.id);
-                              setShowAssignDropdown(false);
+                              setBulkStatus('');
+                              setShowStatusDropdown(false);
+                            }}
+                            className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 first:rounded-t-md"
+                          >
+                            Change Status...
+                          </button>
+                          <button
+                            onClick={() => {
+                              setBulkStatus('NEW');
+                              setShowStatusDropdown(false);
+                            }}
+                            className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                          >
+                            New
+                          </button>
+                          <button
+                            onClick={() => {
+                              setBulkStatus('OPEN');
+                              setShowStatusDropdown(false);
+                            }}
+                            className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                          >
+                            Open
+                          </button>
+                          <button
+                            onClick={() => {
+                              setBulkStatus('PENDING');
+                              setShowStatusDropdown(false);
+                            }}
+                            className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                          >
+                            Pending
+                          </button>
+                          <button
+                            onClick={() => {
+                              setBulkStatus('ON_HOLD');
+                              setShowStatusDropdown(false);
+                            }}
+                            className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                          >
+                            On Hold
+                          </button>
+                          <button
+                            onClick={() => {
+                              setBulkStatus('SOLVED');
+                              setShowStatusDropdown(false);
                             }}
                             className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 last:rounded-b-md"
                           >
-                            {agent.firstName && agent.lastName
-                              ? `${agent.firstName} ${agent.lastName}`
-                              : agent.email}
+                            Solved
                           </button>
-                        ))}
-                      </div>
-                    </>
-                  )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  <button
+                    onClick={handleBulkStatusChange}
+                    disabled={!bulkStatus || bulkUpdateMutation.isPending}
+                    className="px-4 py-2 bg-white text-blue-600 rounded-md hover:bg-gray-100 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Apply
+                  </button>
                 </div>
+
+                {/* Assign to Agent Dropdown */}
+                <div className="flex items-center gap-2 relative">
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowAssignDropdown(!showAssignDropdown)}
+                      className="px-3 py-2 border border-blue-500 dark:border-blue-800 rounded-md shadow-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-white flex items-center gap-2 min-w-[160px] justify-between"
+                    >
+                      <span>
+                        {bulkAssignee
+                          ? agents?.find((a: any) => a.id === bulkAssignee)?.email || 'Select Agent...'
+                          : 'Assign to...'}
+                      </span>
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+
+                    {showAssignDropdown && (
+                      <>
+                        <div
+                          className="fixed inset-0 z-10"
+                          onClick={() => setShowAssignDropdown(false)}
+                        />
+                        <div className="absolute bottom-full left-0 mb-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg z-20 max-h-48 overflow-y-auto">
+                          <button
+                            onClick={() => {
+                              setBulkAssignee('');
+                              setShowAssignDropdown(false);
+                            }}
+                            className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 first:rounded-t-md"
+                          >
+                            Unassign
+                          </button>
+                          {agents?.map((agent: any) => (
+                            <button
+                              key={agent.id}
+                              onClick={() => {
+                                setBulkAssignee(agent.id);
+                                setShowAssignDropdown(false);
+                              }}
+                              className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 last:rounded-b-md"
+                            >
+                              {agent.firstName && agent.lastName
+                                ? `${agent.firstName} ${agent.lastName}`
+                                : agent.email}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  <button
+                    onClick={handleBulkAssign}
+                    disabled={bulkUpdateMutation.isPending}
+                    className="px-4 py-2 bg-white text-blue-600 rounded-md hover:bg-gray-100 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Assign
+                  </button>
+                </div>
+
                 <button
-                  onClick={handleBulkAssign}
+                  onClick={handleMarkAsSpam}
                   disabled={bulkUpdateMutation.isPending}
-                  className="px-4 py-2 bg-white text-blue-600 rounded-md hover:bg-gray-100 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
-                  Assign
+                  Mark as Spam
+                </button>
+
+                <button
+                  onClick={handleBulkDelete}
+                  disabled={bulkDeleteMutation.isPending}
+                  className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Delete
+                </button>
+
+                <button
+                  onClick={() => setSelectedTickets([])}
+                  className="ml-auto px-4 py-2 text-white hover:text-gray-200 text-sm font-medium transition-colors"
+                >
+                  Clear Selection
                 </button>
               </div>
-
-              <button
-                onClick={handleMarkAsSpam}
-                disabled={bulkUpdateMutation.isPending}
-                className="px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                Mark as Spam
-              </button>
-
-              <button
-                onClick={handleBulkDelete}
-                disabled={bulkDeleteMutation.isPending}
-                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                Delete
-              </button>
-
-              <button
-                onClick={() => setSelectedTickets([])}
-                className="ml-auto px-4 py-2 text-white hover:text-gray-200 text-sm font-medium transition-colors"
-              >
-                Clear Selection
-              </button>
             </div>
           </div>
         )}
@@ -742,103 +836,36 @@ const AgentDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* Tickets table */}
+        {/* Tickets - Mobile Cards View */}
         {paginatedTickets && paginatedTickets.length > 0 && (
-          <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full divide-y divide-gray-200 dark:divide-gray-700" style={{ tableLayout: 'fixed' }}>
-                <colgroup>
-                  <col style={{ width: '40px' }} />
-                  <col style={{ width: '90px' }} />
-                  <col style={{ width: '100px' }} />
-                  <col style={{ width: '300px' }} />
-                  <col style={{ width: '160px' }} />
-                  <col style={{ width: '80px' }} />
-                  <col style={{ width: '160px' }} />
-                  <col style={{ width: '100px' }} />
-                </colgroup>
-                <thead className="bg-gray-50 dark:bg-gray-900">
-                  <tr>
-                    <th className="px-4 py-3 text-left">
-                      <input
-                        type="checkbox"
-                        checked={paginatedTickets.length > 0 && paginatedTickets.every((t: any) => selectedTickets.includes(t.id))}
-                        onChange={handleSelectAll}
-                        className="rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-primary"
-                      />
-                    </th>
-                    <th
-                      onClick={() => handleSort('ticketNumber')}
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                    >
-                      <div className="flex items-center">
-                        Ticket #
-                        <SortIcon field="ticketNumber" />
-                      </div>
-                    </th>
-                    <th
-                      onClick={() => handleSort('status')}
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                    >
-                      <div className="flex items-center">
-                        Status
-                        <SortIcon field="status" />
-                      </div>
-                    </th>
-                    <th
-                      onClick={() => handleSort('subject')}
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                    >
-                      <div className="flex items-center">
-                        Subject
-                        <SortIcon field="subject" />
-                      </div>
-                    </th>
-                    <th
-                      onClick={() => handleSort('requester')}
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                    >
-                      <div className="flex items-center">
-                        Requester
-                        <SortIcon field="requester" />
-                      </div>
-                    </th>
-                    <th
-                      onClick={() => handleSort('priority')}
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                    >
-                      <div className="flex items-center">
-                        Priority
-                        <SortIcon field="priority" />
-                      </div>
-                    </th>
-                    <th
-                      onClick={() => handleSort('assignee')}
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                    >
-                      <div className="flex items-center">
-                        Assignee
-                        <SortIcon field="assignee" />
-                      </div>
-                    </th>
-                    <th
-                      onClick={() => handleSort('updatedAt')}
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                    >
-                      <div className="flex items-center">
-                        Updated
-                        <SortIcon field="updatedAt" />
-                      </div>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                  {paginatedTickets.map((ticket: any) => (
-                    <tr
-                      key={ticket.id}
-                      className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                    >
-                      <td className="px-4 py-2">
+          <>
+            {/* Mobile Card View */}
+            <div className="md:hidden space-y-3">
+              {/* Select All on Mobile */}
+              <div className="flex items-center justify-between px-1">
+                <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                  <input
+                    type="checkbox"
+                    checked={paginatedTickets.length > 0 && paginatedTickets.every((t: any) => selectedTickets.includes(t.id))}
+                    onChange={handleSelectAll}
+                    className="rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-primary"
+                  />
+                  Select all
+                </label>
+                <span className="text-xs text-gray-500 dark:text-gray-400">
+                  {totalTickets} tickets
+                </span>
+              </div>
+
+              {paginatedTickets.map((ticket: any) => (
+                <div
+                  key={ticket.id}
+                  className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden"
+                >
+                  <div className="p-3">
+                    {/* Top row: Checkbox, Ticket #, Status */}
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
                         <input
                           type="checkbox"
                           checked={selectedTickets.includes(ticket.id)}
@@ -846,90 +873,260 @@ const AgentDashboard: React.FC = () => {
                           onClick={(e) => e.stopPropagation()}
                           className="rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-primary"
                         />
-                      </td>
-                      <td
-                        onClick={() => navigate(`/tickets/${ticket.id}`)}
-                        className="px-4 py-2 text-sm font-medium text-primary cursor-pointer"
-                      >
-                        #{ticket.ticketNumber}
-                      </td>
-                      <td
-                        onClick={() => navigate(`/tickets/${ticket.id}`)}
-                        className="px-4 py-2 cursor-pointer"
-                      >
-                        <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full whitespace-nowrap ${getStatusColor(ticket.status)}`}>
-                          {ticket.status.replace('_', ' ')}
+                        <span
+                          onClick={() => navigate(`/tickets/${ticket.id}`)}
+                          className="text-sm font-medium text-primary cursor-pointer"
+                        >
+                          #{ticket.ticketNumber}
                         </span>
-                      </td>
-                      <td
-                        onClick={() => navigate(`/tickets/${ticket.id}`)}
-                        className="px-4 py-2 text-sm text-gray-900 dark:text-white cursor-pointer overflow-hidden"
-                      >
-                        <div className="truncate" title={ticket.subject}>
-                          {ticket.subject}
-                        </div>
-                      </td>
-                      <td
-                        onClick={() => navigate(`/tickets/${ticket.id}`)}
-                        className="px-4 py-2 text-sm cursor-pointer overflow-hidden"
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className={`truncate ${ticket.requester.isBlocked ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>
-                            {ticket.requester.name || ticket.requester.email}
-                          </span>
-                          {ticket.requester.isBlocked && (
-                            <span className="flex-shrink-0 px-1.5 py-0.5 text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 rounded" title={ticket.requester.blockedReason || 'Blocked'}>
-                              BLOCKED
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td
-                        onClick={() => navigate(`/tickets/${ticket.id}`)}
-                        className="px-4 py-2 text-sm text-gray-900 dark:text-white capitalize cursor-pointer"
-                      >
-                        {ticket.priority.toLowerCase()}
-                      </td>
-                      <td
-                        onClick={() => navigate(`/tickets/${ticket.id}`)}
-                        className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400 cursor-pointer overflow-hidden"
-                      >
-                        <div className="truncate">
-                          {ticket.assignee ? ticket.assignee.email : 'Unassigned'}
-                        </div>
-                      </td>
-                      <td
-                        onClick={() => navigate(`/tickets/${ticket.id}`)}
-                        className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400 cursor-pointer whitespace-nowrap"
-                      >
-                        {format(new Date(ticket.updatedAt), 'MMM d, HH:mm')}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </div>
+                      <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${getStatusColor(ticket.status)}`}>
+                        {ticket.status.replace('_', ' ')}
+                      </span>
+                    </div>
+
+                    {/* Subject */}
+                    <h3
+                      onClick={() => navigate(`/tickets/${ticket.id}`)}
+                      className="text-sm font-medium text-gray-900 dark:text-white mb-2 line-clamp-2 cursor-pointer"
+                    >
+                      {ticket.subject}
+                    </h3>
+
+                    {/* Requester */}
+                    <div className="flex items-center gap-1 mb-2">
+                      <svg className="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                      <span className={`text-xs truncate ${ticket.requester.isBlocked ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                        {ticket.requester.firstName && ticket.requester.lastName
+                          ? `${ticket.requester.firstName} ${ticket.requester.lastName}`
+                          : ticket.requester.name || ticket.requester.email}
+                      </span>
+                      {ticket.requester.isBlocked && (
+                        <span className="px-1 py-0.5 text-[10px] font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 rounded">
+                          BLOCKED
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Bottom row: Priority, Assignee, Updated */}
+                    <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 pt-2 border-t border-gray-100 dark:border-gray-700">
+                      <div className="flex items-center gap-3">
+                        <span className="capitalize">{ticket.priority.toLowerCase()}</span>
+                        <span className="truncate max-w-[100px]">
+                          {ticket.assignee
+                            ? (ticket.assignee.firstName && ticket.assignee.lastName
+                                ? `${ticket.assignee.firstName} ${ticket.assignee.lastName}`
+                                : ticket.assignee.email.split('@')[0])
+                            : 'Unassigned'}
+                        </span>
+                      </div>
+                      <span>{format(new Date(ticket.updatedAt), 'MMM d, HH:mm')}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
 
-            {/* Pagination Controls */}
+            {/* Desktop Table View */}
+            <div className="hidden md:block bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full divide-y divide-gray-200 dark:divide-gray-700" style={{ tableLayout: 'fixed' }}>
+                  <colgroup>
+                    <col style={{ width: '40px' }} />
+                    <col style={{ width: '90px' }} />
+                    <col style={{ width: '100px' }} />
+                    <col style={{ width: '300px' }} />
+                    <col style={{ width: '160px' }} />
+                    <col style={{ width: '80px' }} />
+                    <col style={{ width: '160px' }} />
+                    <col style={{ width: '100px' }} />
+                  </colgroup>
+                  <thead className="bg-gray-50 dark:bg-gray-900">
+                    <tr>
+                      <th className="px-4 py-3 text-left">
+                        <input
+                          type="checkbox"
+                          checked={paginatedTickets.length > 0 && paginatedTickets.every((t: any) => selectedTickets.includes(t.id))}
+                          onChange={handleSelectAll}
+                          className="rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-primary"
+                        />
+                      </th>
+                      <th
+                        onClick={() => handleSort('ticketNumber')}
+                        className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                      >
+                        <div className="flex items-center">
+                          Ticket #
+                          <SortIcon field="ticketNumber" />
+                        </div>
+                      </th>
+                      <th
+                        onClick={() => handleSort('status')}
+                        className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                      >
+                        <div className="flex items-center">
+                          Status
+                          <SortIcon field="status" />
+                        </div>
+                      </th>
+                      <th
+                        onClick={() => handleSort('subject')}
+                        className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                      >
+                        <div className="flex items-center">
+                          Subject
+                          <SortIcon field="subject" />
+                        </div>
+                      </th>
+                      <th
+                        onClick={() => handleSort('requester')}
+                        className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                      >
+                        <div className="flex items-center">
+                          Requester
+                          <SortIcon field="requester" />
+                        </div>
+                      </th>
+                      <th
+                        onClick={() => handleSort('priority')}
+                        className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                      >
+                        <div className="flex items-center">
+                          Priority
+                          <SortIcon field="priority" />
+                        </div>
+                      </th>
+                      <th
+                        onClick={() => handleSort('assignee')}
+                        className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                      >
+                        <div className="flex items-center">
+                          Assignee
+                          <SortIcon field="assignee" />
+                        </div>
+                      </th>
+                      <th
+                        onClick={() => handleSort('updatedAt')}
+                        className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                      >
+                        <div className="flex items-center">
+                          Updated
+                          <SortIcon field="updatedAt" />
+                        </div>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                    {paginatedTickets.map((ticket: any) => (
+                      <tr
+                        key={ticket.id}
+                        className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                      >
+                        <td className="px-4 py-2">
+                          <input
+                            type="checkbox"
+                            checked={selectedTickets.includes(ticket.id)}
+                            onChange={(e) => handleSelectTicket(ticket.id, e as any)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-primary"
+                          />
+                        </td>
+                        <td
+                          onClick={() => navigate(`/tickets/${ticket.id}`)}
+                          className="px-4 py-2 text-sm font-medium text-primary cursor-pointer"
+                        >
+                          #{ticket.ticketNumber}
+                        </td>
+                        <td
+                          onClick={() => navigate(`/tickets/${ticket.id}`)}
+                          className="px-4 py-2 cursor-pointer"
+                        >
+                          <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full whitespace-nowrap ${getStatusColor(ticket.status)}`}>
+                            {ticket.status.replace('_', ' ')}
+                          </span>
+                        </td>
+                        <td
+                          onClick={() => navigate(`/tickets/${ticket.id}`)}
+                          className="px-4 py-2 text-sm text-gray-900 dark:text-white cursor-pointer overflow-hidden"
+                        >
+                          <div className="truncate" title={ticket.subject}>
+                            {ticket.subject}
+                          </div>
+                        </td>
+                        <td
+                          onClick={() => navigate(`/tickets/${ticket.id}`)}
+                          className="px-4 py-2 text-sm cursor-pointer overflow-hidden"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className={`truncate ${ticket.requester.isBlocked ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                              {ticket.requester.name || ticket.requester.email}
+                            </span>
+                            {ticket.requester.isBlocked && (
+                              <span className="flex-shrink-0 px-1.5 py-0.5 text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 rounded" title={ticket.requester.blockedReason || 'Blocked'}>
+                                BLOCKED
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td
+                          onClick={() => navigate(`/tickets/${ticket.id}`)}
+                          className="px-4 py-2 text-sm text-gray-900 dark:text-white capitalize cursor-pointer"
+                        >
+                          {ticket.priority.toLowerCase()}
+                        </td>
+                        <td
+                          onClick={() => navigate(`/tickets/${ticket.id}`)}
+                          className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400 cursor-pointer overflow-hidden"
+                        >
+                          <div className="truncate">
+                            {ticket.assignee ? ticket.assignee.email : 'Unassigned'}
+                          </div>
+                        </td>
+                        <td
+                          onClick={() => navigate(`/tickets/${ticket.id}`)}
+                          className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400 cursor-pointer whitespace-nowrap"
+                        >
+                          {format(new Date(ticket.updatedAt), 'MMM d, HH:mm')}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Pagination Controls - Shared for both mobile and desktop */}
             {totalPages > 0 && (
-              <div className="bg-white dark:bg-gray-800 px-4 py-3 flex items-center justify-between border-t border-gray-200 dark:border-gray-700 sm:px-6">
-                <div className="flex-1 flex justify-between sm:hidden">
-                  <button
-                    onClick={() => handlePageChange(currentPage - 1)}
-                    disabled={currentPage === 1}
-                    className="relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Previous
-                  </button>
-                  <button
-                    onClick={() => handlePageChange(currentPage + 1)}
-                    disabled={currentPage === totalPages}
-                    className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Next
-                  </button>
+              <div className="bg-white dark:bg-gray-800 px-3 sm:px-6 py-3 flex items-center justify-between border border-gray-200 dark:border-gray-700 rounded-lg mt-3">
+                {/* Mobile pagination */}
+                <div className="flex-1 flex items-center justify-between md:hidden">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {startIndex + 1}-{endIndex} of {totalTickets}
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handlePageChange(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      className="relative inline-flex items-center px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Prev
+                    </button>
+                    <span className="inline-flex items-center px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300">
+                      {currentPage}/{totalPages}
+                    </span>
+                    <button
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                      className="relative inline-flex items-center px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Next
+                    </button>
+                  </div>
                 </div>
-                <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                {/* Desktop pagination */}
+                <div className="hidden md:flex-1 md:flex md:items-center md:justify-between">
                   <div className="flex items-center gap-4">
                     <p className="text-sm text-gray-700 dark:text-gray-300">
                       Showing <span className="font-medium">{startIndex + 1}</span> to{' '}
@@ -1011,17 +1208,17 @@ const AgentDashboard: React.FC = () => {
                 </div>
               </div>
             )}
-          </div>
+          </>
         )}
 
         {/* Empty state */}
         {paginatedTickets && paginatedTickets.length === 0 && (
-          <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="text-center py-8 sm:py-12 px-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+            <svg className="mx-auto h-10 w-10 sm:h-12 sm:w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
             </svg>
             <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">No tickets found</h3>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            <p className="mt-1 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
               {searchQuery
                 ? `No tickets match "${searchQuery}".`
                 : statusFilter

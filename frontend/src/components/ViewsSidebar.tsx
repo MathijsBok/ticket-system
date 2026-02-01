@@ -39,6 +39,8 @@ interface ViewsSidebarProps {
   onViewChange: (viewId: string, filter: ViewItem['filter']) => void;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
+  isMobileOpen?: boolean;
+  onMobileClose?: () => void;
 }
 
 const ViewsSidebar: React.FC<ViewsSidebarProps> = ({
@@ -46,9 +48,19 @@ const ViewsSidebar: React.FC<ViewsSidebarProps> = ({
   activeView,
   onViewChange,
   isCollapsed,
-  onToggleCollapse
+  onToggleCollapse,
+  isMobileOpen = false,
+  onMobileClose
 }) => {
   const [personalExpanded, setPersonalExpanded] = useState(true);
+
+  // Handle view change and close mobile sidebar
+  const handleViewChange = (viewId: string, filter: ViewItem['filter']) => {
+    onViewChange(viewId, filter);
+    if (onMobileClose) {
+      onMobileClose();
+    }
+  };
 
   // Calculate all unsolved (OPEN + PENDING + ON_HOLD)
   const allUnsolved = stats ?
@@ -80,9 +92,10 @@ const ViewsSidebar: React.FC<ViewsSidebarProps> = ({
     { id: 'my-created', name: 'My Tickets', count: stats?.myRequestsCount || 0, filter: { createdByMe: true, status: 'OPEN', allStatuses: ['NEW', 'OPEN', 'PENDING', 'ON_HOLD', 'SOLVED', 'CLOSED'] } }
   ];
 
-  if (isCollapsed) {
+  // Desktop collapsed state - hidden on mobile
+  if (isCollapsed && !isMobileOpen) {
     return (
-      <div className="w-12 flex-shrink-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col items-center py-4">
+      <div className="hidden md:flex w-12 flex-shrink-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex-col items-center py-4">
         <button
           onClick={onToggleCollapse}
           className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
@@ -96,8 +109,105 @@ const ViewsSidebar: React.FC<ViewsSidebarProps> = ({
     );
   }
 
+  // Mobile overlay
+  if (isMobileOpen) {
+    return (
+      <>
+        {/* Backdrop */}
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={onMobileClose}
+        />
+        {/* Sidebar */}
+        <div className="fixed inset-y-0 left-0 w-72 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col z-50 md:hidden animate-slide-in-left">
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Views</h2>
+            <button
+              onClick={onMobileClose}
+              className="p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+              title="Close"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Views List */}
+          <div className="flex-1 overflow-y-auto py-2">
+            {/* Main Views */}
+            <div className="mb-4">
+              {mainViews.map((view) => (
+                <button
+                  key={view.id}
+                  onClick={() => handleViewChange(view.id, view.filter)}
+                  className={`w-full flex items-center justify-between px-4 py-3 text-sm transition-colors ${
+                    activeView === view.id
+                      ? 'bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary font-medium'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                  }`}
+                >
+                  <span className="truncate">{view.name}</span>
+                  <span className={`ml-2 ${activeView === view.id ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}>
+                    {view.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {/* Personal Section */}
+            <div className="border-t border-gray-200 dark:border-gray-700 pt-2">
+              <button
+                onClick={() => setPersonalExpanded(!personalExpanded)}
+                className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <svg
+                    className={`w-4 h-4 transition-transform ${personalExpanded ? 'rotate-0' : '-rotate-90'}`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                  <span>Personal</span>
+                </div>
+                <span className="text-gray-500 dark:text-gray-400">
+                  {personalViews.reduce((sum, v) => sum + v.count, 0)}
+                </span>
+              </button>
+
+              {personalExpanded && (
+                <div className="mt-1">
+                  {personalViews.map((view) => (
+                    <button
+                      key={view.id}
+                      onClick={() => handleViewChange(view.id, view.filter)}
+                      className={`w-full flex items-center justify-between px-4 py-3 pl-10 text-sm transition-colors ${
+                        activeView === view.id
+                          ? 'bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary font-medium'
+                          : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                      }`}
+                    >
+                      <span className="truncate">{view.name}</span>
+                      <span className={`ml-2 ${activeView === view.id ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}>
+                        {view.count}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // Desktop expanded state - hidden on mobile
   return (
-    <div className="w-72 flex-shrink-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col h-full">
+    <div className="hidden md:flex w-72 flex-shrink-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex-col h-full">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Views</h2>
@@ -129,7 +239,7 @@ const ViewsSidebar: React.FC<ViewsSidebarProps> = ({
           {mainViews.map((view) => (
             <button
               key={view.id}
-              onClick={() => onViewChange(view.id, view.filter)}
+              onClick={() => handleViewChange(view.id, view.filter)}
               className={`w-full flex items-center justify-between px-4 py-2 text-sm transition-colors ${
                 activeView === view.id
                   ? 'bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary font-medium'
@@ -171,7 +281,7 @@ const ViewsSidebar: React.FC<ViewsSidebarProps> = ({
               {personalViews.map((view) => (
                 <button
                   key={view.id}
-                  onClick={() => onViewChange(view.id, view.filter)}
+                  onClick={() => handleViewChange(view.id, view.filter)}
                   className={`w-full flex items-center justify-between px-4 py-2 pl-10 text-sm transition-colors ${
                     activeView === view.id
                       ? 'bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary font-medium'
