@@ -73,25 +73,41 @@ router.post('/import', requireAuth, requireAdmin, upload.single('file'), async (
 
     const psqlUser = user || 'postgres';
 
-    // Step 1: Drop all tables in public schema to ensure clean import
-    console.log('[Database Import] Dropping all existing tables...');
-    const dropTablesSQL = `
-      DO $$ DECLARE
+    // Step 1: Terminate all other connections to the database
+    console.log('[Database Import] Terminating existing connections...');
+    const terminateSQL = `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${database}' AND pid <> pg_backend_pid();`;
+    const terminateCommand = `psql -h ${host} -p ${dbPort} -U ${psqlUser} -d postgres -c "${terminateSQL}"`;
+
+    try {
+      await execAsync(terminateCommand, { env });
+      console.log('[Database Import] Connections terminated');
+    } catch (termError: any) {
+      console.log('[Database Import] Warning terminating connections:', termError.message);
+    }
+
+    // Step 2: Drop all tables, sequences, and types in public schema
+    console.log('[Database Import] Dropping all existing objects...');
+    const dropAllSQL = `DO \\$\\$ DECLARE
         r RECORD;
       BEGIN
         FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP
           EXECUTE 'DROP TABLE IF EXISTS public.' || quote_ident(r.tablename) || ' CASCADE';
         END LOOP;
-      END $$;
-    `;
-    const dropCommand = `psql -h ${host} -p ${dbPort} -U ${psqlUser} -d ${database} -c "${dropTablesSQL.replace(/\n/g, ' ')}"`;
+        FOR r IN (SELECT sequencename FROM pg_sequences WHERE schemaname = 'public') LOOP
+          EXECUTE 'DROP SEQUENCE IF EXISTS public.' || quote_ident(r.sequencename) || ' CASCADE';
+        END LOOP;
+        FOR r IN (SELECT typname FROM pg_type t JOIN pg_namespace n ON t.typnamespace = n.oid WHERE n.nspname = 'public' AND t.typtype = 'e') LOOP
+          EXECUTE 'DROP TYPE IF EXISTS public.' || quote_ident(r.typname) || ' CASCADE';
+        END LOOP;
+      END \\$\\$;`;
+    const dropCommand = `psql -h ${host} -p ${dbPort} -U ${psqlUser} -d ${database} -c "${dropAllSQL}"`;
 
     try {
       await execAsync(dropCommand, { env });
-      console.log('[Database Import] All tables dropped successfully');
+      console.log('[Database Import] All objects dropped successfully');
     } catch (dropError: any) {
-      console.log('[Database Import] Warning during drop tables:', dropError.message);
-      // Continue anyway - tables might not exist
+      console.log('[Database Import] Warning during drop:', dropError.message);
+      // Continue anyway - objects might not exist
     }
 
     // Step 2: Import the database
