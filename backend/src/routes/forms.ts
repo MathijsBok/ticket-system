@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import { prisma } from '../lib/prisma';
-import { requireAuth, requireAdmin, AuthRequest } from '../middleware/auth';
+import { requireAuth, requireAgent, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
@@ -10,8 +10,8 @@ router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const userRole = req.userRole;
 
-    // Admins see all forms, regular users only see active forms
-    const whereClause = userRole === 'ADMIN' ? {} : { isActive: true };
+    // Admins and agents see all forms, regular users only see active forms
+    const whereClause = (userRole === 'ADMIN' || userRole === 'AGENT') ? {} : { isActive: true };
 
     const forms = await prisma.form.findMany({
       where: whereClause,
@@ -36,7 +36,7 @@ router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
 });
 
 // Reorder forms (admin only) - MUST be before /:id routes
-router.patch('/reorder', requireAuth, requireAdmin, async (req: AuthRequest, res: Response) => {
+router.patch('/reorder', requireAuth, requireAgent, async (req: AuthRequest, res: Response) => {
   try {
     const { formIds } = req.body;
 
@@ -94,7 +94,7 @@ router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
 // Create new form (admin only)
 router.post('/',
   requireAuth,
-  requireAdmin,
+  requireAgent,
   [
     body('name').isString().notEmpty(),
     body('description').optional().isString(),
@@ -161,7 +161,7 @@ router.post('/',
 // Update form (admin only)
 router.patch('/:id',
   requireAuth,
-  requireAdmin,
+  requireAgent,
   [
     body('name').optional().isString(),
     body('description').optional().isString(),
@@ -237,7 +237,7 @@ router.patch('/:id',
 );
 
 // Delete form (admin only)
-router.delete('/:id', requireAuth, requireAdmin, async (req: AuthRequest, res: Response) => {
+router.delete('/:id', requireAuth, requireAgent, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
 

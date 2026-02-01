@@ -48,6 +48,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         { name: 'Tickets', href: '/agent' },
         { name: 'New Ticket', href: '/tickets/new' },
         { name: 'Analytics', href: '/admin/analytics' },
+        { name: 'Forms', href: '/admin/forms' },
+        { name: 'Field Library', href: '/admin/fields' },
         { name: 'Macros', href: '/admin/macros' },
         { name: 'Bug Reports', href: '/admin/bugs' }
       );

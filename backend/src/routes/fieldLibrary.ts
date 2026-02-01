@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import { prisma } from '../lib/prisma';
-import { requireAuth, requireAdmin, AuthRequest } from '../middleware/auth';
+import { requireAuth, requireAgent, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
@@ -80,7 +80,7 @@ router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
  */
 router.post('/',
   requireAuth,
-  requireAdmin,
+  requireAgent,
   [
     body('label').isString().trim().notEmpty().withMessage('Label is required'),
     body('fieldType').isIn(['text', 'textarea', 'select', 'checkbox', 'radio'])
@@ -134,7 +134,7 @@ router.post('/',
  */
 router.patch('/:id',
   requireAuth,
-  requireAdmin,
+  requireAgent,
   [
     body('label').optional().isString().trim().notEmpty(),
     body('fieldType').optional().isIn(['text', 'textarea', 'select', 'checkbox', 'radio']),
@@ -201,7 +201,7 @@ router.patch('/:id',
  * Admin only
  * Note: Will fail if field is used in any forms (foreign key constraint)
  */
-router.delete('/:id', requireAuth, requireAdmin, async (req: AuthRequest, res: Response) => {
+router.delete('/:id', requireAuth, requireAgent, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
 
