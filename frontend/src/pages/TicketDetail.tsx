@@ -81,6 +81,7 @@ const TicketDetail: React.FC = () => {
   const [showActivityLog, setShowActivityLog] = useState(false);
   const [showProblemSearch, setShowProblemSearch] = useState(false);
   const [problemSearchQuery, setProblemSearchQuery] = useState('');
+  const [showScamModal, setShowScamModal] = useState(false);
 
   // Close submit dropdown when clicking outside
   useEffect(() => {
@@ -377,6 +378,23 @@ const TicketDetail: React.FC = () => {
     },
     onError: () => {
       toast.error('Failed to update problem link');
+    }
+  });
+
+  const markAsScamMutation = useMutation({
+    mutationFn: async () => {
+      const response = await ticketApi.markAsScam(id!);
+      return response.data;
+    },
+    onSuccess: () => {
+      toast.success('Ticket marked as scam and user blocked');
+      queryClient.invalidateQueries({ queryKey: ['tickets'] });
+      queryClient.invalidateQueries({ queryKey: ['agentTickets'] });
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      navigate('/agent');
+    },
+    onError: () => {
+      toast.error('Failed to mark ticket as scam');
     }
   });
 
@@ -750,6 +768,17 @@ const TicketDetail: React.FC = () => {
                       <span className="hidden sm:inline">Merge</span>
                     </button>
                   )}
+                  {/* Mark as Scam button */}
+                  <button
+                    onClick={() => setShowScamModal(true)}
+                    className="inline-flex items-center px-3 py-2 border border-red-300 dark:border-red-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-red-600 dark:text-red-400 text-sm hover:bg-red-50 dark:hover:bg-red-900/20 focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors whitespace-nowrap"
+                    title="Mark as scam and block user"
+                  >
+                    <svg className="w-4 h-4 sm:mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <span className="hidden sm:inline">Scam</span>
+                  </button>
                 </>
               )}
             </div>
@@ -2153,6 +2182,94 @@ const TicketDetail: React.FC = () => {
                     </>
                   ) : (
                     <span>Merge</span>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Mark as Scam Confirmation Modal */}
+        {showScamModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 dark:border-gray-700">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <svg className="w-4 h-4 sm:w-5 sm:h-5 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">Mark as Scam</h3>
+                    <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+                      This action cannot be undone
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowScamModal(false)}
+                  className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Modal Content */}
+              <div className="p-4 sm:p-6">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  Are you sure you want to mark this ticket as scam? This will:
+                </p>
+                <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-2 mb-4">
+                  <li className="flex items-center gap-2">
+                    <svg className="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                    </svg>
+                    <span>Block the user: <strong className="text-gray-900 dark:text-white">{ticket?.requester?.email}</strong></span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <svg className="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    <span>Delete this ticket permanently</span>
+                  </li>
+                </ul>
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+                  <p className="text-sm text-red-700 dark:text-red-300 font-medium">
+                    The blocked user will not be able to create new tickets.
+                  </p>
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="flex items-center justify-end gap-2 sm:gap-3 px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+                <button
+                  onClick={() => setShowScamModal(false)}
+                  className="px-3 sm:px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    markAsScamMutation.mutate();
+                    setShowScamModal(false);
+                  }}
+                  disabled={markAsScamMutation.isPending}
+                  className="px-3 sm:px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                >
+                  {markAsScamMutation.isPending ? (
+                    <>
+                      <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      <span>Processing...</span>
+                    </>
+                  ) : (
+                    <span>Mark as Scam & Block User</span>
                   )}
                 </button>
               </div>

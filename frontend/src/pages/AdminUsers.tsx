@@ -52,8 +52,8 @@ interface UserTableProps {
   users: User[];
   title: string;
   count: number;
-  expanded: boolean;
-  setExpanded: (expanded: boolean) => void;
+  displayLimit: number;
+  setDisplayLimit: (limit: number) => void;
   totalCount: number;
   badgeColor: string;
   sortField: SortField;
@@ -82,8 +82,8 @@ const UserTable: React.FC<UserTableProps> = ({
   users: displayUsers,
   title,
   count,
-  expanded,
-  setExpanded,
+  displayLimit,
+  setDisplayLimit,
   totalCount,
   badgeColor,
   sortField,
@@ -361,27 +361,29 @@ const UserTable: React.FC<UserTableProps> = ({
       </table>
     </div>
     {totalCount > 10 && (
-      <div className="flex justify-center">
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors"
-        >
-          {expanded ? (
-            <>
-              <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-              </svg>
-              Show Less
-            </>
-          ) : (
-            <>
-              <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-              Show {totalCount - 10} More
-            </>
-          )}
-        </button>
+      <div className="flex justify-center gap-2">
+        {displayLimit > 10 && (
+          <button
+            onClick={() => setDisplayLimit(10)}
+            className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors"
+          >
+            <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+            </svg>
+            Show Less
+          </button>
+        )}
+        {displayLimit < totalCount && (
+          <button
+            onClick={() => setDisplayLimit(Math.min(displayLimit + 100, totalCount))}
+            className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors"
+          >
+            <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+            Show {Math.min(100, totalCount - displayLimit)} More ({totalCount - displayLimit} remaining)
+          </button>
+        )}
       </div>
     )}
   </div>
@@ -391,10 +393,10 @@ const AdminUsers: React.FC = () => {
   const queryClient = useQueryClient();
   const [sortField, setSortField] = useState<SortField>('role');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
-  const [adminExpanded, setAdminExpanded] = useState(false);
-  const [agentExpanded, setAgentExpanded] = useState(false);
-  const [userExpanded, setUserExpanded] = useState(false);
-  const [blockedExpanded, setBlockedExpanded] = useState(false);
+  const [adminLimit, setAdminLimit] = useState(10);
+  const [agentLimit, setAgentLimit] = useState(10);
+  const [userLimit, setUserLimit] = useState(10);
+  const [blockedLimit, setBlockedLimit] = useState(10);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editingEmail, setEditingEmail] = useState('');
   const [editingFirstName, setEditingFirstName] = useState('');
@@ -549,22 +551,22 @@ const AdminUsers: React.FC = () => {
     return filteredUsers.filter((user) => user.isBlocked);
   }, [filteredUsers]);
 
-  // Display arrays (limited to 10 unless expanded)
+  // Display arrays (limited by current limit)
   const displayAdminUsers = useMemo(() => {
-    return adminExpanded ? adminUsers : adminUsers.slice(0, 10);
-  }, [adminUsers, adminExpanded]);
+    return adminUsers.slice(0, adminLimit);
+  }, [adminUsers, adminLimit]);
 
   const displayAgentUsers = useMemo(() => {
-    return agentExpanded ? agentUsers : agentUsers.slice(0, 10);
-  }, [agentUsers, agentExpanded]);
+    return agentUsers.slice(0, agentLimit);
+  }, [agentUsers, agentLimit]);
 
   const displayRegularUsers = useMemo(() => {
-    return userExpanded ? regularUsers : regularUsers.slice(0, 10);
-  }, [regularUsers, userExpanded]);
+    return regularUsers.slice(0, userLimit);
+  }, [regularUsers, userLimit]);
 
   const displayBlockedUsers = useMemo(() => {
-    return blockedExpanded ? blockedUsers : blockedUsers.slice(0, 10);
-  }, [blockedUsers, blockedExpanded]);
+    return blockedUsers.slice(0, blockedLimit);
+  }, [blockedUsers, blockedLimit]);
 
   const handleEditUser = useCallback((user: User) => {
     setEditingUserId(user.id);
@@ -695,8 +697,8 @@ const AdminUsers: React.FC = () => {
                 users={displayAdminUsers}
                 title="Administrators"
                 count={adminUsers.length}
-                expanded={adminExpanded}
-                setExpanded={setAdminExpanded}
+                displayLimit={adminLimit}
+                setDisplayLimit={setAdminLimit}
                 totalCount={adminUsers.length}
                 badgeColor="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300"
                 sortField={sortField}
@@ -728,8 +730,8 @@ const AdminUsers: React.FC = () => {
                 users={displayAgentUsers}
                 title="Agents"
                 count={agentUsers.length}
-                expanded={agentExpanded}
-                setExpanded={setAgentExpanded}
+                displayLimit={agentLimit}
+                setDisplayLimit={setAgentLimit}
                 totalCount={agentUsers.length}
                 badgeColor="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
                 sortField={sortField}
@@ -761,8 +763,8 @@ const AdminUsers: React.FC = () => {
                 users={displayRegularUsers}
                 title="Users"
                 count={regularUsers.length}
-                expanded={userExpanded}
-                setExpanded={setUserExpanded}
+                displayLimit={userLimit}
+                setDisplayLimit={setUserLimit}
                 totalCount={regularUsers.length}
                 badgeColor="bg-gray-100 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300"
                 sortField={sortField}
@@ -794,8 +796,8 @@ const AdminUsers: React.FC = () => {
                 users={displayBlockedUsers}
                 title="Blocked Users"
                 count={blockedUsers.length}
-                expanded={blockedExpanded}
-                setExpanded={setBlockedExpanded}
+                displayLimit={blockedLimit}
+                setDisplayLimit={setBlockedLimit}
                 totalCount={blockedUsers.length}
                 badgeColor="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300"
                 sortField={sortField}

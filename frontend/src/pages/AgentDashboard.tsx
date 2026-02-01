@@ -25,6 +25,7 @@ const AgentDashboard: React.FC = () => {
   // Use currentView for admins (respects "View as" switcher), userRole for others
   const effectiveRole = userRole === 'ADMIN' ? currentView : userRole;
   const [statusFilter, setStatusFilter] = useState<string>('OPEN');
+  const [typeFilter, setTypeFilter] = useState<string>('');
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [selectedTickets, setSelectedTickets] = useState<string[]>([]);
@@ -139,10 +140,11 @@ const AgentDashboard: React.FC = () => {
   }, [searchQuery]);
 
   const { data: ticketResponse, isLoading } = useQuery({
-    queryKey: ['agentTickets', statusFilter, currentPage, itemsPerPage, sortField, sortDirection, debouncedSearch],
+    queryKey: ['agentTickets', statusFilter, typeFilter, currentPage, itemsPerPage, sortField, sortDirection, debouncedSearch],
     queryFn: async () => {
       const response = await ticketApi.getAll({
         status: statusFilter || undefined,
+        type: typeFilter || undefined,
         page: currentPage,
         limit: itemsPerPage,
         sortField,
@@ -178,7 +180,7 @@ const AgentDashboard: React.FC = () => {
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [statusFilter, debouncedSearch]);
+  }, [statusFilter, typeFilter, debouncedSearch]);
 
   // Pagination from server response
   const totalTickets = pagination?.totalCount || 0;
@@ -489,25 +491,39 @@ const AgentDashboard: React.FC = () => {
         </div>
 
         {/* Status Filters */}
-        <div className="flex gap-2 flex-wrap">
-          {statusFilters.map((filter) => (
-            <button
-              key={filter.value}
-              onClick={() => setStatusFilter(filter.value)}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                statusFilter === filter.value
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
-              }`}
-            >
-              {filter.label}
-              {stats && filter.value && (
-                <span className="ml-2 px-2 py-0.5 rounded-full bg-white/20 text-xs">
-                  {stats.byStatus[getStatsKey(filter.value)] || 0}
-                </span>
-              )}
-            </button>
-          ))}
+        <div className="flex justify-between items-center gap-2 flex-wrap">
+          <div className="flex gap-2 flex-wrap">
+            {statusFilters.map((filter) => (
+              <button
+                key={filter.value}
+                onClick={() => setStatusFilter(filter.value)}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  statusFilter === filter.value
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
+                }`}
+              >
+                {filter.label}
+                {stats && filter.value && (
+                  <span className="ml-2 px-2 py-0.5 rounded-full bg-white/20 text-xs">
+                    {stats.byStatus[getStatsKey(filter.value)] || 0}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Problem Filter */}
+          <button
+            onClick={() => setTypeFilter(typeFilter === 'PROBLEM' ? '' : 'PROBLEM')}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              typeFilter === 'PROBLEM'
+                ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200 border border-purple-300 dark:border-purple-700'
+                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
+            }`}
+          >
+            Problem Tickets
+          </button>
         </div>
 
         {/* Bulk Actions Toolbar - Fixed at bottom */}

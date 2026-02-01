@@ -22,6 +22,7 @@ api.interceptors.request.use(async (config) => {
 export const ticketApi = {
   getAll: (params?: {
     status?: string;
+    type?: string;
     assigneeId?: string;
     page?: number;
     limit?: number;
@@ -73,6 +74,9 @@ export const ticketApi = {
 
   searchProblems: (query?: string, excludeId?: string) =>
     api.get('/tickets/problems/search', { params: { q: query, excludeId } }),
+
+  markAsScam: (id: string) =>
+    api.post(`/tickets/${id}/mark-scam`),
 
   generateSummary: (ticketId: string) =>
     api.post(`/tickets/${ticketId}/generate-summary`),

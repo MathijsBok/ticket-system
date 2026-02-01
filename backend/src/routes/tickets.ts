@@ -11,7 +11,7 @@ const router = Router();
 // Get all tickets (with filters and pagination for agents)
 router.get('/', requireAuth, async (req: AuthRequest, res) => {
   try {
-    const { status, assigneeId, requesterId, page, limit, sortField, sortDirection, search } = req.query;
+    const { status, assigneeId, requesterId, page, limit, sortField, sortDirection, search, type } = req.query;
     const userRole = req.userRole;
     const userId = req.userId;
 
@@ -30,6 +30,11 @@ router.get('/', requireAuth, async (req: AuthRequest, res) => {
     // Agents can see all tickets (optional filtering)
     if (status && typeof status === 'string') {
       where.status = status.toUpperCase();
+    }
+
+    // Filter by ticket type (NORMAL, PROBLEM, INCIDENT)
+    if (type && typeof type === 'string') {
+      where.type = type.toUpperCase();
     }
 
     if (assigneeId && typeof assigneeId === 'string') {
@@ -654,6 +659,16 @@ router.patch('/:id',
           details: { newType: type }
         });
 
+        // Auto-set priority to URGENT for INCIDENT and PROBLEM tickets
+        if (type === 'INCIDENT' || type === 'PROBLEM') {
+          updateData.priority = 'URGENT';
+          activities.push({
+            userId,
+            action: 'priority_changed',
+            details: { newPriority: 'URGENT', reason: 'Auto-set for ' + type + ' ticket' }
+          });
+        }
+
         // If changing to INCIDENT without a problemId, clear any existing problemId
         // If changing to NORMAL or PROBLEM, clear problemId
         if (type !== 'INCIDENT') {
@@ -690,9 +705,15 @@ router.patch('/:id',
           }
 
           updateData.problemId = problemId;
-          // Also ensure this ticket is marked as INCIDENT
+          // Also ensure this ticket is marked as INCIDENT with URGENT priority
           if (!type) {
             updateData.type = 'INCIDENT';
+            updateData.priority = 'URGENT';
+            activities.push({
+              userId,
+              action: 'priority_changed',
+              details: { newPriority: 'URGENT', reason: 'Auto-set for INCIDENT ticket' }
+            });
           }
           activities.push({
             userId,
@@ -899,6 +920,63 @@ router.delete('/bulk/delete',
     } catch (error) {
       console.error('Error bulk deleting tickets:', error);
       return res.status(500).json({ error: 'Failed to bulk delete tickets' });
+    }
+  }
+);
+
+// Mark ticket as scam - blocks the requester and deletes the ticket
+router.post('/:id/mark-scam',
+  requireAuth,
+  requireAgent,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+
+      // Get the ticket with requester info
+      const ticket = await prisma.ticket.findUnique({
+        where: { id },
+        include: {
+          requester: {
+            select: { id: true, role: true, email: true }
+          }
+        }
+      });
+
+      if (!ticket) {
+        return res.status(404).json({ error: 'Ticket not found' });
+      }
+
+      if (!ticket.requester) {
+        return res.status(400).json({ error: 'Ticket has no requester' });
+      }
+
+      // Prevent blocking admins
+      if (ticket.requester.role === 'ADMIN') {
+        return res.status(400).json({ error: 'Cannot mark admin user as scam' });
+      }
+
+      // Block the requester
+      await prisma.user.update({
+        where: { id: ticket.requester.id },
+        data: {
+          isBlocked: true,
+          blockedAt: new Date(),
+          blockedReason: `Marked as scam from ticket #${ticket.ticketNumber}`
+        }
+      });
+
+      // Delete the ticket
+      await prisma.ticket.delete({
+        where: { id }
+      });
+
+      return res.json({
+        success: true,
+        message: `User ${ticket.requester.email} blocked and ticket #${ticket.ticketNumber} deleted`
+      });
+    } catch (error) {
+      console.error('Error marking ticket as scam:', error);
+      return res.status(500).json({ error: 'Failed to mark ticket as scam' });
     }
   }
 );
