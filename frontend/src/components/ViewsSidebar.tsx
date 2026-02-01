@@ -6,6 +6,7 @@ interface ViewItem {
   count: number;
   filter: {
     status?: string | string[];
+    allStatuses?: string[]; // What "All" button should filter by (if different from status)
     type?: string;
     assignee?: 'me' | 'unassigned' | 'all';
     createdByMe?: boolean;
@@ -62,13 +63,13 @@ const ViewsSidebar: React.FC<ViewsSidebarProps> = ({
 
   // Main views (no group header)
   const mainViews: ViewItem[] = [
-    { id: 'your-unsolved', name: 'Your unsolved tickets', count: stats?.myUnsolvedCount || 0, filter: { assignee: 'me', status: ['OPEN', 'PENDING', 'ON_HOLD'] } },
+    { id: 'your-unsolved', name: 'Your unsolved tickets', count: stats?.myUnsolvedCount || 0, filter: { assignee: 'me', status: 'OPEN', allStatuses: ['OPEN', 'PENDING', 'ON_HOLD'] } },
     { id: 'unassigned', name: 'Unassigned tickets', count: stats?.unassignedCount || 0, filter: { assignee: 'unassigned' } },
     { id: 'open', name: 'Open Tickets', count: stats?.byStatus.open || 0, filter: { status: 'OPEN' } },
     { id: 'pending', name: 'Pending tickets', count: stats?.byStatus.pending || 0, filter: { status: 'PENDING' } },
     { id: 'on-hold', name: 'On-Hold tickets', count: stats?.byStatus.onHold || 0, filter: { status: 'ON_HOLD' } },
-    { id: 'problem', name: 'Problem tickets', count: stats?.byType?.problem || 0, filter: { type: 'PROBLEM', status: 'OPEN' } },
-    { id: 'incident', name: 'Incident tickets', count: stats?.byType?.incident || 0, filter: { type: 'INCIDENT', status: 'OPEN' } },
+    { id: 'problem', name: 'Problem tickets', count: stats?.byType?.problem || 0, filter: { type: 'PROBLEM', status: 'OPEN', allStatuses: ['OPEN', 'PENDING', 'ON_HOLD', 'SOLVED'] } },
+    { id: 'incident', name: 'Incident tickets', count: stats?.byType?.incident || 0, filter: { type: 'INCIDENT', status: 'OPEN', allStatuses: ['OPEN', 'PENDING', 'ON_HOLD', 'SOLVED'] } },
     { id: 'all-unsolved', name: 'All unsolved tickets', count: allUnsolved, filter: { status: ['OPEN', 'PENDING', 'ON_HOLD'] } },
     { id: 'solved', name: 'Recently solved tickets', count: stats?.byStatus.solved || 0, filter: { status: 'SOLVED', solvedAfter: solvedAfterDate } },
     { id: 'all', name: 'All tickets', count: stats?.total || 0, filter: {} }
@@ -76,7 +77,7 @@ const ViewsSidebar: React.FC<ViewsSidebarProps> = ({
 
   // Personal views
   const personalViews: ViewItem[] = [
-    { id: 'my-created', name: 'My Tickets', count: stats?.myRequestsCount || 0, filter: { createdByMe: true, status: 'OPEN' } }
+    { id: 'my-created', name: 'My Tickets', count: stats?.myRequestsCount || 0, filter: { createdByMe: true, status: 'OPEN', allStatuses: ['NEW', 'OPEN', 'PENDING', 'ON_HOLD', 'SOLVED', 'CLOSED'] } }
   ];
 
   if (isCollapsed) {

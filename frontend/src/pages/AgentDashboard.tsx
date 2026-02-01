@@ -378,13 +378,14 @@ const AgentDashboard: React.FC = () => {
   };
 
   // Handle view change from sidebar
-  const handleViewChange = (viewId: string, filter: { status?: string | string[]; type?: string; assignee?: string; createdByMe?: boolean; solvedAfter?: string }) => {
+  const handleViewChange = (viewId: string, filter: { status?: string | string[]; allStatuses?: string[]; type?: string; assignee?: string; createdByMe?: boolean; solvedAfter?: string }) => {
     setActiveViewId(viewId);
     // Handle status filter - can be string, array, or empty
-    // Also track the view's base status so "All" button respects view constraints
-    const baseStatus = Array.isArray(filter.status) ? filter.status.join(',') : (filter.status || '');
-    setStatusFilter(baseStatus);
-    setViewBaseStatus(baseStatus);
+    const initialStatus = Array.isArray(filter.status) ? filter.status.join(',') : (filter.status || '');
+    setStatusFilter(initialStatus);
+    // Track what "All" button should filter by (allStatuses if provided, otherwise same as initial)
+    const allStatus = filter.allStatuses ? filter.allStatuses.join(',') : initialStatus;
+    setViewBaseStatus(allStatus);
     setTypeFilter(filter.type || '');
     // Handle personal filters
     setMyRequests(filter.createdByMe === true);
