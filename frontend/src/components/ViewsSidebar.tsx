@@ -80,8 +80,8 @@ const ViewsSidebar: React.FC<ViewsSidebarProps> = ({
     { id: 'open', name: 'Open Tickets', count: stats?.byStatus.open || 0, filter: { status: 'OPEN' } },
     { id: 'pending', name: 'Pending tickets', count: stats?.byStatus.pending || 0, filter: { status: 'PENDING' } },
     { id: 'on-hold', name: 'On-Hold tickets', count: stats?.byStatus.onHold || 0, filter: { status: 'ON_HOLD' } },
-    { id: 'problem', name: 'Problem tickets', count: stats?.byType?.problem || 0, filter: { type: 'PROBLEM', status: 'OPEN', allStatuses: ['OPEN', 'PENDING', 'ON_HOLD', 'SOLVED'] } },
-    { id: 'incident', name: 'Incident tickets', count: stats?.byType?.incident || 0, filter: { type: 'INCIDENT', status: 'OPEN', allStatuses: ['OPEN', 'PENDING', 'ON_HOLD', 'SOLVED'] } },
+    { id: 'problem', name: 'Problem tickets', count: stats?.byType?.problem || 0, filter: { type: 'PROBLEM', status: ['OPEN', 'PENDING', 'ON_HOLD', 'SOLVED'], allStatuses: ['OPEN', 'PENDING', 'ON_HOLD', 'SOLVED'] } },
+    { id: 'incident', name: 'Incident tickets', count: stats?.byType?.incident || 0, filter: { type: 'INCIDENT', status: ['OPEN', 'PENDING', 'ON_HOLD', 'SOLVED'], allStatuses: ['OPEN', 'PENDING', 'ON_HOLD', 'SOLVED'] } },
     { id: 'all-unsolved', name: 'All unsolved tickets', count: allUnsolved, filter: { status: ['OPEN', 'PENDING', 'ON_HOLD'] } },
     { id: 'solved', name: 'Recently solved tickets', count: stats?.byStatus.solved || 0, filter: { status: 'SOLVED', solvedAfter: solvedAfterDate } },
     { id: 'all', name: 'All tickets', count: stats?.total || 0, filter: {} }
