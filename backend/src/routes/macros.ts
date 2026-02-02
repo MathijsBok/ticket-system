@@ -2,7 +2,7 @@ import { Router, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import multer from 'multer';
 import { prisma } from '../lib/prisma';
-import { requireAuth, requireAdmin, requireAgent, AuthRequest } from '../middleware/auth';
+import { requireAuth, requireAgent, AuthRequest } from '../middleware/auth';
 
 // Configure multer for file uploads
 const upload = multer({
