@@ -45,6 +45,10 @@ const CreateTicket: React.FC = () => {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const userSearchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Simple form fields for agents (when no form is selected)
+  const [simpleSubject, setSimpleSubject] = useState('');
+  const [simpleDescription, setSimpleDescription] = useState('');
+
   // Allowed file types
   const ALLOWED_EXTENSIONS = '.png,.jpg,.jpeg,.gif,.webp,.bmp,.svg,.mp4,.webm,.mov,.avi';
   const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp', 'image/bmp', 'image/svg+xml', 'video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo'];
@@ -225,7 +229,31 @@ const CreateTicket: React.FC = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Require form selection
+    // For agents without form: validate simple fields
+    if (isAgentOrAdmin && !selectedFormId) {
+      if (!simpleSubject.trim()) {
+        toast.error('Please enter a subject');
+        return;
+      }
+      if (!requesterEmail || !isValidEmail(requesterEmail)) {
+        toast.error('Please enter a valid email address for the requester');
+        return;
+      }
+
+      createMutation.mutate({
+        subject: simpleSubject.trim(),
+        description: simpleDescription.trim() || 'No description provided',
+        channel: 'WEB',
+        priority,
+        categoryId: categoryId || undefined,
+        relatedTicketId: relatedTicketId || undefined,
+        userAgent: navigator.userAgent,
+        requesterEmail
+      });
+      return;
+    }
+
+    // Require form selection for regular users
     if (!selectedFormId) {
       toast.error('Please select a form to continue');
       return;
@@ -444,22 +472,91 @@ const CreateTicket: React.FC = () => {
     );
   };
 
+  // Render the simple form for agents (quick ticket creation)
+  const renderSimpleAgentForm = () => {
+    if (!isAgentOrAdmin) return null;
+
+    return (
+      <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+          Quick Ticket Creation
+        </h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+          Create a ticket with just the essential fields, or select a form below for more options.
+        </p>
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="simpleSubject" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Subject <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              id="simpleSubject"
+              value={simpleSubject}
+              onChange={(e) => setSimpleSubject(e.target.value)}
+              placeholder="Enter ticket subject"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+            />
+          </div>
+          <div>
+            <label htmlFor="simpleDescription" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Description
+            </label>
+            <textarea
+              id="simpleDescription"
+              value={simpleDescription}
+              onChange={(e) => setSimpleDescription(e.target.value)}
+              placeholder="Enter ticket description (optional)"
+              rows={4}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+            />
+          </div>
+          <div>
+            <label htmlFor="simplePriority" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Priority
+            </label>
+            <select
+              id="simplePriority"
+              value={priority}
+              onChange={(e) => setPriority(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+            >
+              <option value="LOW">Low</option>
+              <option value="NORMAL">Normal</option>
+              <option value="HIGH">High</option>
+              <option value="URGENT">Urgent</option>
+            </select>
+          </div>
+          <div className="pt-2">
+            <button
+              type="submit"
+              disabled={createMutation.isPending || !simpleSubject.trim() || !requesterEmail || !isValidEmail(requesterEmail)}
+              className="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {createMutation.isPending ? 'Creating...' : 'Create Ticket'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // Render the form selector component
   const renderFormSelector = () => (
     <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 p-6">
       <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-        Select Request Type <span className="text-red-500">*</span>
+        {isAgentOrAdmin ? 'Or Select a Form' : 'Select Request Type'} {!isAgentOrAdmin && <span className="text-red-500">*</span>}
       </h2>
       <div>
         <label htmlFor="formId" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-          Please select the type of request you want to submit
+          {isAgentOrAdmin ? 'Select a form for additional fields' : 'Please select the type of request you want to submit'}
         </label>
         <select
           id="formId"
           value={selectedFormId || ''}
           onChange={(e) => handleFormSelection(e.target.value)}
           className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-          required
+          required={!isAgentOrAdmin}
         >
           <option value="">-- Select a form --</option>
           {forms?.map((form) => (
@@ -616,10 +713,14 @@ const CreateTicket: React.FC = () => {
               {/* User Selection for Agents */}
               {renderUserSelection()}
 
-              {/* Form Selection - REQUIRED */}
+              {/* Simple Agent Form - Quick ticket creation */}
+              {renderSimpleAgentForm()}
+
+              {/* Form Selection - Optional for agents, required for users */}
               {forms && forms.length > 0 && renderFormSelector()}
 
-              {/* Important Support Information - Only show when no form is selected */}
+              {/* Important Support Information - Only show for regular users when no form is selected */}
+              {!isAgentOrAdmin && (
               <div className="bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-400 dark:border-yellow-600 p-6 rounded-r-lg shadow-sm">
                 <div className="flex items-start">
                   <div className="flex-shrink-0">
@@ -672,6 +773,7 @@ const CreateTicket: React.FC = () => {
                   </div>
                 </div>
               </div>
+              )}
             </div>
           )}
 
