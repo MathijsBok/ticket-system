@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma';
 import { requireAuth, requireAgent, AuthRequest } from '../middleware/auth';
 import { generateTicketSummary, generateKnowledgeBasedSolution, getKnowledgeContent } from '../services/aiService';
 import { getOrCreateEmailThread, sendTicketCreatedEmail, sendTicketResolvedEmail } from '../services/emailService';
-import { getCountryFromIP, getTimezoneFromCountry, getCountryFromTimezone } from '../lib/geolocation';
+import { getCountryFromIP } from '../lib/geolocation';
 
 const router = Router();
 
@@ -79,27 +79,13 @@ router.get('/', requireAuth, async (req: AuthRequest, res) => {
       const searchTerm = search.trim();
       const searchNum = parseInt(searchTerm);
 
-      // Build numeric conditions for partial ticket number matching
-      // If user searches "1", find tickets #1, #10-19, #100-199, etc.
-      // If user searches "12", find tickets #12, #120-129, #1200-1299, etc.
-      const numericConditions: any[] = [];
-      if (!isNaN(searchNum) && searchNum > 0) {
-        for (let i = 0; i <= 5; i++) {
-          const multiplier = Math.pow(10, i);
-          const minVal = searchNum * multiplier;
-          const maxVal = (searchNum + 1) * multiplier;
-          numericConditions.push({
-            ticketNumber: { gte: minVal, lt: maxVal }
-          });
-        }
-      }
-
       where.OR = [
         { subject: { contains: searchTerm, mode: 'insensitive' } },
         { requester: { email: { contains: searchTerm, mode: 'insensitive' } } },
         { requester: { firstName: { contains: searchTerm, mode: 'insensitive' } } },
         { requester: { lastName: { contains: searchTerm, mode: 'insensitive' } } },
-        ...numericConditions
+        // Exact match for ticket number
+        ...(!isNaN(searchNum) && searchNum > 0 ? [{ ticketNumber: searchNum }] : [])
       ];
     }
 
@@ -452,35 +438,11 @@ router.post('/',
         });
 
         if (requesterUser) {
-          const updateData: { country?: string; timezoneOffset?: string } = {};
-
-          // Always update country if we detected one
-          if (country) {
-            updateData.country = country;
-          }
-
-          // If user has country but no timezone, derive timezone from country
-          const effectiveCountry = country || requesterUser.country;
-          if (effectiveCountry && !requesterUser.timezoneOffset) {
-            const derivedTimezone = getTimezoneFromCountry(effectiveCountry);
-            if (derivedTimezone) {
-              updateData.timezoneOffset = derivedTimezone;
-            }
-          }
-
-          // If user has timezone but no country, derive country from timezone
-          if (!effectiveCountry && requesterUser.timezoneOffset) {
-            const derivedCountry = getCountryFromTimezone(requesterUser.timezoneOffset);
-            if (derivedCountry) {
-              updateData.country = derivedCountry;
-            }
-          }
-
-          // Update if we have any data to update
-          if (Object.keys(updateData).length > 0) {
+          // Update country if we detected one from IP (don't infer timezone from country)
+          if (country && !requesterUser.country) {
             await prisma.user.update({
               where: { id: requesterId },
-              data: updateData
+              data: { country }
             });
           }
         }
