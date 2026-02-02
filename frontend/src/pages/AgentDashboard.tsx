@@ -653,7 +653,7 @@ const AgentDashboard: React.FC = () => {
                   <select
                     value={bulkAssignee}
                     onChange={(e) => setBulkAssignee(e.target.value)}
-                    className="px-2 py-1.5 border border-blue-400 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-white max-w-[120px]"
+                    className="px-2 py-1.5 border border-blue-400 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-white max-w-[150px] sm:max-w-[180px]"
                   >
                     <option value="">Assign...</option>
                     <option value="">Unassign</option>
@@ -699,7 +699,7 @@ const AgentDashboard: React.FC = () => {
                   <div className="relative">
                     <button
                       onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                      className="px-3 py-2 border border-blue-500 dark:border-blue-800 rounded-md shadow-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-white flex items-center gap-2 min-w-[160px] justify-between"
+                      className="px-3 py-2 border border-blue-500 dark:border-blue-800 rounded-md shadow-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-white flex items-center gap-2 min-w-[140px] sm:min-w-[160px] justify-between"
                     >
                       <span>{bulkStatus ? bulkStatus.replace('_', ' ') : 'Change Status...'}</span>
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -786,7 +786,7 @@ const AgentDashboard: React.FC = () => {
                   <div className="relative">
                     <button
                       onClick={() => setShowAssignDropdown(!showAssignDropdown)}
-                      className="px-3 py-2 border border-blue-500 dark:border-blue-800 rounded-md shadow-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-white flex items-center gap-2 min-w-[160px] justify-between"
+                      className="px-3 py-2 border border-blue-500 dark:border-blue-800 rounded-md shadow-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-white flex items-center gap-2 min-w-[140px] sm:min-w-[160px] justify-between"
                     >
                       <span>
                         {bulkAssignee

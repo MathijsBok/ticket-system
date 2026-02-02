@@ -271,7 +271,7 @@ const AnalyticsDashboard: React.FC = () => {
         </div>
 
         {/* Overview Cards with hover effects - Compact */}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
           <div className="group relative overflow-hidden bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
             <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
             <div className="relative p-4 text-white">
@@ -394,7 +394,7 @@ const AnalyticsDashboard: React.FC = () => {
         </div>
 
         {/* Charts Grid with modern cards */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
           {/* Tickets Solved per Month */}
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 border border-gray-100 dark:border-gray-700">
             <div className="flex items-center justify-between mb-6">
@@ -417,7 +417,7 @@ const AnalyticsDashboard: React.FC = () => {
                 ))}
               </select>
             </div>
-            <ResponsiveContainer width="100%" height={250}>
+            <div className="h-[200px] sm:h-[250px]"><ResponsiveContainer width="100%" height="100%">
               <BarChart data={solvedByMonthData?.data || []} margin={{ left: 0, right: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-700" />
                 <XAxis dataKey="name" className="text-xs" />
@@ -425,7 +425,7 @@ const AnalyticsDashboard: React.FC = () => {
                 <Tooltip content={<CustomTooltip />} />
                 <Bar dataKey="count" name="Solved" fill="#8B5CF6" radius={[8, 8, 0, 0]} label={{ position: 'top', fill: '#6B7280', fontSize: 10, fontWeight: 600 }} />
               </BarChart>
-            </ResponsiveContainer>
+            </ResponsiveContainer></div>
           </div>
 
           {/* Tickets by Priority - Horizontal Bar Chart */}
@@ -450,7 +450,7 @@ const AnalyticsDashboard: React.FC = () => {
                 ))}
               </select>
             </div>
-            <ResponsiveContainer width="100%" height={200}>
+            <div className="h-[160px] sm:h-[200px]"><ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={(priorityByYearData?.data || charts.priority).map((p: any) => ({ ...p, name: p.label || p.name }))}
                 layout="vertical"
@@ -466,7 +466,7 @@ const AnalyticsDashboard: React.FC = () => {
                   ))}
                 </Bar>
               </BarChart>
-            </ResponsiveContainer>
+            </ResponsiveContainer></div>
           </div>
 
           {/* Top Countries per Year */}
@@ -492,7 +492,7 @@ const AnalyticsDashboard: React.FC = () => {
               </select>
             </div>
             {countriesByYearData?.data && countriesByYearData.data.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
+              <div className="h-[220px] sm:h-[300px]"><ResponsiveContainer width="100%" height="100%">
                 <BarChart data={countriesByYearData.data} margin={{ left: 0, right: 20 }}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-700" />
                   <XAxis dataKey="name" className="text-xs" angle={-45} textAnchor="end" height={80} interval={0} />
@@ -504,7 +504,7 @@ const AnalyticsDashboard: React.FC = () => {
                     ))}
                   </Bar>
                 </BarChart>
-              </ResponsiveContainer>
+              </ResponsiveContainer></div>
             ) : (
               <div className="text-center py-12 text-gray-500 dark:text-gray-400">
                 No country data available for {countryYear}
@@ -534,7 +534,7 @@ const AnalyticsDashboard: React.FC = () => {
                 ))}
               </select>
             </div>
-            <ResponsiveContainer width="100%" height={300}>
+            <div className="h-[220px] sm:h-[300px]"><ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
                   data={channelByYearData?.data || charts.channel}
@@ -554,7 +554,7 @@ const AnalyticsDashboard: React.FC = () => {
                 <Tooltip content={<CustomTooltip />} />
                 <Legend verticalAlign="bottom" height={36} />
               </PieChart>
-            </ResponsiveContainer>
+            </ResponsiveContainer></div>
           </div>
 
           {/* Tickets by Weekday */}
@@ -580,7 +580,7 @@ const AnalyticsDashboard: React.FC = () => {
                   ))}
                 </select>
               </div>
-              <ResponsiveContainer width="100%" height={300}>
+              <div className="h-[220px] sm:h-[300px]"><ResponsiveContainer width="100%" height="100%">
                 <BarChart data={weekdayByYearData?.data || charts.weekday}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-700" />
                   <XAxis dataKey="name" className="text-xs" />
@@ -594,7 +594,7 @@ const AnalyticsDashboard: React.FC = () => {
                     </linearGradient>
                   </defs>
                 </BarChart>
-              </ResponsiveContainer>
+              </ResponsiveContainer></div>
             </div>
           )}
 
@@ -621,7 +621,7 @@ const AnalyticsDashboard: React.FC = () => {
                   ))}
                 </select>
               </div>
-              <ResponsiveContainer width="100%" height={300}>
+              <div className="h-[220px] sm:h-[300px]"><ResponsiveContainer width="100%" height="100%">
                 <BarChart data={hourlyByYearData?.data || charts.hourly}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-700" />
                   <XAxis dataKey="label" className="text-xs" />
@@ -635,7 +635,7 @@ const AnalyticsDashboard: React.FC = () => {
                     </linearGradient>
                   </defs>
                 </BarChart>
-              </ResponsiveContainer>
+              </ResponsiveContainer></div>
             </div>
           )}
 
@@ -650,7 +650,7 @@ const AnalyticsDashboard: React.FC = () => {
                 </div>
                 <h3 className="text-xl font-bold text-gray-900 dark:text-white">Tickets by Category</h3>
               </div>
-              <ResponsiveContainer width="100%" height={300}>
+              <div className="h-[220px] sm:h-[300px]"><ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
                     data={charts.categories}
@@ -670,7 +670,7 @@ const AnalyticsDashboard: React.FC = () => {
                   <Tooltip content={<CustomTooltip />} />
                   <Legend verticalAlign="bottom" height={36} />
                 </PieChart>
-              </ResponsiveContainer>
+              </ResponsiveContainer></div>
             </div>
           )}
         </div>
@@ -686,7 +686,7 @@ const AnalyticsDashboard: React.FC = () => {
               </div>
               <h3 className="text-xl font-bold text-gray-900 dark:text-white">30-Day Ticket Trend</h3>
             </div>
-            <ResponsiveContainer width="100%" height={350}>
+            <div className="h-[280px] sm:h-[350px]"><ResponsiveContainer width="100%" height="100%">
               <LineChart data={trend}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-700" />
                 <XAxis
@@ -703,7 +703,7 @@ const AnalyticsDashboard: React.FC = () => {
                 <Line type="monotone" dataKey="count" stroke="#3B82F6" strokeWidth={3} name="Created Tickets" dot={{ fill: '#3B82F6', r: 4 }} activeDot={{ r: 6 }} />
                 <Line type="monotone" dataKey="solved" stroke="#10B981" strokeWidth={3} name="Solved" dot={{ fill: '#10B981', r: 4 }} activeDot={{ r: 6 }} />
               </LineChart>
-            </ResponsiveContainer>
+            </ResponsiveContainer></div>
           </div>
         )}
 
@@ -739,7 +739,7 @@ const AnalyticsDashboard: React.FC = () => {
                     <span className="text-sm text-gray-600 dark:text-gray-400">Hold</span>
                   </div>
                 </div>
-                <ResponsiveContainer width="100%" height={350}>
+                <div className="h-[280px] sm:h-[350px]"><ResponsiveContainer width="100%" height="100%">
                   <BarChart data={backlogHistoryData.daily}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-700" />
                     <XAxis
@@ -758,7 +758,7 @@ const AnalyticsDashboard: React.FC = () => {
                     <Bar dataKey="pending" stackId="backlog" fill={BACKLOG_COLORS.pending} name="Pending" />
                     <Bar dataKey="hold" stackId="backlog" fill={BACKLOG_COLORS.hold} name="Hold" radius={[4, 4, 0, 0]} />
                   </BarChart>
-                </ResponsiveContainer>
+                </ResponsiveContainer></div>
               </div>
             )}
 
@@ -791,7 +791,7 @@ const AnalyticsDashboard: React.FC = () => {
                     <span className="text-sm text-gray-600 dark:text-gray-400">Hold</span>
                   </div>
                 </div>
-                <ResponsiveContainer width="100%" height={350}>
+                <div className="h-[280px] sm:h-[350px]"><ResponsiveContainer width="100%" height="100%">
                   <BarChart data={backlogHistoryData.weekly}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-700" />
                     <XAxis
@@ -809,7 +809,7 @@ const AnalyticsDashboard: React.FC = () => {
                     <Bar dataKey="pending" stackId="backlog" fill={BACKLOG_COLORS.pending} name="Pending" />
                     <Bar dataKey="hold" stackId="backlog" fill={BACKLOG_COLORS.hold} name="Hold" radius={[4, 4, 0, 0]} />
                   </BarChart>
-                </ResponsiveContainer>
+                </ResponsiveContainer></div>
               </div>
             )}
           </div>
@@ -1081,7 +1081,7 @@ const AnalyticsDashboard: React.FC = () => {
             {aiSummaryData.monthlyChart && aiSummaryData.monthlyChart.some((m: any) => m.summaryGenerated > 0 || m.suggestionHelpful > 0 || m.suggestionNotHelpful > 0 || m.chatResponseGenerated > 0) && (
               <div>
                 <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">Monthly Breakdown</h4>
-                <ResponsiveContainer width="100%" height={250}>
+                <div className="h-[200px] sm:h-[250px]"><ResponsiveContainer width="100%" height="100%">
                   <BarChart data={aiSummaryData.monthlyChart} margin={{ left: 0, right: 20 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-700" />
                     <XAxis dataKey="name" className="text-xs" />
@@ -1094,7 +1094,7 @@ const AnalyticsDashboard: React.FC = () => {
                     <Bar dataKey="suggestionNotHelpful" name="Did Not Solve" fill="#EF4444" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="chatResponseGenerated" name="Chat Responses" fill="#06B6D4" radius={[4, 4, 0, 0]} />
                   </BarChart>
-                </ResponsiveContainer>
+                </ResponsiveContainer></div>
               </div>
             )}
 

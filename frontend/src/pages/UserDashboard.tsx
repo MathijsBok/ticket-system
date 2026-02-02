@@ -201,7 +201,32 @@ const UserDashboard: React.FC = () => {
                     {openTickets.length}
                   </span>
                 </div>
-                <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                {/* Mobile Card View */}
+                <div className="md:hidden space-y-3">
+                  {displayOpenTickets.map((ticket: any) => (
+                    <div
+                      key={ticket.id}
+                      onClick={() => navigate(`/tickets/${ticket.id}`)}
+                      className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm p-4 cursor-pointer active:bg-gray-50 dark:active:bg-gray-700"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-primary">#{ticket.ticketNumber}</span>
+                        <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${getStatusColor(ticket.status)}`}>
+                          {ticket.status.replace('_', ' ')}
+                        </span>
+                      </div>
+                      <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-2 line-clamp-2">
+                        {ticket.subject}
+                      </h3>
+                      <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                        <span className="capitalize">{ticket.priority.toLowerCase()}</span>
+                        <span>{format(new Date(ticket.createdAt), 'MMM d, yyyy')}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {/* Desktop Table View */}
+                <div className="hidden md:block bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
                   <table className="w-full divide-y divide-gray-200 dark:divide-gray-700" style={{ tableLayout: 'fixed' }}>
                     <colgroup>
                       <col style={{ width: '100px' }} />
@@ -346,7 +371,32 @@ const UserDashboard: React.FC = () => {
                     {solvedTickets.length}
                   </span>
                 </div>
-                <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                {/* Mobile Card View */}
+                <div className="md:hidden space-y-3">
+                  {displaySolvedTickets.map((ticket: any) => (
+                    <div
+                      key={ticket.id}
+                      onClick={() => navigate(`/tickets/${ticket.id}`)}
+                      className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm p-4 cursor-pointer active:bg-gray-50 dark:active:bg-gray-700"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-primary">#{ticket.ticketNumber}</span>
+                        <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${getStatusColor(ticket.status)}`}>
+                          {ticket.status.replace('_', ' ')}
+                        </span>
+                      </div>
+                      <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-2 line-clamp-2">
+                        {ticket.subject}
+                      </h3>
+                      <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                        <span className="capitalize">{ticket.priority.toLowerCase()}</span>
+                        <span>{format(new Date(ticket.createdAt), 'MMM d, yyyy')}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {/* Desktop Table View */}
+                <div className="hidden md:block bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
                   <table className="w-full divide-y divide-gray-200 dark:divide-gray-700" style={{ tableLayout: 'fixed' }}>
                     <colgroup>
                       <col style={{ width: '100px' }} />
@@ -491,7 +541,32 @@ const UserDashboard: React.FC = () => {
                     {closedTickets.length}
                   </span>
                 </div>
-                <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                {/* Mobile Card View */}
+                <div className="md:hidden space-y-3">
+                  {displayClosedTickets.map((ticket: any) => (
+                    <div
+                      key={ticket.id}
+                      onClick={() => navigate(`/tickets/${ticket.id}`)}
+                      className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm p-4 cursor-pointer active:bg-gray-50 dark:active:bg-gray-700"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-primary">#{ticket.ticketNumber}</span>
+                        <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${getStatusColor(ticket.status)}`}>
+                          {ticket.status.replace('_', ' ')}
+                        </span>
+                      </div>
+                      <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-2 line-clamp-2">
+                        {ticket.subject}
+                      </h3>
+                      <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                        <span className="capitalize">{ticket.priority.toLowerCase()}</span>
+                        <span>{format(new Date(ticket.createdAt), 'MMM d, yyyy')}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {/* Desktop Table View */}
+                <div className="hidden md:block bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
                   <table className="w-full divide-y divide-gray-200 dark:divide-gray-700" style={{ tableLayout: 'fixed' }}>
                     <colgroup>
                       <col style={{ width: '100px' }} />
