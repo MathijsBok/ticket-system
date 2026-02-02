@@ -791,12 +791,10 @@ const TicketDetail: React.FC = () => {
                     {showStatusDropdown && (
                       <div className="absolute top-full left-0 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg z-20">
                         {[
-                          { value: 'NEW', label: 'New' },
                           { value: 'OPEN', label: 'Open' },
                           { value: 'PENDING', label: 'Pending' },
                           { value: 'ON_HOLD', label: 'On Hold' },
                           { value: 'SOLVED', label: 'Solved' },
-                          { value: 'CLOSED', label: 'Closed' },
                         ].map((status, index, arr) => (
                           <button
                             key={status.value}
