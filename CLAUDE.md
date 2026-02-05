@@ -64,3 +64,12 @@ The application now has a built-in database import/export feature in the Admin S
 - Create migration: `npx prisma migrate dev --name migration_name`
 - Deploy migrations: `npx prisma migrate deploy`
 - Generate client: `npx prisma generate`
+
+## UI/UX Guidelines
+
+### No Native Browser Popups
+**MANDATORY**: Never use native browser dialogs (`window.alert()`, `window.confirm()`, `window.prompt()`).
+- Always use in-app modals, toast notifications, or custom confirmation dialogs
+- Native popups break the app's design and user experience
+- Use `react-hot-toast` for notifications
+- Create custom modal components for confirmations

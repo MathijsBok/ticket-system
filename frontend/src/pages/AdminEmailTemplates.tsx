@@ -34,6 +34,7 @@ const AdminEmailTemplates: React.FC = () => {
     bodyHtml: '',
     bodyPlain: ''
   });
+  const [resetConfirmTemplate, setResetConfirmTemplate] = useState<EmailTemplate | null>(null);
 
   const { data: templates, isLoading } = useQuery({
     queryKey: ['emailTemplates'],
@@ -61,7 +62,7 @@ const AdminEmailTemplates: React.FC = () => {
     onSuccess: () => {
       toast.success('Template reset to default');
       queryClient.invalidateQueries({ queryKey: ['emailTemplates'] });
-      navigate('/admin/email-templates');
+      // Stay on the page so user can see the reset template
     },
     onError: () => {
       toast.error('Failed to reset template');
@@ -99,9 +100,15 @@ const AdminEmailTemplates: React.FC = () => {
 
   const handleSave = () => {
     if (!editingTemplate) return;
+    // Only send non-empty fields to avoid validation errors
+    const dataToSend: any = {};
+    if (formData.subject && formData.subject.trim()) dataToSend.subject = formData.subject;
+    if (formData.bodyHtml && formData.bodyHtml.trim()) dataToSend.bodyHtml = formData.bodyHtml;
+    if (formData.bodyPlain && formData.bodyPlain.trim()) dataToSend.bodyPlain = formData.bodyPlain;
+
     updateMutation.mutate({
       id: editingTemplate.id,
-      data: formData
+      data: dataToSend
     });
   };
 
@@ -142,8 +149,13 @@ const AdminEmailTemplates: React.FC = () => {
   };
 
   const handleReset = (template: EmailTemplate) => {
-    if (window.confirm(`Are you sure you want to reset "${template.name}" to the default? This cannot be undone.`)) {
-      resetMutation.mutate(template.id);
+    setResetConfirmTemplate(template);
+  };
+
+  const confirmReset = () => {
+    if (resetConfirmTemplate) {
+      resetMutation.mutate(resetConfirmTemplate.id);
+      setResetConfirmTemplate(null);
     }
   };
 
@@ -270,12 +282,19 @@ const AdminEmailTemplates: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Email Body
                   </label>
-                  <RichTextEditor
-                    value={formData.bodyHtml}
-                    onChange={handleHtmlChange}
-                    placeholder="Compose your email template here..."
-                    minHeight="250px"
-                  />
+                  {editingTemplate && formData.bodyHtml !== '' ? (
+                    <RichTextEditor
+                      key={editingTemplate.id}
+                      value={formData.bodyHtml}
+                      onChange={handleHtmlChange}
+                      placeholder="Compose your email template here..."
+                      minHeight="300px"
+                    />
+                  ) : (
+                    <div className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400" style={{ minHeight: '300px' }}>
+                      Loading...
+                    </div>
+                  )}
                   <div className="mt-2 flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-100 dark:border-blue-800">
                     <svg className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -489,6 +508,45 @@ const AdminEmailTemplates: React.FC = () => {
               )}
             </div>
           </div>
+        )}
+
+        {/* Reset Confirmation Modal */}
+        {resetConfirmTemplate && (
+          <>
+            {/* Backdrop */}
+            <div
+              className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+              onClick={() => setResetConfirmTemplate(null)}
+            >
+              {/* Modal */}
+              <div
+                className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                  Reset to Default
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                  Are you sure you want to reset "{resetConfirmTemplate.name}" to the default? This cannot be undone.
+                </p>
+                <div className="flex justify-end gap-3">
+                  <button
+                    onClick={() => setResetConfirmTemplate(null)}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmReset}
+                    disabled={resetMutation.isPending}
+                    className="px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-md hover:bg-orange-700 disabled:opacity-50"
+                  >
+                    {resetMutation.isPending ? 'Resetting...' : 'Reset to Default'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </>
         )}
       </div>
     </Layout>

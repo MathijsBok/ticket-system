@@ -13,18 +13,12 @@ const upload = multer({
 const router = Router();
 
 // Get all macros
-// Agents see only active macros, admins see all
+// Agents and admins see all macros (both active and inactive)
 router.get('/', requireAuth, requireAgent, async (req: AuthRequest, res: Response) => {
   try {
-    const userRole = req.userRole;
     const category = req.query.category as string | undefined;
 
     const whereClause: any = {};
-
-    // Only admins see inactive macros
-    if (userRole !== 'ADMIN') {
-      whereClause.isActive = true;
-    }
 
     // Filter by category if provided
     if (category) {

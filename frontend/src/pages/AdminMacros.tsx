@@ -315,25 +315,48 @@ const AdminMacros: React.FC = () => {
       <div className="space-y-6">
         {/* Header */}
         {(isEditMode || isNewMode) ? (
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => navigate('/admin/macros')}
-              className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-              title="Back to Macros"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-              </svg>
-            </button>
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-                {isEditMode ? 'Edit Macro' : 'Create New Macro'}
-              </h1>
-              {isEditMode && singleMacro && (
-                <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                  {singleMacro.name}
-                </p>
-              )}
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => navigate('/admin/macros')}
+                className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                title="Back to Macros"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+              </button>
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+                  {isEditMode ? 'Edit Macro' : 'Create New Macro'}
+                </h1>
+                {isEditMode && singleMacro && (
+                  <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                    {singleMacro.name}
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => navigate('/admin/macros')}
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                form="macro-form"
+                disabled={createMutation.isPending || updateMutation.isPending}
+                className="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50"
+              >
+                {createMutation.isPending || updateMutation.isPending
+                  ? 'Saving...'
+                  : isEditMode
+                  ? 'Update Macro'
+                  : 'Create Macro'}
+              </button>
             </div>
           </div>
         ) : (
@@ -359,7 +382,7 @@ const AdminMacros: React.FC = () => {
         {/* Create/Edit Form */}
         {(isEditMode || isNewMode) && (
           <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-            <form key={macroId || 'new'} onSubmit={handleSubmit} className="space-y-5">
+            <form id="macro-form" key={macroId || 'new'} onSubmit={handleSubmit} className="space-y-5">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Name <span className="text-red-500">*</span>
@@ -509,27 +532,6 @@ const AdminMacros: React.FC = () => {
                     </div>
                   </div>
                 </div>
-              </div>
-
-              <div className="flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => navigate('/admin/macros')}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={createMutation.isPending || updateMutation.isPending}
-                  className="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50"
-                >
-                  {createMutation.isPending || updateMutation.isPending
-                    ? 'Saving...'
-                    : isEditMode
-                    ? 'Update Macro'
-                    : 'Create Macro'}
-                </button>
               </div>
             </form>
           </div>

@@ -52,6 +52,7 @@ const AgentDashboard: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isRefreshingStats, setIsRefreshingStats] = useState(false);
 
   const { permission, requestPermission, isSupported } = useNotification();
   const { newTicketCount, isPolling } = useTicketNotifications({
@@ -191,18 +192,20 @@ const AgentDashboard: React.FC = () => {
   const { data: ticketResponse, isLoading } = useQuery({
     queryKey: ['agentTickets', statusFilter, typeFilter, currentPage, itemsPerPage, sortField, sortDirection, debouncedSearch, myRequests, myAssigned, unassigned, solvedAfter],
     queryFn: async () => {
+      // When searching, ignore view filters and search globally
+      const isSearching = !!debouncedSearch;
       const response = await ticketApi.getAll({
-        status: statusFilter || undefined,
-        type: typeFilter || undefined,
+        status: isSearching ? undefined : (statusFilter || undefined),
+        type: isSearching ? undefined : (typeFilter || undefined),
         page: currentPage,
         limit: itemsPerPage,
         sortField,
         sortDirection,
         search: debouncedSearch || undefined,
-        myRequests: myRequests || undefined,
-        myAssigned: myAssigned || undefined,
-        unassigned: unassigned || undefined,
-        solvedAfter: solvedAfter || undefined
+        myRequests: isSearching ? undefined : (myRequests || undefined),
+        myAssigned: isSearching ? undefined : (myAssigned || undefined),
+        unassigned: isSearching ? undefined : (unassigned || undefined),
+        solvedAfter: isSearching ? undefined : (solvedAfter || undefined)
       });
       return response.data;
     },
@@ -212,13 +215,30 @@ const AgentDashboard: React.FC = () => {
   const tickets = ticketResponse?.tickets || [];
   const pagination = ticketResponse?.pagination;
 
-  const { data: stats } = useQuery({
+  const { data: stats, refetch: refetchStats } = useQuery({
     queryKey: ['ticketStats'],
     queryFn: async () => {
       const response = await ticketApi.getStats();
       return response.data;
     }
   });
+
+  // Wrapper function to ensure loading state is visible for at least 500ms
+  const handleRefreshStats = async () => {
+    setIsRefreshingStats(true);
+    const startTime = Date.now();
+
+    await refetchStats();
+
+    const elapsed = Date.now() - startTime;
+    const remainingTime = Math.max(0, 500 - elapsed);
+
+    if (remainingTime > 0) {
+      setTimeout(() => setIsRefreshingStats(false), remainingTime);
+    } else {
+      setIsRefreshingStats(false);
+    }
+  };
 
   // Fetch agents for bulk assign dropdown
   const { data: agents } = useQuery({
@@ -449,6 +469,8 @@ const AgentDashboard: React.FC = () => {
           onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
           isMobileOpen={mobileSidebarOpen}
           onMobileClose={() => setMobileSidebarOpen(false)}
+          onRefresh={handleRefreshStats}
+          isRefreshing={isRefreshingStats}
         />
 
         {/* Main Content */}
@@ -716,19 +738,10 @@ const AgentDashboard: React.FC = () => {
                         <div className="absolute bottom-full left-0 mb-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg z-20">
                           <button
                             onClick={() => {
-                              setBulkStatus('');
-                              setShowStatusDropdown(false);
-                            }}
-                            className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 first:rounded-t-md"
-                          >
-                            Change Status...
-                          </button>
-                          <button
-                            onClick={() => {
                               setBulkStatus('NEW');
                               setShowStatusDropdown(false);
                             }}
-                            className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                            className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 first:rounded-t-md"
                           >
                             New
                           </button>
