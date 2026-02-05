@@ -10,6 +10,7 @@ import { useNotification } from '../contexts/NotificationContext';
 import { useView } from '../contexts/ViewContext';
 import { useTicketNotifications } from '../hooks/useTicketNotifications';
 import toast from 'react-hot-toast';
+import FeedbackStatsWidget from '../components/FeedbackStatsWidget';
 
 type SortField = 'ticketNumber' | 'subject' | 'requester' | 'status' | 'priority' | 'assignee' | 'updatedAt';
 type SortDirection = 'asc' | 'desc';
@@ -880,6 +881,9 @@ const AgentDashboard: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Feedback Stats Widget */}
+        <FeedbackStatsWidget />
 
         {/* Loading state */}
         {isLoading && (

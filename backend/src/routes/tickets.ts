@@ -3,7 +3,7 @@ import { body, validationResult } from 'express-validator';
 import { prisma } from '../lib/prisma';
 import { requireAuth, requireAgent, AuthRequest } from '../middleware/auth';
 import { generateTicketSummary, generateKnowledgeBasedSolution, getKnowledgeContent } from '../services/aiService';
-import { getOrCreateEmailThread, sendTicketCreatedEmail, sendTicketResolvedEmail } from '../services/emailService';
+import { getOrCreateEmailThread, sendTicketCreatedEmail, sendTicketResolvedEmail, sendFeedbackRequestEmail } from '../services/emailService';
 import { getCountryFromIP } from '../lib/geolocation';
 
 const router = Router();
@@ -346,6 +346,13 @@ router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
             }
           },
           orderBy: { createdAt: 'desc' }
+        },
+        feedback: {
+          select: {
+            rating: true,
+            userComment: true,
+            submittedAt: true
+          }
         }
       }
     });
@@ -760,6 +767,16 @@ router.patch('/:id',
         }).catch(err => {
           console.error('[Email] Failed to send ticket resolved email:', err);
         });
+
+        // Also send feedback request email
+        sendFeedbackRequestEmail({
+          id: ticket.id,
+          ticketNumber: ticket.ticketNumber,
+          subject: ticket.subject,
+          requester: ticket.requester
+        }).catch(err => {
+          console.error('[Email] Failed to send feedback request email:', err);
+        });
       }
 
       // Auto-solve all linked incidents when a PROBLEM ticket is solved
@@ -827,6 +844,16 @@ router.patch('/:id',
                 requester: incident.requester as any
               }).catch(err => {
                 console.error(`[Email] Failed to send resolved email for incident #${incident.ticketNumber}:`, err);
+              });
+
+              // Also send feedback request email
+              sendFeedbackRequestEmail({
+                id: incident.id,
+                ticketNumber: incident.ticketNumber,
+                subject: ticket.subject,
+                requester: incident.requester as any
+              }).catch(err => {
+                console.error(`[Email] Failed to send feedback request email for incident #${incident.ticketNumber}:`, err);
               });
             }
           }

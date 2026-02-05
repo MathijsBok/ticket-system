@@ -550,3 +550,113 @@ export function textToHtml(text: string): string {
     .replace(/\n/g, '<br>\n')
     .replace(/  /g, '&nbsp;&nbsp;');
 }
+
+// Send feedback request email
+export async function sendFeedbackRequestEmail(
+  ticket: {
+    id: string;
+    ticketNumber: number;
+    subject: string;
+    requester: {
+      email: string;
+      firstName: string | null;
+      lastName: string | null;
+    };
+  }
+): Promise<boolean> {
+  // Get effective SendGrid configuration
+  const config = await getEffectiveConfig();
+  if (!config.enabled || !config.apiKey) {
+    console.log('[Email] SendGrid not configured, skipping feedback request email');
+    return false;
+  }
+
+  try {
+    // Set API key dynamically
+    sgMail.setApiKey(config.apiKey);
+
+    // Get email template
+    const template = await prisma.emailTemplate.findUnique({
+      where: { type: 'FEEDBACK_REQUEST' }
+    });
+
+    if (!template || !template.isActive) {
+      console.log('[Email] FEEDBACK_REQUEST template not found or inactive');
+      return false;
+    }
+
+    // Create or get existing feedback record
+    let feedback = await prisma.feedback.findUnique({
+      where: { ticketId: ticket.id }
+    });
+
+    if (!feedback) {
+      // Generate unique feedback token
+      const feedbackToken = crypto.randomBytes(32).toString('hex');
+
+      feedback = await prisma.feedback.create({
+        data: {
+          ticketId: ticket.id,
+          token: feedbackToken
+        }
+      });
+    }
+
+    // Build feedback URL
+    const feedbackUrl = `${FRONTEND_URL}/feedback?token=${feedback.token}`;
+
+    // Build placeholder data
+    const userName = [ticket.requester.firstName, ticket.requester.lastName]
+      .filter(Boolean)
+      .join(' ') || 'Customer';
+    const ticketUrl = `${FRONTEND_URL}/tickets/${ticket.id}`;
+
+    const placeholders: Record<string, string> = {
+      userName,
+      ticketNumber: ticket.ticketNumber.toString(),
+      ticketSubject: ticket.subject,
+      ticketUrl,
+      feedbackUrl
+    };
+
+    // Replace placeholders in template
+    const subject = replacePlaceholders(template.subject, placeholders);
+    const htmlBody = replacePlaceholders(template.bodyHtml, placeholders);
+    const textBody = replacePlaceholders(template.bodyPlain, placeholders);
+
+    // Get email thread for headers
+    const thread = await getOrCreateEmailThread(ticket.id);
+    const messageId = generateMessageId(ticket.ticketNumber, config.fromEmail);
+
+    // Build headers
+    const headers: Record<string, string> = {
+      'Message-ID': messageId,
+      'X-Ticket-Number': ticket.ticketNumber.toString(),
+      'X-Ticket-ID': ticket.id
+    };
+
+    if (thread.messageId) {
+      headers['In-Reply-To'] = thread.messageId;
+      headers['References'] = thread.messageId;
+    }
+
+    // Send email via SendGrid
+    await sgMail.send({
+      to: ticket.requester.email,
+      from: {
+        email: config.fromEmail,
+        name: config.fromName
+      },
+      subject,
+      text: textBody,
+      html: htmlBody,
+      headers
+    });
+
+    console.log(`[Email] Sent feedback request for ticket #${ticket.ticketNumber} to ${ticket.requester.email}`);
+    return true;
+  } catch (error) {
+    console.error('[Email] Failed to send feedback request email:', error);
+    return false;
+  }
+}

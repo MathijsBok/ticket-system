@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import { prisma } from '../lib/prisma';
-import { requireAuth, requireAdmin, requireAgent, AuthRequest } from '../middleware/auth';
+import { requireAuth, requireAgent, AuthRequest } from '../middleware/auth';
 import { EmailTemplateType } from '@prisma/client';
 
 const router = Router();
@@ -231,7 +231,7 @@ router.get('/', requireAuth, requireAgent, async (_req: AuthRequest, res: Respon
 });
 
 // Get single email template
-router.get('/:id', requireAuth, requireAdmin, async (req: AuthRequest, res: Response) => {
+router.get('/:id', requireAuth, requireAgent, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
 
@@ -253,7 +253,7 @@ router.get('/:id', requireAuth, requireAdmin, async (req: AuthRequest, res: Resp
 // Update email template
 router.patch('/:id',
   requireAuth,
-  requireAdmin,
+  requireAgent,
   [
     body('subject').optional().isString().notEmpty(),
     body('bodyHtml').optional().isString().notEmpty(),
@@ -299,7 +299,7 @@ router.patch('/:id',
 );
 
 // Preview email template with sample data
-router.post('/:id/preview', requireAuth, requireAdmin, async (req: AuthRequest, res: Response) => {
+router.post('/:id/preview', requireAuth, requireAgent, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
 
@@ -334,7 +334,7 @@ router.post('/:id/preview', requireAuth, requireAdmin, async (req: AuthRequest, 
 });
 
 // Reset template to default
-router.post('/:id/reset', requireAuth, requireAdmin, async (req: AuthRequest, res: Response) => {
+router.post('/:id/reset', requireAuth, requireAgent, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
 

@@ -140,12 +140,17 @@ const AdminEmailTemplates: React.FC = () => {
 
   const handlePreview = () => {
     if (!editingTemplate) return;
-    // Generate preview client-side without saving
-    setPreviewData({
-      subject: replacePlaceholders(formData.subject),
-      bodyHtml: replacePlaceholders(formData.bodyHtml),
-      bodyPlain: replacePlaceholders(formData.bodyPlain)
-    });
+    // Toggle preview on/off
+    if (previewData) {
+      setPreviewData(null);
+    } else {
+      // Generate preview client-side without saving
+      setPreviewData({
+        subject: replacePlaceholders(formData.subject),
+        bodyHtml: replacePlaceholders(formData.bodyHtml),
+        bodyPlain: replacePlaceholders(formData.bodyPlain)
+      });
+    }
   };
 
   const handleReset = (template: EmailTemplate) => {
@@ -332,7 +337,7 @@ const AdminEmailTemplates: React.FC = () => {
                       onClick={handlePreview}
                       className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
                     >
-                      Preview
+                      {previewData ? 'Hide Preview' : 'Preview'}
                     </button>
                     <button
                       onClick={handleSave}
@@ -366,6 +371,17 @@ const AdminEmailTemplates: React.FC = () => {
                       </div>
                       {/* Email body - always white background for accurate email preview */}
                       <style>{`
+                        .email-preview-content { background-color: #ffffff !important; }
+                        .email-preview-content * { color: #1e293b !important; }
+                        .email-preview-content a { color: #2563eb !important; text-decoration: underline !important; }
+                        .email-preview-content strong, .email-preview-content b { font-weight: 600 !important; }
+                        .email-preview-content h1, .email-preview-content h2, .email-preview-content h3,
+                        .email-preview-content h4, .email-preview-content h5, .email-preview-content h6 {
+                          color: #0f172a !important;
+                          font-weight: 700 !important;
+                          margin-top: 0 !important;
+                          margin-bottom: 0.5em !important;
+                        }
                         .email-preview-content p { margin: 0; line-height: 1.5; }
                         .email-preview-content p:has(> br:only-child) { min-height: 1.5em; }
                         .email-preview-content p:empty { min-height: 1.5em; }

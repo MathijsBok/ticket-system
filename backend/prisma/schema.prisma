@@ -148,6 +148,7 @@ model Ticket {
   formResponses   FormResponse[]
   emailThread     EmailThread?
   chatSession     ChatSession?
+  feedback        Feedback?
 
   @@index([ticketNumber], name: "idx_tickets_number")
   @@index([status], name: "idx_tickets_status")
@@ -404,6 +405,16 @@ enum EmailTemplateType {
   TICKET_RESOLVED
   PENDING_REMINDER_24H
   PENDING_REMINDER_48H
+  FEEDBACK_REQUEST
+}
+
+// Feedback Rating Types (emoticons)
+enum FeedbackRating {
+  VERY_DISSATISFIED
+  DISSATISFIED
+  NEUTRAL
+  SATISFIED
+  VERY_SATISFIED
 }
 
 // Email Templates for notifications
@@ -419,6 +430,25 @@ model EmailTemplate {
   updatedAt DateTime          @updatedAt
 
   @@index([type])
+}
+
+// Feedback - Customer satisfaction tracking
+model Feedback {
+  id          String          @id @default(uuid()) @db.Uuid
+  ticketId    String          @db.Uuid
+  token       String          @unique @db.VarChar(64) // Unique token for anonymous submission
+  rating      FeedbackRating?
+  userComment String?         @db.Text // Optional text feedback from user
+  submittedAt DateTime?       // When feedback was actually submitted
+  createdAt   DateTime        @default(now()) // When feedback request was created
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@unique([ticketId]) // One feedback per ticket
+  @@index([ticketId])
+  @@index([token])
+  @@index([rating])
+  @@index([submittedAt])
 }
 
 // Macros - Pre-built reply templates for agents

@@ -609,3 +609,9 @@ export const databaseApi = {
       timeout: 600000 // 10 minute timeout for large exports
     })
 };
+
+// Feedback API
+export const feedbackApi = {
+  getAll: (year?: number) =>
+    api.get('/feedback', { params: year ? { year } : {} })
+};

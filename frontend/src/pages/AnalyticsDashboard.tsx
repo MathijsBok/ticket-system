@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { analyticsApi, adminAnalyticsApi, aiSummaryAnalyticsApi } from '../lib/api';
+import { analyticsApi, adminAnalyticsApi, aiSummaryAnalyticsApi, feedbackApi } from '../lib/api';
 import Layout from '../components/Layout';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, LineChart, Line, XAxis, YAxis, CartesianGrid, BarChart, Bar } from 'recharts';
 
@@ -77,6 +77,7 @@ const AnalyticsDashboard: React.FC = () => {
   const [hourlyYear, setHourlyYear] = useState<number>(new Date().getFullYear());
   const [agentPerfYear, setAgentPerfYear] = useState<number>(new Date().getFullYear());
   const [aiSummaryYear, setAiSummaryYear] = useState<number>(new Date().getFullYear());
+  const [feedbackYear, setFeedbackYear] = useState<number>(new Date().getFullYear());
 
   const { data: dashboardData, isLoading, error } = useQuery({
     queryKey: ['dashboardAnalytics'],
@@ -101,6 +102,16 @@ const AnalyticsDashboard: React.FC = () => {
     queryKey: ['aiSummaryAnalytics', aiSummaryYear],
     queryFn: async () => {
       const response = await aiSummaryAnalyticsApi.getStats(aiSummaryYear);
+      return response.data;
+    },
+    refetchInterval: 60000,
+    placeholderData: (previousData) => previousData
+  });
+
+  const { data: feedbackData } = useQuery({
+    queryKey: ['feedbackAnalytics', feedbackYear],
+    queryFn: async () => {
+      const response = await feedbackApi.getAll(feedbackYear);
       return response.data;
     },
     refetchInterval: 60000,
@@ -1225,6 +1236,92 @@ const AnalyticsDashboard: React.FC = () => {
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+
+        {/* Customer Feedback Analytics */}
+        {feedbackData?.analytics && (
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 border border-gray-100 dark:border-gray-700">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-yellow-500 to-orange-500 rounded-xl flex items-center justify-center">
+                  <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Customer Satisfaction</h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Feedback from resolved tickets</p>
+                </div>
+              </div>
+              {/* Year Selector */}
+              <select
+                value={feedbackYear}
+                onChange={(e) => setFeedbackYear(Number(e.target.value))}
+                className="px-3 py-1.5 text-sm font-medium bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map((year) => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
+            </div>
+
+            {feedbackData.analytics.totalFeedback > 0 ? (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Satisfaction Score */}
+                <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-xl p-6 border border-green-200 dark:border-green-800">
+                  <div className="text-center">
+                    <div className="text-6xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent mb-2">
+                      {feedbackData.analytics.satisfactionPercentage}%
+                    </div>
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Satisfaction Rate</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {feedbackData.analytics.satisfiedCount} satisfied out of {feedbackData.analytics.totalFeedback} responses
+                    </p>
+                  </div>
+                </div>
+
+                {/* Rating Distribution */}
+                <div className="space-y-3">
+                  {[
+                    { key: 'VERY_SATISFIED', emoji: '🤩', label: 'Very Satisfied', color: 'emerald' },
+                    { key: 'SATISFIED', emoji: '😊', label: 'Satisfied', color: 'green' },
+                    { key: 'NEUTRAL', emoji: '😐', label: 'Neutral', color: 'gray' },
+                    { key: 'DISSATISFIED', emoji: '😕', label: 'Dissatisfied', color: 'orange' },
+                    { key: 'VERY_DISSATISFIED', emoji: '😞', label: 'Very Dissatisfied', color: 'red' }
+                  ].map((rating) => {
+                    const count = feedbackData.analytics.ratingCounts[rating.key] || 0;
+                    const percentage = feedbackData.analytics.totalFeedback > 0
+                      ? Math.round((count / feedbackData.analytics.totalFeedback) * 100)
+                      : 0;
+
+                    if (count === 0) return null;
+
+                    return (
+                      <div key={rating.key} className="flex items-center gap-3">
+                        <span className="text-2xl">{rating.emoji}</span>
+                        <div className="flex-1">
+                          <div className="flex justify-between text-sm mb-1">
+                            <span className="font-medium text-gray-700 dark:text-gray-300">{rating.label}</span>
+                            <span className="text-gray-500 dark:text-gray-400">{count} ({percentage}%)</span>
+                          </div>
+                          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                            <div
+                              className={`bg-gradient-to-r from-${rating.color}-500 to-${rating.color}-600 h-2 rounded-full transition-all duration-300`}
+                              style={{ width: `${percentage}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+                No feedback collected for {feedbackYear}
+              </div>
+            )}
           </div>
         )}
       </div>

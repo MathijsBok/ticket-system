@@ -11,6 +11,7 @@ import { useView } from '../contexts/ViewContext';
 import Layout from '../components/Layout';
 import RichTextEditor from '../components/RichTextEditor';
 import MentionableRichTextEditor from '../components/MentionableRichTextEditor';
+import TicketFeedback from '../components/TicketFeedback';
 import { format } from 'date-fns';
 
 // Format form response values (handles Zendesk snake_case values)
@@ -1214,6 +1215,11 @@ const TicketDetail: React.FC = () => {
                   </div>
                 </div>
               </div>
+            )}
+
+            {/* Customer Feedback - Agents and Admins only */}
+            {isAgent && ticket.feedback && (
+              <TicketFeedback feedback={ticket.feedback} />
             )}
 
             {/* Internal Notes - Desktop only (agents/admins only) */}
