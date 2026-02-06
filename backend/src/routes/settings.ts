@@ -84,6 +84,41 @@ router.patch('/:id', requireAuth, requireAdmin, async (req: AuthRequest, res: Re
       if (updateData.twoFactorGracePeriodDays < 1 || updateData.twoFactorGracePeriodDays > 90) {
         return res.status(400).json({ error: 'Grace period days must be between 1 and 90' });
       }
+
+      // If grace period days are being changed, recalculate existing grace periods
+      const currentSettings = await prisma.settings.findUnique({ where: { id } });
+      if (currentSettings && currentSettings.twoFactorEnforcementEnabled) {
+        const newGracePeriodEnd = new Date();
+        newGracePeriodEnd.setDate(newGracePeriodEnd.getDate() + updateData.twoFactorGracePeriodDays);
+
+        console.log('[2FA Settings] Recalculating grace periods for new duration:', updateData.twoFactorGracePeriodDays, 'days');
+
+        // Recalculate grace period for admins without 2FA
+        if (currentSettings.require2FAForAdmins) {
+          const adminsUpdated = await prisma.user.updateMany({
+            where: {
+              role: 'ADMIN',
+              has2FAEnabled: false,
+              twoFactorGracePeriodEnd: { not: null }
+            },
+            data: { twoFactorGracePeriodEnd: newGracePeriodEnd }
+          });
+          console.log('[2FA Settings] Updated grace period for', adminsUpdated.count, 'admins');
+        }
+
+        // Recalculate grace period for agents without 2FA
+        if (currentSettings.require2FAForAgents) {
+          const agentsUpdated = await prisma.user.updateMany({
+            where: {
+              role: 'AGENT',
+              has2FAEnabled: false,
+              twoFactorGracePeriodEnd: { not: null }
+            },
+            data: { twoFactorGracePeriodEnd: newGracePeriodEnd }
+          });
+          console.log('[2FA Settings] Updated grace period for', agentsUpdated.count, 'agents');
+        }
+      }
     }
 
     // If enforcement is being enabled, set grace periods for users without 2FA
