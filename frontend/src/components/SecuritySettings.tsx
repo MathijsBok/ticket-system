@@ -231,7 +231,29 @@ export default function SecuritySettings() {
               identityPreviewEditButton: '!text-blue-600 dark:!text-blue-400',
               footer: '!bg-white dark:!bg-gray-700',
               footerActionText: '!text-gray-600 dark:!text-gray-400',
-              footerActionLink: '!text-blue-600 dark:!text-blue-400'
+              footerActionLink: '!text-blue-600 dark:!text-blue-400',
+              // Additional text and container elements
+              userPreviewMainIdentifier: '!text-gray-900 dark:!text-white !bg-transparent dark:!bg-transparent',
+              userPreviewSecondaryIdentifier: '!text-gray-600 dark:!text-gray-400 !bg-transparent dark:!bg-transparent',
+              userButtonPopoverCard: '!bg-white dark:!bg-gray-800',
+              userButtonPopoverActionButton: '!text-gray-700 dark:!text-gray-300',
+              avatarBox: '!border-gray-300 dark:!border-gray-600',
+              avatarImage: '!border-gray-300 dark:!border-gray-600',
+              // Form and input elements
+              formFieldAction: '!text-blue-600 dark:!text-blue-400',
+              formFieldSuccessText: '!text-green-600 dark:!text-green-400',
+              formFieldErrorText: '!text-red-600 dark:!text-red-400',
+              formFieldHintText: '!text-gray-500 dark:!text-gray-400',
+              formFieldWarningText: '!text-yellow-600 dark:!text-yellow-400',
+              // Profile section items
+              profileSectionItem: '!bg-transparent dark:!bg-transparent !text-gray-900 dark:!text-white',
+              profileSectionItemButton: '!text-gray-700 dark:!text-gray-300',
+              // Text elements
+              text: '!text-gray-900 dark:!text-white',
+              textSecondary: '!text-gray-600 dark:!text-gray-400',
+              // Tags and badges
+              tag: '!bg-gray-100 dark:!bg-gray-700 !text-gray-700 dark:!text-gray-300',
+              tagPrimaryText: '!text-blue-700 dark:!text-blue-300'
             }
           }}
           routing="hash"
