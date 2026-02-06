@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useUser } from '@clerk/clerk-react';
 import { UserProfile } from '@clerk/clerk-react';
 import toast from 'react-hot-toast';
-import api from '../lib/api';
+import { api } from '../lib/api';
 
 interface SecurityStatus {
   has2FAEnabled: boolean;
@@ -16,7 +15,6 @@ interface SecurityStatus {
 }
 
 export default function SecuritySettings() {
-  const { user } = useUser();
   const [securityStatus, setSecurityStatus] = useState<SecurityStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useUser } from '@clerk/clerk-react';
-import api from '../lib/api';
+import { api } from '../lib/api';
 
 interface SecurityStatus {
   has2FAEnabled: boolean;

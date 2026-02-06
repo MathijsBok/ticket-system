@@ -3752,7 +3752,7 @@ const AdminSettings: React.FC = () => {
                       checked={settings?.twoFactorEnforcementEnabled ?? false}
                       onChange={(e) => {
                         console.log('[2FA Settings] Toggling enforcement:', e.target.checked);
-                        handleSettingChange('twoFactorEnforcementEnabled', e.target.checked);
+                        handleToggle('twoFactorEnforcementEnabled', e.target.checked);
                       }}
                       className="sr-only peer"
                     />
@@ -3779,7 +3779,7 @@ const AdminSettings: React.FC = () => {
                         checked={settings?.require2FAForAdmins ?? true}
                         onChange={(e) => {
                           console.log('[2FA Settings] Toggling admin requirement:', e.target.checked);
-                          handleSettingChange('require2FAForAdmins', e.target.checked);
+                          handleToggle('require2FAForAdmins', e.target.checked);
                         }}
                         className="sr-only peer"
                       />
@@ -3804,7 +3804,7 @@ const AdminSettings: React.FC = () => {
                         checked={settings?.require2FAForAgents ?? true}
                         onChange={(e) => {
                           console.log('[2FA Settings] Toggling agent requirement:', e.target.checked);
-                          handleSettingChange('require2FAForAgents', e.target.checked);
+                          handleToggle('require2FAForAgents', e.target.checked);
                         }}
                         className="sr-only peer"
                       />
@@ -3831,7 +3831,7 @@ const AdminSettings: React.FC = () => {
                       checked={settings?.allow2FAForUsers ?? true}
                       onChange={(e) => {
                         console.log('[2FA Settings] Toggling user allowance:', e.target.checked);
-                        handleSettingChange('allow2FAForUsers', e.target.checked);
+                        handleToggle('allow2FAForUsers', e.target.checked);
                       }}
                       className="sr-only peer"
                     />
@@ -3859,7 +3859,7 @@ const AdminSettings: React.FC = () => {
                         const days = parseInt(e.target.value);
                         console.log('[2FA Settings] Setting grace period days:', days);
                         if (days >= 1 && days <= 90) {
-                          handleSettingChange('twoFactorGracePeriodDays', days);
+                          updateMutation.mutate({ twoFactorGracePeriodDays: days });
                         }
                       }}
                       className="block w-24 rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:text-white sm:text-sm"
@@ -3874,12 +3874,12 @@ const AdminSettings: React.FC = () => {
                 <button
                   onClick={() => {
                     console.log('[2FA Settings] Saving settings...');
-                    updateSettings.mutate(settings);
+                    updateMutation.mutate(settings);
                   }}
-                  disabled={updateSettings.isPending}
+                  disabled={updateMutation.isPending}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {updateSettings.isPending ? 'Saving...' : 'Save Security Settings'}
+                  {updateMutation.isPending ? 'Saving...' : 'Save Security Settings'}
                 </button>
               </div>
             </div>

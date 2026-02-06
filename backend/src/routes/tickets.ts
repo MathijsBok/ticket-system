@@ -1354,7 +1354,7 @@ router.get('/problems/search', requireAuth, requireAgent, async (req: AuthReques
 });
 
 // Get ticket statistics (for dashboard)
-router.get('/stats/overview', requireAuth, requireAgent, async (req: AuthRequest, res) => {
+router.get('/stats/overview', requireAuth, requireAgent, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId;
     // Agents and Admins see all ticket stats

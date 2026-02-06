@@ -72,11 +72,6 @@ const ViewsSidebar: React.FC<ViewsSidebarProps> = ({
     (stats.byStatus.pending || 0) +
     (stats.byStatus.onHold || 0) : 0;
 
-  // Calculate date 3 days ago for "Recently solved" filter
-  const threeDaysAgo = new Date();
-  threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
-  const solvedAfterDate = threeDaysAgo.toISOString();
-
   // Main views (no group header)
   const mainViews: ViewItem[] = [
     { id: 'your-unsolved', name: 'Your unsolved tickets', count: stats?.myUnsolvedCount || 0, filter: { assignee: 'me', status: 'OPEN', allStatuses: ['OPEN', 'PENDING', 'ON_HOLD'] } },
