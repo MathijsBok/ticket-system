@@ -273,7 +273,30 @@ export default function SecuritySettings() {
               text: isDarkMode ? '!text-white' : '!text-gray-900',
               textSecondary: isDarkMode ? '!text-gray-400' : '!text-gray-600',
               tag: isDarkMode ? '!bg-gray-700 !text-gray-300' : '!bg-gray-100 !text-gray-700',
-              tagPrimaryText: isDarkMode ? '!text-blue-300' : '!text-blue-700'
+              tagPrimaryText: isDarkMode ? '!text-blue-300' : '!text-blue-700',
+              // Dropdown and select elements
+              selectButton: isDarkMode ? '!bg-gray-700 !text-white !border-gray-600' : '!bg-white !text-gray-900 !border-gray-300',
+              selectButtonIcon: isDarkMode ? '!text-gray-400' : '!text-gray-500',
+              selectPopover: isDarkMode ? '!bg-gray-700 !border-gray-600' : '!bg-white !border-gray-200',
+              selectOption: isDarkMode ? '!text-gray-300 hover:!bg-gray-600' : '!text-gray-700 hover:!bg-gray-100',
+              selectOptionSelected: isDarkMode ? '!bg-gray-600 !text-white' : '!bg-blue-50 !text-blue-600',
+              // Menu and dropdown items
+              menuList: isDarkMode ? '!bg-gray-700 !border-gray-600' : '!bg-white !border-gray-200',
+              menuItem: isDarkMode ? '!text-gray-300 hover:!bg-gray-600' : '!text-gray-700 hover:!bg-gray-100',
+              menuItemDestructive: isDarkMode ? '!text-red-400 hover:!bg-gray-600' : '!text-red-600 hover:!bg-red-50',
+              // Accordion content
+              accordionPanel: isDarkMode ? '!bg-gray-800 !text-gray-300' : '!bg-white !text-gray-700',
+              // Action buttons and links
+              button: isDarkMode ? '!text-gray-300' : '!text-gray-700',
+              buttonArrowIcon: isDarkMode ? '!text-gray-400' : '!text-gray-500',
+              // Additional sections
+              otpCodeField: isDarkMode ? '!bg-gray-700 !text-white !border-gray-600' : '!bg-white !text-gray-900 !border-gray-300',
+              otpCodeFieldInput: isDarkMode ? '!bg-gray-700 !text-white' : '!bg-white !text-gray-900',
+              // Table elements (for device lists)
+              tableHead: isDarkMode ? '!bg-gray-700 !text-gray-300' : '!bg-gray-50 !text-gray-700',
+              tableBody: isDarkMode ? '!bg-gray-800' : '!bg-white',
+              tableRow: isDarkMode ? 'hover:!bg-gray-700 !border-gray-600' : 'hover:!bg-gray-50 !border-gray-200',
+              tableCell: isDarkMode ? '!text-gray-300' : '!text-gray-700'
             }
           }}
           routing="hash"
