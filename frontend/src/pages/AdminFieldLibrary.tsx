@@ -4,6 +4,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { fieldLibraryApi } from '../lib/api';
 import Layout from '../components/Layout';
+import CustomSelect from '../components/CustomSelect';
 import ConfirmModal from '../components/ConfirmModal';
 import { format } from 'date-fns';
 import { FormFieldLibrary } from '../types';
@@ -242,18 +243,19 @@ const AdminFieldLibrary: React.FC = () => {
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
                   Type:
                 </label>
-                <select
+                <CustomSelect
                   value={typeFilter}
-                  onChange={(e) => setTypeFilter(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <option value="all">All Types</option>
-                  <option value="text">Text</option>
-                  <option value="textarea">Textarea</option>
-                  <option value="select">Select</option>
-                  <option value="checkbox">Checkbox</option>
-                  <option value="radio">Radio</option>
-                </select>
+                  onChange={(v) => setTypeFilter(v)}
+                  options={[
+                    { value: 'all', label: 'All Types' },
+                    { value: 'text', label: 'Text' },
+                    { value: 'textarea', label: 'Textarea' },
+                    { value: 'select', label: 'Select' },
+                    { value: 'checkbox', label: 'Checkbox' },
+                    { value: 'radio', label: 'Radio' },
+                  ]}
+                  size="sm"
+                />
               </div>
             </div>
           </div>
@@ -296,17 +298,17 @@ const AdminFieldLibrary: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Field Type <span className="text-red-500">*</span>
                   </label>
-                  <select
+                  <CustomSelect
                     value={fieldType}
-                    onChange={(e) => setFieldType(e.target.value as any)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
-                  >
-                    <option value="text">Text</option>
-                    <option value="textarea">Textarea</option>
-                    <option value="select">Select</option>
-                    <option value="checkbox">Checkbox</option>
-                    <option value="radio">Radio</option>
-                  </select>
+                    onChange={(v) => setFieldType(v as any)}
+                    options={[
+                      { value: 'text', label: 'Text' },
+                      { value: 'textarea', label: 'Textarea' },
+                      { value: 'select', label: 'Select' },
+                      { value: 'checkbox', label: 'Checkbox' },
+                      { value: 'radio', label: 'Radio' },
+                    ]}
+                  />
                 </div>
               </div>
 

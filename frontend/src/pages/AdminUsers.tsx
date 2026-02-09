@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { userApi } from '../lib/api';
 import { User, UserRole } from '../types';
 import Layout from '../components/Layout';
+import CustomSelect from '../components/CustomSelect';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 import { getTimezoneDisplay, getCountryDisplay } from '../lib/geolocation';
@@ -259,15 +260,16 @@ const UserTable: React.FC<UserTableProps> = ({
               </td>
               <td className="px-4 py-2 whitespace-nowrap">
                 {editingUserId === user.id ? (
-                  <select
+                  <CustomSelect
                     value={selectedRole}
-                    onChange={(e) => setSelectedRole(e.target.value as UserRole)}
-                    className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
-                  >
-                    <option value="USER">User</option>
-                    <option value="AGENT">Agent</option>
-                    <option value="ADMIN">Admin</option>
-                  </select>
+                    onChange={(v) => setSelectedRole(v as UserRole)}
+                    options={[
+                      { value: 'USER', label: 'User' },
+                      { value: 'AGENT', label: 'Agent' },
+                      { value: 'ADMIN', label: 'Admin' },
+                    ]}
+                    size="sm"
+                  />
                 ) : (
                   <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getRoleColor(user.role)}`}>
                     {user.role}

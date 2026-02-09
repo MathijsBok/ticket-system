@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { settingsApi, zendeskApi, exportApi, apiKeyApi, analyticsApi, adminAnalyticsApi, aiAnalyticsApi, macroApi, databaseApi } from '../lib/api';
 import Layout from '../components/Layout';
+import CustomSelect from '../components/CustomSelect';
 
 type TabType = 'notifications' | 'automation' | 'sendgrid' | 'import' | 'export' | 'api' | 'maintenance' | 'widget' | 'permissions' | 'security';
 const validTabs: TabType[] = ['notifications', 'automation', 'sendgrid', 'import', 'export', 'api', 'maintenance', 'widget', 'permissions', 'security'];
@@ -2804,16 +2805,18 @@ const AdminSettings: React.FC = () => {
                           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                             Restrict to Form
                           </label>
-                          <select
+                          <CustomSelect
                             value={newKeyFormId}
-                            onChange={(e) => setNewKeyFormId(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
-                          >
-                            <option value="">All forms (no restriction)</option>
-                            {availableForms?.map((form) => (
-                              <option key={form.id} value={form.id}>{form.name}</option>
-                            ))}
-                          </select>
+                            onChange={(v) => setNewKeyFormId(v)}
+                            placeholder="All forms (no restriction)"
+                            options={[
+                              { value: '', label: 'All forms (no restriction)' },
+                              ...(availableForms?.map((form) => ({
+                                value: form.id,
+                                label: form.name,
+                              })) || []),
+                            ]}
+                          />
                           <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                             Optionally restrict this API key to only submit tickets for a specific form.
                           </p>

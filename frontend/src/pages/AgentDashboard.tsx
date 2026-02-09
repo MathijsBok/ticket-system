@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useClerk, useUser } from '@clerk/clerk-react';
 import { ticketApi, sessionApi, userApi } from '../lib/api';
 import Layout from '../components/Layout';
+import CustomSelect from '../components/CustomSelect';
 import ViewsSidebar from '../components/ViewsSidebar';
 import { format } from 'date-fns';
 import { useNotification } from '../contexts/NotificationContext';
@@ -644,18 +645,19 @@ const AgentDashboard: React.FC = () => {
               {/* Mobile: Scrollable actions */}
               <div className="flex sm:hidden gap-2 overflow-x-auto pb-1 -mx-1 px-1">
                 <div className="flex items-center gap-1.5 flex-shrink-0">
-                  <select
+                  <CustomSelect
                     value={bulkStatus}
-                    onChange={(e) => setBulkStatus(e.target.value)}
-                    className="px-2 py-1.5 border border-blue-400 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-white"
-                  >
-                    <option value="">Status...</option>
-                    <option value="NEW">New</option>
-                    <option value="OPEN">Open</option>
-                    <option value="PENDING">Pending</option>
-                    <option value="ON_HOLD">On Hold</option>
-                    <option value="SOLVED">Solved</option>
-                  </select>
+                    onChange={(v) => setBulkStatus(v)}
+                    placeholder="Status..."
+                    options={[
+                      { value: 'NEW', label: 'New' },
+                      { value: 'OPEN', label: 'Open' },
+                      { value: 'PENDING', label: 'Pending' },
+                      { value: 'ON_HOLD', label: 'On Hold' },
+                      { value: 'SOLVED', label: 'Solved' },
+                    ]}
+                    size="sm"
+                  />
                   <button
                     onClick={handleBulkStatusChange}
                     disabled={!bulkStatus || bulkUpdateMutation.isPending}
@@ -665,21 +667,22 @@ const AgentDashboard: React.FC = () => {
                   </button>
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
-                  <select
+                  <CustomSelect
                     value={bulkAssignee}
-                    onChange={(e) => setBulkAssignee(e.target.value)}
-                    className="px-2 py-1.5 border border-blue-400 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-white max-w-[150px] sm:max-w-[180px]"
-                  >
-                    <option value="">Assign...</option>
-                    <option value="">Unassign</option>
-                    {agents?.map((agent: any) => (
-                      <option key={agent.id} value={agent.id}>
-                        {agent.firstName && agent.lastName
+                    onChange={(v) => setBulkAssignee(v)}
+                    placeholder="Assign..."
+                    options={[
+                      { value: '', label: 'Unassign' },
+                      ...(agents?.map((agent: any) => ({
+                        value: agent.id,
+                        label: agent.firstName && agent.lastName
                           ? `${agent.firstName} ${agent.lastName}`
-                          : agent.email}
-                      </option>
-                    ))}
-                  </select>
+                          : agent.email,
+                      })) || []),
+                    ]}
+                    size="sm"
+                    className="max-w-[150px] sm:max-w-[180px]"
+                  />
                   <button
                     onClick={handleBulkAssign}
                     disabled={bulkUpdateMutation.isPending}
@@ -1186,17 +1189,18 @@ const AgentDashboard: React.FC = () => {
                       <label htmlFor="itemsPerPage" className="text-sm text-gray-700 dark:text-gray-300">
                         Show:
                       </label>
-                      <select
+                      <CustomSelect
                         id="itemsPerPage"
-                        value={itemsPerPage}
-                        onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
-                        className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
-                      >
-                        <option value={25}>25</option>
-                        <option value={50}>50</option>
-                        <option value={75}>75</option>
-                        <option value={100}>100</option>
-                      </select>
+                        value={String(itemsPerPage)}
+                        onChange={(v) => handleItemsPerPageChange(Number(v))}
+                        options={[
+                          { value: '25', label: '25' },
+                          { value: '50', label: '50' },
+                          { value: '75', label: '75' },
+                          { value: '100', label: '100' },
+                        ]}
+                        size="sm"
+                      />
                     </div>
                   </div>
                   <div>

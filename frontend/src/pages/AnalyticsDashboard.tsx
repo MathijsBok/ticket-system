@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { analyticsApi, adminAnalyticsApi, aiSummaryAnalyticsApi, feedbackApi } from '../lib/api';
 import Layout from '../components/Layout';
+import CustomSelect from '../components/CustomSelect';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, LineChart, Line, XAxis, YAxis, CartesianGrid, BarChart, Bar } from 'recharts';
 
 // Format label - handles ISO dates and other formats
@@ -418,15 +419,12 @@ const AnalyticsDashboard: React.FC = () => {
                 <h3 className="text-xl font-bold text-gray-900 dark:text-white">Tickets Solved per Month</h3>
               </div>
               {/* Year Selector */}
-              <select
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(Number(e.target.value))}
-                className="px-3 py-1.5 text-sm font-medium bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                {(solvedByMonthData?.availableYears || [new Date().getFullYear()]).map((year: number) => (
-                  <option key={year} value={year}>{year}</option>
-                ))}
-              </select>
+              <CustomSelect
+                value={String(selectedYear)}
+                onChange={(v) => setSelectedYear(Number(v))}
+                options={(solvedByMonthData?.availableYears || [new Date().getFullYear()]).map((year: number) => ({ value: String(year), label: String(year) }))}
+                size="sm"
+              />
             </div>
             <div className="h-[200px] sm:h-[250px]"><ResponsiveContainer width="100%" height="100%">
               <BarChart data={solvedByMonthData?.data || []} margin={{ left: 0, right: 20 }}>
@@ -451,15 +449,12 @@ const AnalyticsDashboard: React.FC = () => {
                 <h3 className="text-xl font-bold text-gray-900 dark:text-white">Tickets by Priority</h3>
               </div>
               {/* Year Selector */}
-              <select
-                value={priorityYear}
-                onChange={(e) => setPriorityYear(Number(e.target.value))}
-                className="px-3 py-1.5 text-sm font-medium bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                {(priorityByYearData?.availableYears || [new Date().getFullYear()]).map((year: number) => (
-                  <option key={year} value={year}>{year}</option>
-                ))}
-              </select>
+              <CustomSelect
+                value={String(priorityYear)}
+                onChange={(v) => setPriorityYear(Number(v))}
+                options={(priorityByYearData?.availableYears || [new Date().getFullYear()]).map((year: number) => ({ value: String(year), label: String(year) }))}
+                size="sm"
+              />
             </div>
             <div className="h-[160px] sm:h-[200px]"><ResponsiveContainer width="100%" height="100%">
               <BarChart
@@ -492,15 +487,12 @@ const AnalyticsDashboard: React.FC = () => {
                 <h3 className="text-xl font-bold text-gray-900 dark:text-white">Top Countries</h3>
               </div>
               {/* Year Selector */}
-              <select
-                value={countryYear}
-                onChange={(e) => setCountryYear(Number(e.target.value))}
-                className="px-3 py-1.5 text-sm font-medium bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                {(countriesByYearData?.availableYears || [new Date().getFullYear()]).map((year: number) => (
-                  <option key={year} value={year}>{year}</option>
-                ))}
-              </select>
+              <CustomSelect
+                value={String(countryYear)}
+                onChange={(v) => setCountryYear(Number(v))}
+                options={(countriesByYearData?.availableYears || [new Date().getFullYear()]).map((year: number) => ({ value: String(year), label: String(year) }))}
+                size="sm"
+              />
             </div>
             {countriesByYearData?.data && countriesByYearData.data.length > 0 ? (
               <div className="h-[220px] sm:h-[300px]"><ResponsiveContainer width="100%" height="100%">
@@ -535,15 +527,12 @@ const AnalyticsDashboard: React.FC = () => {
                 <h3 className="text-xl font-bold text-gray-900 dark:text-white">Tickets by Channel</h3>
               </div>
               {/* Year Selector */}
-              <select
-                value={channelYear}
-                onChange={(e) => setChannelYear(Number(e.target.value))}
-                className="px-3 py-1.5 text-sm font-medium bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                {(channelByYearData?.availableYears || [new Date().getFullYear()]).map((year: number) => (
-                  <option key={year} value={year}>{year}</option>
-                ))}
-              </select>
+              <CustomSelect
+                value={String(channelYear)}
+                onChange={(v) => setChannelYear(Number(v))}
+                options={(channelByYearData?.availableYears || [new Date().getFullYear()]).map((year: number) => ({ value: String(year), label: String(year) }))}
+                size="sm"
+              />
             </div>
             <div className="h-[220px] sm:h-[300px]"><ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -581,15 +570,12 @@ const AnalyticsDashboard: React.FC = () => {
                   <h3 className="text-xl font-bold text-gray-900 dark:text-white">Tickets by Day of Week</h3>
                 </div>
                 {/* Year Selector */}
-                <select
-                  value={weekdayYear}
-                  onChange={(e) => setWeekdayYear(Number(e.target.value))}
-                  className="px-3 py-1.5 text-sm font-medium bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary"
-                >
-                  {(weekdayByYearData?.availableYears || [new Date().getFullYear()]).map((year: number) => (
-                    <option key={year} value={year}>{year}</option>
-                  ))}
-                </select>
+                <CustomSelect
+                  value={String(weekdayYear)}
+                  onChange={(v) => setWeekdayYear(Number(v))}
+                  options={(weekdayByYearData?.availableYears || [new Date().getFullYear()]).map((year: number) => ({ value: String(year), label: String(year) }))}
+                  size="sm"
+                />
               </div>
               <div className="h-[220px] sm:h-[300px]"><ResponsiveContainer width="100%" height="100%">
                 <BarChart data={weekdayByYearData?.data || charts.weekday}>
@@ -622,15 +608,12 @@ const AnalyticsDashboard: React.FC = () => {
                   <h3 className="text-xl font-bold text-gray-900 dark:text-white">Tickets by Hour of Day</h3>
                 </div>
                 {/* Year Selector */}
-                <select
-                  value={hourlyYear}
-                  onChange={(e) => setHourlyYear(Number(e.target.value))}
-                  className="px-3 py-1.5 text-sm font-medium bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary"
-                >
-                  {(hourlyByYearData?.availableYears || [new Date().getFullYear()]).map((year: number) => (
-                    <option key={year} value={year}>{year}</option>
-                  ))}
-                </select>
+                <CustomSelect
+                  value={String(hourlyYear)}
+                  onChange={(v) => setHourlyYear(Number(v))}
+                  options={(hourlyByYearData?.availableYears || [new Date().getFullYear()]).map((year: number) => ({ value: String(year), label: String(year) }))}
+                  size="sm"
+                />
               </div>
               <div className="h-[220px] sm:h-[300px]"><ResponsiveContainer width="100%" height="100%">
                 <BarChart data={hourlyByYearData?.data || charts.hourly}>
@@ -842,15 +825,12 @@ const AnalyticsDashboard: React.FC = () => {
                 </div>
               </div>
               {/* Year Selector */}
-              <select
-                value={agentPerfYear}
-                onChange={(e) => setAgentPerfYear(Number(e.target.value))}
-                className="px-3 py-1.5 text-sm font-medium bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                {(agentPerformanceData?.availableYears || [new Date().getFullYear()]).map((year: number) => (
-                  <option key={year} value={year}>{year}</option>
-                ))}
-              </select>
+              <CustomSelect
+                value={String(agentPerfYear)}
+                onChange={(v) => setAgentPerfYear(Number(v))}
+                options={(agentPerformanceData?.availableYears || [new Date().getFullYear()]).map((year: number) => ({ value: String(year), label: String(year) }))}
+                size="sm"
+              />
             </div>
             {/* Calculation Explanation */}
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-3 mb-4">
@@ -943,15 +923,12 @@ const AnalyticsDashboard: React.FC = () => {
                 </div>
               </div>
               {/* Year Selector */}
-              <select
-                value={aiSummaryYear}
-                onChange={(e) => setAiSummaryYear(Number(e.target.value))}
-                className="px-3 py-1.5 text-sm font-medium bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                {(aiSummaryData?.availableYears || [new Date().getFullYear()]).map((year: number) => (
-                  <option key={year} value={year}>{year}</option>
-                ))}
-              </select>
+              <CustomSelect
+                value={String(aiSummaryYear)}
+                onChange={(v) => setAiSummaryYear(Number(v))}
+                options={(aiSummaryData?.availableYears || [new Date().getFullYear()]).map((year: number) => ({ value: String(year), label: String(year) }))}
+                size="sm"
+              />
             </div>
 
             {/* AI Summary Stats (Ticket Detail Page) */}
@@ -1129,15 +1106,12 @@ const AnalyticsDashboard: React.FC = () => {
               <h3 className="text-xl font-bold text-gray-900 dark:text-white">Most Used Forms</h3>
             </div>
             {/* Year Selector */}
-            <select
-              value={formYear}
-              onChange={(e) => setFormYear(Number(e.target.value))}
-              className="px-3 py-1.5 text-sm font-medium bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary"
-            >
-              {(formsByYearData?.availableYears || [new Date().getFullYear()]).map((year: number) => (
-                <option key={year} value={year}>{year}</option>
-              ))}
-            </select>
+            <CustomSelect
+              value={String(formYear)}
+              onChange={(v) => setFormYear(Number(v))}
+              options={(formsByYearData?.availableYears || [new Date().getFullYear()]).map((year: number) => ({ value: String(year), label: String(year) }))}
+              size="sm"
+            />
           </div>
           {formsByYearData?.data && formsByYearData.data.length > 0 ? (
             <div className="space-y-4">
@@ -1255,15 +1229,12 @@ const AnalyticsDashboard: React.FC = () => {
                 </div>
               </div>
               {/* Year Selector */}
-              <select
-                value={feedbackYear}
-                onChange={(e) => setFeedbackYear(Number(e.target.value))}
-                className="px-3 py-1.5 text-sm font-medium bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map((year) => (
-                  <option key={year} value={year}>{year}</option>
-                ))}
-              </select>
+              <CustomSelect
+                value={String(feedbackYear)}
+                onChange={(v) => setFeedbackYear(Number(v))}
+                options={Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map((year) => ({ value: String(year), label: String(year) }))}
+                size="sm"
+              />
             </div>
 
             {feedbackData.analytics.totalFeedback > 0 ? (

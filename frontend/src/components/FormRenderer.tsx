@@ -1,4 +1,5 @@
 import React from 'react';
+import CustomSelect from './CustomSelect';
 import { FormFieldAssignment } from '../types';
 
 interface FormRendererProps {
@@ -49,22 +50,17 @@ const FormRenderer: React.FC<FormRendererProps> = ({ fields, values, onChange, e
 
       case 'select':
         return (
-          <select
+          <CustomSelect
             id={field.id}
             value={value}
-            onChange={(e) => onChange(field.id, e.target.value)}
+            onChange={(v) => onChange(field.id, v)}
             required={required}
-            className={baseInputClasses}
-          >
-            <option value="">
-              {field.placeholder || 'Select an option...'}
-            </option>
-            {field.options?.map((option, index) => (
-              <option key={index} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
+            placeholder={field.placeholder || 'Select an option...'}
+            options={(field.options || []).map((option) => ({
+              value: option,
+              label: option,
+            }))}
+          />
         );
 
       case 'radio':

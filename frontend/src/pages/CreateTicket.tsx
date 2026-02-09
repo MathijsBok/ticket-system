@@ -5,6 +5,7 @@ import { useUser } from '@clerk/clerk-react';
 import toast from 'react-hot-toast';
 import { ticketApi, formApi, attachmentApi, aiAnalyticsApi, userApi } from '../lib/api';
 import Layout from '../components/Layout';
+import CustomSelect from '../components/CustomSelect';
 import FormRenderer from '../components/FormRenderer';
 import { Form, User } from '../types';
 
@@ -512,17 +513,17 @@ const CreateTicket: React.FC = () => {
             <label htmlFor="simplePriority" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Priority
             </label>
-            <select
+            <CustomSelect
               id="simplePriority"
               value={priority}
-              onChange={(e) => setPriority(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-            >
-              <option value="LOW">Low</option>
-              <option value="NORMAL">Normal</option>
-              <option value="HIGH">High</option>
-              <option value="URGENT">Urgent</option>
-            </select>
+              onChange={(v) => setPriority(v)}
+              options={[
+                { value: 'LOW', label: 'Low' },
+                { value: 'NORMAL', label: 'Normal' },
+                { value: 'HIGH', label: 'High' },
+                { value: 'URGENT', label: 'Urgent' },
+              ]}
+            />
           </div>
           <div className="pt-2">
             <button
@@ -548,20 +549,17 @@ const CreateTicket: React.FC = () => {
         <label htmlFor="formId" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
           {isAgentOrAdmin ? 'Select a form for additional fields' : 'Please select the type of request you want to submit'}
         </label>
-        <select
+        <CustomSelect
           id="formId"
           value={selectedFormId || ''}
-          onChange={(e) => handleFormSelection(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+          onChange={(v) => handleFormSelection(v)}
+          placeholder="-- Select a form --"
           required={!isAgentOrAdmin}
-        >
-          <option value="">-- Select a form --</option>
-          {forms?.map((form) => (
-            <option key={form.id} value={form.id}>
-              {form.name}
-            </option>
-          ))}
-        </select>
+          options={(forms || []).map((form) => ({
+            value: form.id,
+            label: form.name,
+          }))}
+        />
       </div>
     </div>
   );
@@ -909,17 +907,17 @@ const CreateTicket: React.FC = () => {
                       <label htmlFor="priority" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         How urgent is your request?
                       </label>
-                      <select
+                      <CustomSelect
                         id="priority"
                         value={priority}
-                        onChange={(e) => setPriority(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                      >
-                        <option value="LOW">Low - General inquiry</option>
-                        <option value="NORMAL">Normal - Standard request</option>
-                        <option value="HIGH">High - Important issue</option>
-                        <option value="URGENT">Urgent - Critical problem</option>
-                      </select>
+                        onChange={(v) => setPriority(v)}
+                        options={[
+                          { value: 'LOW', label: 'Low - General inquiry' },
+                          { value: 'NORMAL', label: 'Normal - Standard request' },
+                          { value: 'HIGH', label: 'High - Important issue' },
+                          { value: 'URGENT', label: 'Urgent - Critical problem' },
+                        ]}
+                      />
                     </div>
                   </div>
                 )}

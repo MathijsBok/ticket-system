@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { macroApi } from '../lib/api';
 import Layout from '../components/Layout';
+import CustomSelect from '../components/CustomSelect';
 import RichTextEditor from '../components/RichTextEditor';
 import ConfirmModal from '../components/ConfirmModal';
 import toast from 'react-hot-toast';
@@ -613,38 +614,35 @@ const AdminMacros: React.FC = () => {
 
             {/* Category Dropdown */}
             {categories.length > 0 && (
-              <select
+              <CustomSelect
                 value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-              >
-                <option value="all">All Categories ({macrosInCurrentTab.length})</option>
-                {categories.map((category) => {
-                  const count = macrosInCurrentTab.filter(m => m.category === category).length;
-                  return (
-                    <option key={category} value={category}>
-                      {category} ({count})
-                    </option>
-                  );
-                })}
-                {macrosInCurrentTab.some(m => !m.category) && (
-                  <option value="uncategorized">
-                    Uncategorized ({macrosInCurrentTab.filter(m => !m.category).length})
-                  </option>
-                )}
-              </select>
+                onChange={(v) => setCategoryFilter(v)}
+                options={[
+                  { value: 'all', label: `All Categories (${macrosInCurrentTab.length})` },
+                  ...categories.map((category) => ({
+                    value: category,
+                    label: `${category} (${macrosInCurrentTab.filter(m => m.category === category).length})`,
+                  })),
+                  ...(macrosInCurrentTab.some(m => !m.category) ? [{
+                    value: 'uncategorized',
+                    label: `Uncategorized (${macrosInCurrentTab.filter(m => !m.category).length})`,
+                  }] : []),
+                ]}
+                size="sm"
+              />
             )}
 
             {/* Sort Dropdown */}
-            <select
+            <CustomSelect
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as 'order' | 'name-asc' | 'name-desc')}
-              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-            >
-              <option value="order">Sort by Order</option>
-              <option value="name-asc">Name A-Z</option>
-              <option value="name-desc">Name Z-A</option>
-            </select>
+              onChange={(v) => setSortBy(v as 'order' | 'name-asc' | 'name-desc')}
+              options={[
+                { value: 'order', label: 'Sort by Order' },
+                { value: 'name-asc', label: 'Name A-Z' },
+                { value: 'name-desc', label: 'Name Z-A' },
+              ]}
+              size="sm"
+            />
           </div>
         )}
 
