@@ -73,7 +73,7 @@ model User {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  organization    Organization?     @relation(fields: [organizationId], references: [id])
+  organization    Organization?     @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   ticketsCreated  Ticket[]          @relation("TicketRequester")
   ticketsAssigned Ticket[]          @relation("TicketAssignee")
   comments        Comment[]
@@ -92,6 +92,7 @@ model User {
   @@index([clerkId])
   @@index([email])
   @@index([role])
+  @@index([organizationId])
 }
 
 model Organization {
@@ -136,7 +137,7 @@ model Ticket {
 
   requester       User              @relation("TicketRequester", fields: [requesterId], references: [id])
   assignee        User?             @relation("TicketAssignee", fields: [assigneeId], references: [id])
-  organization    Organization?     @relation(fields: [organizationId], references: [id])
+  organization    Organization?     @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   form            Form?             @relation(fields: [formId], references: [id])
   category        Category?         @relation(fields: [categoryId], references: [id])
   relatedTicket   Ticket?           @relation("RelatedTickets", fields: [relatedTicketId], references: [id])
@@ -164,6 +165,8 @@ model Ticket {
   @@index([type], name: "idx_tickets_type")
   @@index([problemId], name: "idx_tickets_problem")
   @@index([mergedIntoId], name: "idx_tickets_merged")
+  @@index([organizationId], name: "idx_tickets_organization")
+  @@index([categoryId], name: "idx_tickets_category")
 }
 
 model Comment {
@@ -181,7 +184,7 @@ model Comment {
   updatedAt      DateTime       @updatedAt
 
   ticket      Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  author      User         @relation(fields: [authorId], references: [id])
+  author      User         @relation(fields: [authorId], references: [id], onDelete: Cascade)
   attachments Attachment[]
   mentions    Mention[]
 
@@ -203,10 +206,11 @@ model Attachment {
 
   ticket   Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   comment  Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
-  uploader User     @relation(fields: [uploaderId], references: [id])
+  uploader User     @relation(fields: [uploaderId], references: [id], onDelete: Cascade)
 
   @@index([ticketId], name: "idx_attachments_ticket")
   @@index([commentId], name: "idx_attachments_comment")
+  @@index([uploaderId], name: "idx_attachments_uploader")
 }
 
 model Category {
@@ -243,7 +247,7 @@ model TicketActivity {
   createdAt DateTime @default(now())
 
   ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  user   User?  @relation("UserActivities", fields: [userId], references: [id])
+  user   User?  @relation("UserActivities", fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([ticketId])
   @@index([userId])
@@ -260,7 +264,7 @@ model AgentSession {
   ipAddress  String?
   userAgent  String?
 
-  agent User @relation(fields: [agentId], references: [id])
+  agent User @relation(fields: [agentId], references: [id], onDelete: Cascade)
 
   @@index([agentId])
   @@index([loginAt])
@@ -278,7 +282,7 @@ model TicketTimeEntry {
   updatedAt   DateTime  @updatedAt
 
   ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  agent  User   @relation(fields: [agentId], references: [id])
+  agent  User   @relation(fields: [agentId], references: [id], onDelete: Cascade)
 
   @@index([ticketId])
   @@index([agentId])
@@ -485,7 +489,7 @@ model Mention {
   createdAt       DateTime @default(now())
 
   comment       Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
-  mentionedUser User    @relation(fields: [mentionedUserId], references: [id])
+  mentionedUser User    @relation(fields: [mentionedUserId], references: [id], onDelete: Cascade)
 
   @@unique([commentId, mentionedUserId])
   @@index([commentId])
@@ -548,8 +552,8 @@ model Bug {
   solvedAt    DateTime?
   updatedAt   DateTime  @updatedAt
 
-  reportedBy  User            @relation("BugReporter", fields: [reportedById], references: [id])
-  solvedBy    User?           @relation("BugSolver", fields: [solvedById], references: [id])
+  reportedBy  User            @relation("BugReporter", fields: [reportedById], references: [id], onDelete: Cascade)
+  solvedBy    User?           @relation("BugSolver", fields: [solvedById], references: [id], onDelete: SetNull)
   attachments BugAttachment[]
 
   @@index([status])
@@ -570,7 +574,7 @@ model BugAttachment {
   createdAt  DateTime @default(now())
 
   bug      Bug  @relation(fields: [bugId], references: [id], onDelete: Cascade)
-  uploader User @relation("BugAttachmentUploader", fields: [uploaderId], references: [id])
+  uploader User @relation("BugAttachmentUploader", fields: [uploaderId], references: [id], onDelete: Cascade)
 
   @@index([bugId])
 }
@@ -591,7 +595,7 @@ model ApiKey {
   revokedAt   DateTime?
 
   form      Form? @relation(fields: [formId], references: [id])
-  createdBy User  @relation("ApiKeyCreator", fields: [createdById], references: [id])
+  createdBy User  @relation("ApiKeyCreator", fields: [createdById], references: [id], onDelete: Cascade)
 
   @@index([key])
   @@index([isActive])
@@ -679,7 +683,7 @@ model ChatSession {
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
 
-  user     User          @relation(fields: [userId], references: [id])
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   ticket   Ticket?       @relation(fields: [ticketId], references: [id])
   messages ChatMessage[]
 

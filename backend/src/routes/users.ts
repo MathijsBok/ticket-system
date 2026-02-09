@@ -433,8 +433,28 @@ router.delete(
         return res.status(400).json({ error: 'You cannot delete yourself' });
       }
 
+      // Check for cascading effects before deletion
+      const [ticketCount, assignedCount] = await Promise.all([
+        prisma.ticket.count({ where: { requesterId: id } }),
+        prisma.ticket.count({ where: { assigneeId: id } })
+      ]);
+
+      if (ticketCount > 0) {
+        return res.status(400).json({
+          error: `Cannot delete user: they have ${ticketCount} ticket(s) as requester. Reassign or close them first.`
+        });
+      }
+
+      if (assignedCount > 0) {
+        // Unassign tickets before deletion
+        await prisma.ticket.updateMany({
+          where: { assigneeId: id },
+          data: { assigneeId: null }
+        });
+      }
+
       // Delete the user from the database
-      // Note: Related records will be handled by cascade delete or set null based on schema
+      // Related records will be handled by cascade delete or set null based on schema
       await prisma.user.delete({
         where: { id }
       });

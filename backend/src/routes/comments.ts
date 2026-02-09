@@ -20,12 +20,12 @@ const sanitizeOptions: sanitizeHtml.IOptions = {
   allowedSchemes: ['http', 'https', 'mailto'],
   allowedStyles: {
     '*': {
-      'color': [/.*/],
-      'background-color': [/.*/],
-      'text-align': [/.*/],
-      'font-size': [/.*/],
-      'font-weight': [/.*/],
-      'text-decoration': [/.*/]
+      'color': [/^#[0-9a-fA-F]{3,6}$/, /^rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\)$/, /^[a-zA-Z]+$/],
+      'background-color': [/^#[0-9a-fA-F]{3,6}$/, /^rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\)$/, /^[a-zA-Z]+$/],
+      'text-align': [/^(left|right|center|justify)$/],
+      'font-size': [/^(\d+)(px|em|rem|pt|%)$/],
+      'font-weight': [/^(normal|bold|bolder|lighter|\d{3})$/],
+      'text-decoration': [/^(none|underline|overline|line-through)$/]
     }
   }
 };

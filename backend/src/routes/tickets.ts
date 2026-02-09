@@ -1129,8 +1129,13 @@ router.post('/merge',
         });
       }
 
-      // Check if all source tickets have same requester as target (optional validation)
+      // Cross-requester merges require admin role
       const differentRequesters = sourceTickets.filter(t => t.requesterId !== targetTicket.requesterId);
+      if (differentRequesters.length > 0 && req.userRole !== 'ADMIN') {
+        return res.status(403).json({
+          error: 'Only admins can merge tickets from different requesters'
+        });
+      }
 
       // Perform the merge in a transaction
       const result = await prisma.$transaction(async (tx) => {

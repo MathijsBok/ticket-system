@@ -102,12 +102,26 @@ function generateMessageId(ticketNumber: number, fromEmail: string): string {
   return `<ticket-${ticketNumber}-${Date.now()}@${domain}>`;
 }
 
-// Replace placeholders in template
+// HTML-escape a string to prevent injection in email templates
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// Replace placeholders in template (HTML-escapes values to prevent injection)
 function replacePlaceholders(template: string, data: Record<string, string>): string {
   let result = template;
   Object.entries(data).forEach(([key, value]) => {
     const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
-    result = result.replace(regex, value || '');
+    // URLs should not be escaped (they go into href attributes)
+    const safeValue = key.toLowerCase().includes('url')
+      ? (value || '')
+      : escapeHtml(value || '');
+    result = result.replace(regex, safeValue);
   });
   return result;
 }

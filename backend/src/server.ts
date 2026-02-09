@@ -7,6 +7,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import { clerkMiddleware } from '@clerk/express';
 
@@ -53,6 +54,26 @@ app.use(cors({
   credentials: true
 }));
 app.use(morgan('dev'));
+
+// Rate limiting - general API limit
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 500, // limit each IP to 500 requests per window
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later' }
+});
+app.use('/api/', apiLimiter);
+
+// Stricter rate limit for public/unauthenticated endpoints
+const publicLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30, // 30 requests per 15 minutes for public endpoints
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later' }
+});
+app.use('/api/feedback', publicLimiter);
 
 // Webhook routes (before JSON parsing and Clerk middleware)
 app.use('/webhooks', webhookRoutes);

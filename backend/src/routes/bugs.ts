@@ -2,6 +2,7 @@ import { Router, Response, NextFunction } from 'express';
 import multer, { MulterError } from 'multer';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 import { prisma } from '../lib/prisma';
 import { requireAuth, requireAgent, requireAdmin, requireAgentPermission, AuthRequest } from '../middleware/auth';
 
@@ -28,7 +29,7 @@ const storage = multer.diskStorage({
     cb(null, uploadDir);
   },
   filename: (_req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const uniqueSuffix = Date.now() + '-' + crypto.randomBytes(8).toString('hex');
     cb(null, 'bug-' + uniqueSuffix + path.extname(file.originalname));
   }
 });
