@@ -7,7 +7,6 @@ import Layout from '../components/Layout';
 import ViewsSidebar from '../components/ViewsSidebar';
 import { format } from 'date-fns';
 import { useNotification } from '../contexts/NotificationContext';
-import { useView } from '../contexts/ViewContext';
 import { useTicketNotifications } from '../hooks/useTicketNotifications';
 import toast from 'react-hot-toast';
 import FeedbackStatsWidget from '../components/FeedbackStatsWidget';
@@ -23,10 +22,6 @@ const AgentDashboard: React.FC = () => {
   const { user } = useUser();
   // Default to 'USER' role if no role is set (new users)
   const userRole = (user?.publicMetadata?.role as string) || 'USER';
-  const { currentView } = useView();
-
-  // Use currentView for admins (respects "View as" switcher), userRole for others
-  const effectiveRole = userRole === 'ADMIN' ? currentView : userRole;
 
   // Get initial view from URL or default to 'open'
   const urlView = searchParams.get('view') || 'open';
@@ -491,7 +486,7 @@ const AgentDashboard: React.FC = () => {
               </svg>
             </button>
             <div>
-              <h1 className="text-xl sm:text-3xl font-bold text-gray-900 dark:text-white">{effectiveRole === 'ADMIN' ? 'Admin Dashboard' : 'Agent Dashboard'}</h1>
+              <h1 className="text-xl sm:text-3xl font-bold text-gray-900 dark:text-white">{userRole === 'ADMIN' ? 'Admin Dashboard' : 'Agent Dashboard'}</h1>
               <p className="hidden sm:block mt-1 text-sm text-gray-600 dark:text-gray-400">
                 Manage and respond to customer tickets
               </p>

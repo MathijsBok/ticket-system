@@ -4,7 +4,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { NotificationProvider } from './contexts/NotificationContext';
-import { ViewProvider } from './contexts/ViewContext';
 
 // Components
 import ProtectedRoute from './components/ProtectedRoute';
@@ -65,7 +64,6 @@ function App() {
       <ThemeProvider>
         <QueryClientProvider client={queryClient}>
           <NotificationProvider>
-            <ViewProvider>
               <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
                 <SignedIn>
                   <TwoFactorGuard>
@@ -370,7 +368,6 @@ function App() {
                 </SignedOut>
               </BrowserRouter>
               <Toaster position="top-right" />
-            </ViewProvider>
           </NotificationProvider>
         </QueryClientProvider>
       </ThemeProvider>

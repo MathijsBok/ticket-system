@@ -7,7 +7,6 @@ import { ticketApi, commentApi, userApi, macroApi, attachmentApi, settingsApi, a
 import { parseUserAgent } from '../lib/deviceDetection';
 import { getTimezoneDisplay, getCountryDisplay } from '../lib/geolocation';
 import { Macro, Attachment } from '../types';
-import { useView } from '../contexts/ViewContext';
 import Layout from '../components/Layout';
 import RichTextEditor from '../components/RichTextEditor';
 import MentionableRichTextEditor from '../components/MentionableRichTextEditor';
@@ -57,7 +56,6 @@ const TicketDetail: React.FC = () => {
   const { user } = useUser();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const { currentView } = useView();
   // Default to 'USER' role if no role is set (new users)
   const userRole = (user?.publicMetadata?.role as string) || 'USER';
 
@@ -631,9 +629,7 @@ const TicketDetail: React.FC = () => {
     );
   }
 
-  // Determine if user should see agent controls based on role and view context
-  const effectiveRole = userRole === 'ADMIN' ? currentView : userRole;
-  const isAgent = effectiveRole === 'AGENT' || effectiveRole === 'ADMIN';
+  const isAgent = userRole === 'AGENT' || userRole === 'ADMIN';
 
   // Check if ticket is closed (either CLOSED status or SOLVED for more than 48 hours)
   const isTicketClosedForReplies = () => {

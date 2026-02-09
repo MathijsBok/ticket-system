@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useUser, UserButton } from '@clerk/clerk-react';
 import { useQuery } from '@tanstack/react-query';
 import { useTheme } from '../contexts/ThemeContext';
-import { useView } from '../contexts/ViewContext';
 import { Link, useLocation } from 'react-router-dom';
 import { settingsApi } from '../lib/api';
 import NotificationBell from './NotificationBell';
@@ -17,7 +16,6 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children, hidePadding = false }) => {
   const { user } = useUser();
   const { theme, toggleTheme } = useTheme();
-  const { currentView, setCurrentView } = useView();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   // Default to 'USER' role if no role is set (new users)
@@ -34,35 +32,18 @@ const Layout: React.FC<LayoutProps> = ({ children, hidePadding = false }) => {
     staleTime: 5 * 60 * 1000 // Cache for 5 minutes
   });
 
-  // Only update currentView when admin uses "View as" dropdown
-  // Don't auto-switch based on URL - this was causing navigation issues
-
-  const handleViewChange = (view: string) => {
-    const newView = view as 'USER' | 'AGENT' | 'ADMIN';
-    setCurrentView(newView);
-    // Don't navigate - just update the view context
-    // The menu will update and user can click where they want to go
-  };
-
-  // Use currentView for admins (respects "View as" switcher), userRole for others
-  const effectiveRole = userRole === 'ADMIN' ? currentView : userRole;
-
   const navigation = React.useMemo(() => {
     const nav = [];
 
-    // Navigation based on effective role (for admins, this respects the "View as" selection)
-    if (effectiveRole === 'USER') {
-      // User view: only show user-facing navigation
+    if (userRole === 'USER') {
       nav.push(
         { name: 'My Tickets', href: '/user' },
         { name: 'New Ticket', href: '/tickets/new' },
         { name: 'Settings', href: '/settings' }
       );
-    } else if (effectiveRole === 'AGENT') {
-      // Agent view: show agent-facing navigation based on permissions
+    } else if (userRole === 'AGENT') {
       nav.push({ name: 'Tickets', href: '/agent' });
 
-      // Conditionally add menu items based on permissions (using /agent/ URLs for agents)
       if (agentPermissions?.canCreateTickets !== false) {
         nav.push({ name: 'New Ticket', href: '/tickets/new' });
       }
@@ -87,10 +68,8 @@ const Layout: React.FC<LayoutProps> = ({ children, hidePadding = false }) => {
       if (agentPermissions?.canAccessBugReports !== false) {
         nav.push({ name: 'Bug Reports', href: '/agent/bugs' });
       }
-      // Always add Settings for agents
       nav.push({ name: 'Settings', href: '/settings' });
-    } else if (effectiveRole === 'ADMIN') {
-      // Admin view: show all admin navigation in the main nav array
+    } else if (userRole === 'ADMIN') {
       nav.push(
         { name: 'Dashboard', href: '/agent' },
         { name: 'New Ticket', href: '/tickets/new' },
@@ -107,7 +86,7 @@ const Layout: React.FC<LayoutProps> = ({ children, hidePadding = false }) => {
     }
 
     return nav;
-  }, [effectiveRole, agentPermissions]);
+  }, [userRole, agentPermissions]);
 
   const handleNavClick = () => {
     setMobileMenuOpen(false);
@@ -141,21 +120,6 @@ const Layout: React.FC<LayoutProps> = ({ children, hidePadding = false }) => {
                   {item.name}
                 </Link>
               ))}
-
-              {userRole === 'ADMIN' && (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500 dark:text-gray-400">View as:</span>
-                  <select
-                    value={currentView}
-                    onChange={(e) => handleViewChange(e.target.value)}
-                    className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary transition-colors"
-                  >
-                    <option value="USER">User</option>
-                    <option value="AGENT">Agent</option>
-                    <option value="ADMIN">Admin</option>
-                  </select>
-                </div>
-              )}
 
               {/* Notifications bell for agents and admins */}
               {(userRole === 'AGENT' || userRole === 'ADMIN') && (
@@ -249,20 +213,6 @@ const Layout: React.FC<LayoutProps> = ({ children, hidePadding = false }) => {
                 </Link>
               ))}
 
-              {userRole === 'ADMIN' && (
-                <div className="px-3 py-2 flex items-center gap-2">
-                  <span className="text-sm text-gray-500 dark:text-gray-400">View as:</span>
-                  <select
-                    value={currentView}
-                    onChange={(e) => handleViewChange(e.target.value)}
-                    className="flex-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary transition-colors"
-                  >
-                    <option value="USER">User</option>
-                    <option value="AGENT">Agent</option>
-                    <option value="ADMIN">Admin</option>
-                  </select>
-                </div>
-              )}
             </div>
           </div>
         )}

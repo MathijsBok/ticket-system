@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useUser } from '@clerk/clerk-react';
-import { useView } from '../contexts/ViewContext';
 import toast from 'react-hot-toast';
 import { ticketApi, formApi, attachmentApi, aiAnalyticsApi, userApi } from '../lib/api';
 import Layout from '../components/Layout';
@@ -19,9 +18,7 @@ const CreateTicket: React.FC = () => {
   const [searchParams] = useSearchParams();
   const { user } = useUser();
   const userRole = (user?.publicMetadata?.role as string) || 'USER';
-  const { currentView } = useView();
-  const effectiveRole = userRole === 'ADMIN' ? currentView : userRole;
-  const isAgentOrAdmin = effectiveRole === 'AGENT' || effectiveRole === 'ADMIN';
+  const isAgentOrAdmin = userRole === 'AGENT' || userRole === 'ADMIN';
   const relatedTicketId = searchParams.get('relatedTicketId');
   const [priority, setPriority] = useState('NORMAL');
   const [categoryId, _setCategoryId] = useState('');
