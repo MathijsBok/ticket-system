@@ -85,6 +85,8 @@ router.patch('/:id', requireAuth, requireAdmin, async (req: AuthRequest, res: Re
       'chatWidgetSystemInstructions', 'chatWidgetCompanyName', 'chatWidgetTone', 'chatWidgetFaqItems',
       // SendGrid
       'sendgridEnabled', 'sendgridApiKey', 'sendgridFromEmail', 'sendgridFromName', 'sendgridInboundDomain',
+      // Frontend URL (for email links)
+      'frontendUrl',
       // Agent Permissions
       'agentCanAccessAnalytics', 'agentCanAccessForms', 'agentCanAccessFieldLibrary',
       'agentCanAccessMacros', 'agentCanAccessBugReports', 'agentCanAccessEmailTemplates',

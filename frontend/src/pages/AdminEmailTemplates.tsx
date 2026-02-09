@@ -148,13 +148,14 @@ const AdminEmailTemplates: React.FC = () => {
   };
 
   // Sample data for client-side preview
+  const baseUrl = settings?.frontendUrl || window.location.origin;
   const sampleData: Record<string, string> = {
     userName: 'John Doe',
     ticketNumber: '12345',
     ticketSubject: 'Sample Ticket Subject',
-    ticketUrl: 'https://support.example.com/tickets/123',
+    ticketUrl: `${baseUrl}/tickets/123`,
     agentName: 'Support Agent',
-    feedbackUrl: 'https://support.example.com/feedback?token=sample-token'
+    feedbackUrl: `${baseUrl}/feedback?token=sample-token`
   };
 
   const handleSendTest = async () => {

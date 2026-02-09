@@ -269,6 +269,7 @@ const AdminSettings: React.FC = () => {
     sendgridFromEmail: '',
     sendgridFromName: '',
     sendgridInboundDomain: '',
+    frontendUrl: '',
   });
   const [sendgridSaving, setSendgridSaving] = useState(false);
 
@@ -281,6 +282,7 @@ const AdminSettings: React.FC = () => {
         sendgridFromEmail: settings.sendgridFromEmail ?? '',
         sendgridFromName: settings.sendgridFromName ?? '',
         sendgridInboundDomain: settings.sendgridInboundDomain ?? '',
+        frontendUrl: settings.frontendUrl ?? '',
       });
     }
   }, [settings]);
@@ -291,7 +293,8 @@ const AdminSettings: React.FC = () => {
     sendgridForm.sendgridApiKey !== (settings.sendgridApiKey ?? '') ||
     sendgridForm.sendgridFromEmail !== (settings.sendgridFromEmail ?? '') ||
     sendgridForm.sendgridFromName !== (settings.sendgridFromName ?? '') ||
-    sendgridForm.sendgridInboundDomain !== (settings.sendgridInboundDomain ?? '')
+    sendgridForm.sendgridInboundDomain !== (settings.sendgridInboundDomain ?? '') ||
+    sendgridForm.frontendUrl !== (settings.frontendUrl ?? '')
   );
 
   // Handle sendgrid form field changes
@@ -326,6 +329,7 @@ const AdminSettings: React.FC = () => {
         sendgridFromEmail: settings.sendgridFromEmail ?? '',
         sendgridFromName: settings.sendgridFromName ?? '',
         sendgridInboundDomain: settings.sendgridInboundDomain ?? '',
+        frontendUrl: settings.frontendUrl ?? '',
       });
     }
   };
@@ -1709,6 +1713,23 @@ const AdminSettings: React.FC = () => {
                     />
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
                       The display name shown to recipients
+                    </p>
+                  </div>
+
+                  {/* Frontend URL */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
+                      Frontend URL
+                    </label>
+                    <input
+                      type="url"
+                      value={sendgridForm.frontendUrl}
+                      onChange={(e) => handleSendgridChange('frontendUrl', e.target.value)}
+                      placeholder="https://support.yourdomain.com"
+                      className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                    />
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                      The public URL of your support portal. Used for "View Ticket" links in emails. Leave empty to use the server's FRONTEND_URL environment variable.
                     </p>
                   </div>
 

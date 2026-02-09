@@ -439,9 +439,9 @@ router.post('/:id/send-test',
         userName: 'John Doe',
         ticketNumber: '12345',
         ticketSubject: 'Sample Ticket Subject',
-        ticketUrl: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/tickets/test-123`,
+        ticketUrl: `${config.frontendUrl}/tickets/test-123`,
         agentName: 'Support Agent',
-        feedbackUrl: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/feedback?token=test-token-sample`
+        feedbackUrl: `${config.frontendUrl}/feedback?token=test-token-sample`
       };
 
       // Replace placeholders and wrap in layout

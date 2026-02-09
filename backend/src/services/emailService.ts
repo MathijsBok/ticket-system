@@ -16,6 +16,7 @@ let cachedSettings: {
   sendgridFromEmail: string | null;
   sendgridFromName: string | null;
   sendgridInboundDomain: string | null;
+  frontendUrl: string | null;
 } | null = null;
 let settingsCacheTime = 0;
 const SETTINGS_CACHE_TTL = 60000; // 1 minute cache
@@ -34,6 +35,7 @@ async function getSendGridSettings() {
     sendgridFromEmail: settings?.sendgridFromEmail ?? null,
     sendgridFromName: settings?.sendgridFromName ?? null,
     sendgridInboundDomain: settings?.sendgridInboundDomain ?? null,
+    frontendUrl: settings?.frontendUrl ?? null,
   };
   settingsCacheTime = now;
   return cachedSettings;
@@ -43,6 +45,9 @@ async function getSendGridSettings() {
 export async function getEffectiveConfig() {
   const dbSettings = await getSendGridSettings();
 
+  // Frontend URL: DB setting > env var > default
+  const frontendUrl = dbSettings.frontendUrl || FRONTEND_URL;
+
   // If SendGrid is enabled in DB and has API key, use DB settings
   if (dbSettings.sendgridEnabled && dbSettings.sendgridApiKey) {
     return {
@@ -51,6 +56,7 @@ export async function getEffectiveConfig() {
       fromEmail: dbSettings.sendgridFromEmail || ENV_SENDGRID_FROM_EMAIL,
       fromName: dbSettings.sendgridFromName || ENV_SENDGRID_FROM_NAME,
       inboundDomain: dbSettings.sendgridInboundDomain || ENV_SENDGRID_INBOUND_DOMAIN,
+      frontendUrl,
     };
   }
 
@@ -62,6 +68,7 @@ export async function getEffectiveConfig() {
       fromEmail: ENV_SENDGRID_FROM_EMAIL,
       fromName: ENV_SENDGRID_FROM_NAME,
       inboundDomain: ENV_SENDGRID_INBOUND_DOMAIN,
+      frontendUrl,
     };
   }
 
@@ -71,6 +78,7 @@ export async function getEffectiveConfig() {
     fromEmail: ENV_SENDGRID_FROM_EMAIL,
     fromName: ENV_SENDGRID_FROM_NAME,
     inboundDomain: ENV_SENDGRID_INBOUND_DOMAIN,
+    frontendUrl,
   };
 }
 
@@ -296,7 +304,7 @@ export async function sendAgentReplyEmail(
     const agentName = [comment.author.firstName, comment.author.lastName]
       .filter(Boolean)
       .join(' ') || 'Support Agent';
-    const ticketUrl = `${FRONTEND_URL}/tickets/${ticket.id}`;
+    const ticketUrl = `${config.frontendUrl}/tickets/${ticket.id}`;
 
     const placeholders: Record<string, string> = {
       userName,
@@ -404,7 +412,7 @@ export async function sendTicketCreatedEmail(
     const userName = [ticket.requester.firstName, ticket.requester.lastName]
       .filter(Boolean)
       .join(' ') || 'Customer';
-    const ticketUrl = `${FRONTEND_URL}/tickets/${ticket.id}`;
+    const ticketUrl = `${config.frontendUrl}/tickets/${ticket.id}`;
 
     const placeholders: Record<string, string> = {
       userName,
@@ -501,7 +509,7 @@ export async function sendTicketResolvedEmail(
     const userName = [ticket.requester.firstName, ticket.requester.lastName]
       .filter(Boolean)
       .join(' ') || 'Customer';
-    const ticketUrl = `${FRONTEND_URL}/tickets/${ticket.id}`;
+    const ticketUrl = `${config.frontendUrl}/tickets/${ticket.id}`;
 
     const placeholders: Record<string, string> = {
       userName,
@@ -689,13 +697,13 @@ export async function sendFeedbackRequestEmail(
     }
 
     // Build feedback URL
-    const feedbackUrl = `${FRONTEND_URL}/feedback?token=${feedback.token}`;
+    const feedbackUrl = `${config.frontendUrl}/feedback?token=${feedback.token}`;
 
     // Build placeholder data
     const userName = [ticket.requester.firstName, ticket.requester.lastName]
       .filter(Boolean)
       .join(' ') || 'Customer';
-    const ticketUrl = `${FRONTEND_URL}/tickets/${ticket.id}`;
+    const ticketUrl = `${config.frontendUrl}/tickets/${ticket.id}`;
 
     const placeholders: Record<string, string> = {
       userName,
