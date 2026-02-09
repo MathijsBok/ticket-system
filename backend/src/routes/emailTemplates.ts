@@ -372,6 +372,35 @@ router.post('/:id/reset', requireAuth, requireAgent, requireAgentPermission('age
   }
 });
 
+// Reset all templates to default
+router.post('/reset-all', requireAuth, requireAgent, requireAgentPermission('agentCanAccessEmailTemplates'), async (_req: AuthRequest, res: Response) => {
+  try {
+    const results = [];
+    for (const defaultTemplate of defaultTemplates) {
+      const existing = await prisma.emailTemplate.findUnique({
+        where: { type: defaultTemplate.type }
+      });
+
+      if (existing) {
+        const updated = await prisma.emailTemplate.update({
+          where: { id: existing.id },
+          data: {
+            subject: defaultTemplate.subject,
+            bodyHtml: defaultTemplate.bodyHtml,
+            bodyPlain: defaultTemplate.bodyPlain
+          }
+        });
+        results.push(updated);
+      }
+    }
+
+    return res.json({ success: true, count: results.length, templates: results });
+  } catch (error) {
+    console.error('Error resetting all email templates:', error);
+    return res.status(500).json({ error: 'Failed to reset templates' });
+  }
+});
+
 // Send test email
 router.post('/:id/send-test',
   requireAuth,

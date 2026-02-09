@@ -37,6 +37,7 @@ const AdminEmailTemplates: React.FC = () => {
     bodyPlain: ''
   });
   const [resetConfirmTemplate, setResetConfirmTemplate] = useState<EmailTemplate | null>(null);
+  const [showResetAllConfirm, setShowResetAllConfirm] = useState(false);
   const [showTestEmail, setShowTestEmail] = useState(false);
   const [testEmailAddress, setTestEmailAddress] = useState('');
   const [sendingTest, setSendingTest] = useState(false);
@@ -71,6 +72,18 @@ const AdminEmailTemplates: React.FC = () => {
     },
     onError: () => {
       toast.error('Failed to reset template');
+    }
+  });
+
+  const resetAllMutation = useMutation({
+    mutationFn: () => emailTemplateApi.resetAll(),
+    onSuccess: () => {
+      toast.success('All templates reset to default with updated styling');
+      queryClient.invalidateQueries({ queryKey: ['emailTemplates'] });
+      setShowResetAllConfirm(false);
+    },
+    onError: () => {
+      toast.error('Failed to reset templates');
     }
   });
 
@@ -236,11 +249,24 @@ const AdminEmailTemplates: React.FC = () => {
     <Layout>
       <div className="space-y-6">
         {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Email Templates</h1>
-          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-            Customize the email notifications sent to users
-          </p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Email Templates</h1>
+            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+              Customize the email notifications sent to users
+            </p>
+          </div>
+          {!editingTemplate && (
+            <button
+              onClick={() => setShowResetAllConfirm(true)}
+              className="px-4 py-2 text-sm font-medium text-orange-600 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-md hover:bg-orange-100 dark:hover:bg-orange-900/30 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 flex items-center gap-1.5"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Reset All to Default
+            </button>
+          )}
         </div>
 
         {/* Edit Panel - Full width when editing */}
@@ -628,6 +654,45 @@ const AdminEmailTemplates: React.FC = () => {
                     className="px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-md hover:bg-orange-700 disabled:opacity-50"
                   >
                     {resetMutation.isPending ? 'Resetting...' : 'Reset to Default'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+        {/* Reset All Confirmation Modal */}
+        {showResetAllConfirm && (
+          <>
+            <div
+              className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+              onClick={() => setShowResetAllConfirm(false)}
+            >
+              <div
+                className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                  Reset All Templates
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  This will reset all email templates to their default content with updated styling for better rendering across email clients.
+                </p>
+                <p className="text-sm text-orange-600 dark:text-orange-400 mb-6">
+                  Any custom changes you've made to templates will be lost. This cannot be undone.
+                </p>
+                <div className="flex justify-end gap-3">
+                  <button
+                    onClick={() => setShowResetAllConfirm(false)}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => resetAllMutation.mutate()}
+                    disabled={resetAllMutation.isPending}
+                    className="px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-md hover:bg-orange-700 disabled:opacity-50"
+                  >
+                    {resetAllMutation.isPending ? 'Resetting...' : 'Reset All Templates'}
                   </button>
                 </div>
               </div>

@@ -442,6 +442,9 @@ export const emailTemplateApi = {
   reset: (id: string) =>
     api.post(`/email-templates/${id}/reset`),
 
+  resetAll: () =>
+    api.post('/email-templates/reset-all'),
+
   sendTest: (id: string, email: string) =>
     api.post(`/email-templates/${id}/send-test`, { email })
 };
