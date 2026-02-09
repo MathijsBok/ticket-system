@@ -48,11 +48,17 @@ export default function TwoFactorGuard({ children }: TwoFactorGuardProps) {
         const data: SecurityStatus = response.data;
         setSecurityStatus(data);
 
+        // Check if grace period expired using direct timestamp comparison
+        // (matches backend middleware logic exactly)
+        const isGracePeriodExpired = data.gracePeriodEnd
+          ? new Date(data.gracePeriodEnd) <= new Date()
+          : false;
+
         if (
           data.enforcementEnabled &&
           data.is2FARequired &&
           !data.has2FAEnabled &&
-          data.gracePeriodExpired
+          isGracePeriodExpired
         ) {
           setStatus('blocked');
         } else {

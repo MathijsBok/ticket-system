@@ -44,11 +44,16 @@ router.get('/status', requireAuth, async (req: AuthRequest, res: Response) => {
     if (user.twoFactorGracePeriodEnd) {
       const now = new Date();
       const gracePeriodEnd = new Date(user.twoFactorGracePeriodEnd);
-      const diffTime = gracePeriodEnd.getTime() - now.getTime();
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-      gracePeriodDaysRemaining = Math.max(0, diffDays);
-      gracePeriodExpired = diffDays < 0;
+      // Match middleware logic: expired when now >= gracePeriodEnd
+      gracePeriodExpired = now >= gracePeriodEnd;
+
+      if (!gracePeriodExpired) {
+        const diffTime = gracePeriodEnd.getTime() - now.getTime();
+        gracePeriodDaysRemaining = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+      } else {
+        gracePeriodDaysRemaining = 0;
+      }
     }
 
     return res.json({
