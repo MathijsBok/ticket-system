@@ -78,20 +78,33 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
           color: rgb(229, 231, 235);
         }
         /* Override inline color styles in dark mode for better visibility */
-        .dark .rich-text-editor .ql-editor span[style*="color: rgb(0, 0, 0)"],
-        .dark .rich-text-editor .ql-editor span[style*="color:rgb(0, 0, 0)"],
-        .dark .rich-text-editor .ql-editor span[style*="color: rgb(0,0,0)"],
-        .dark .rich-text-editor .ql-editor span[style*="color:#000000"],
-        .dark .rich-text-editor .ql-editor span[style*="color: #000000"],
-        .dark .rich-text-editor .ql-editor span[style*="color:black"],
-        .dark .rich-text-editor .ql-editor span[style*="color: black"] {
+        /* Target all elements (p, h2, strong, span, a, etc.) with dark text colors */
+        .dark .rich-text-editor .ql-editor [style*="color: rgb(0, 0, 0)"],
+        .dark .rich-text-editor .ql-editor [style*="color:rgb(0, 0, 0)"],
+        .dark .rich-text-editor .ql-editor [style*="color: rgb(0,0,0)"],
+        .dark .rich-text-editor .ql-editor [style*="color:#000000"],
+        .dark .rich-text-editor .ql-editor [style*="color: #000000"],
+        .dark .rich-text-editor .ql-editor [style*="color:black"],
+        .dark .rich-text-editor .ql-editor [style*="color: black"] {
           color: rgb(229, 231, 235) !important;
         }
-        /* Also handle very dark colors that are hard to read */
-        .dark .rich-text-editor .ql-editor span[style*="color: rgb(67, 67, 67)"],
-        .dark .rich-text-editor .ql-editor span[style*="color: rgb(51, 65, 85)"],
-        .dark .rich-text-editor .ql-editor span[style*="color: rgb(30, 41, 59)"] {
+        /* Handle dark grays and slates from email template inline styles */
+        .dark .rich-text-editor .ql-editor [style*="color: rgb(67, 67, 67)"],
+        .dark .rich-text-editor .ql-editor [style*="color: rgb(51, 65, 85)"],
+        .dark .rich-text-editor .ql-editor [style*="color: rgb(30, 41, 59)"],
+        .dark .rich-text-editor .ql-editor [style*="color: #1e293b"],
+        .dark .rich-text-editor .ql-editor [style*="color: #0f172a"],
+        .dark .rich-text-editor .ql-editor [style*="color: #111827"],
+        .dark .rich-text-editor .ql-editor [style*="color: #374151"],
+        .dark .rich-text-editor .ql-editor [style*="color: #64748b"] {
           color: rgb(209, 213, 219) !important;
+        }
+        /* Ensure child elements within styled parents also get light text */
+        .dark .rich-text-editor .ql-editor [style*="color: #374151"] strong,
+        .dark .rich-text-editor .ql-editor [style*="color: #1e293b"] strong,
+        .dark .rich-text-editor .ql-editor [style*="color: #111827"] strong,
+        .dark .rich-text-editor .ql-editor strong[style*="color: #111827"] {
+          color: rgb(243, 244, 246) !important;
         }
         .dark .rich-text-editor .ql-editor.ql-blank::before {
           color: rgb(107, 114, 128);
