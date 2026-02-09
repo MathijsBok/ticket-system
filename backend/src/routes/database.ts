@@ -5,6 +5,7 @@ import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import * as crypto from 'crypto';
 import { requireAuth, requireAdmin, AuthRequest } from '../middleware/auth';
 
 const router = Router();
@@ -68,7 +69,7 @@ const upload = multer({
 // Import database from dump file
 // WARNING: This will replace all data in the database!
 router.post('/import', requireAuth, requireAdmin, upload.single('file'), async (req: AuthRequest, res: Response) => {
-  const tempFilePath = path.join(os.tmpdir(), `db_import_${Date.now()}.dump`);
+  const tempFilePath = path.join(os.tmpdir(), `db_import_${crypto.randomBytes(16).toString('hex')}.dump`);
 
   try {
     if (!req.file) {
@@ -182,8 +183,7 @@ router.post('/import', requireAuth, requireAdmin, upload.single('file'), async (
   } catch (error: any) {
     console.error('[Database Import] Error:', error);
     return res.status(500).json({
-      error: 'Failed to import database',
-      details: error.message || 'Unknown error'
+      error: 'Failed to import database'
     });
   } finally {
     // Clean up temp file
@@ -199,7 +199,7 @@ router.post('/import', requireAuth, requireAdmin, upload.single('file'), async (
 router.get('/export', requireAuth, requireAdmin, async (req: AuthRequest, res: Response): Promise<void> => {
   const format = (req.query.format as string)?.toLowerCase() === 'sql' ? 'sql' : 'dump';
   const extension = format === 'sql' ? '.sql' : '.dump';
-  const tempFilePath = path.join(os.tmpdir(), `db_export_${Date.now()}${extension}`);
+  const tempFilePath = path.join(os.tmpdir(), `db_export_${crypto.randomBytes(16).toString('hex')}${extension}`);
 
   try {
     console.log(`[Database Export] Starting export (format: ${format})...`);
@@ -248,8 +248,7 @@ router.get('/export', requireAuth, requireAdmin, async (req: AuthRequest, res: R
       fs.unlinkSync(tempFilePath);
     }
     res.status(500).json({
-      error: 'Failed to export database',
-      details: error.message || 'Unknown error'
+      error: 'Failed to export database'
     });
   }
 });

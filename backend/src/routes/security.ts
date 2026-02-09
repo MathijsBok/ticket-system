@@ -1,10 +1,26 @@
 import { Router, Response } from 'express';
 import { body, validationResult } from 'express-validator';
+import rateLimit from 'express-rate-limit';
 import { clerkClient } from '@clerk/express';
 import { prisma } from '../lib/prisma';
 import { requireAuth, requireAdmin, AuthRequest } from '../middleware/auth';
 
 const router = Router();
+
+// Rate limiting for security endpoints to prevent abuse
+const securityRateLimit = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 30, // 30 requests per minute
+  message: { error: 'Too many requests, please try again later' }
+});
+
+const syncRateLimit = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10, // 10 syncs per minute (calls external Clerk API)
+  message: { error: 'Too many sync requests, please try again later' }
+});
+
+router.use(securityRateLimit);
 
 // Get current user's 2FA status and grace period
 router.get('/status', requireAuth, async (req: AuthRequest, res: Response) => {
@@ -73,7 +89,7 @@ router.get('/status', requireAuth, async (req: AuthRequest, res: Response) => {
 });
 
 // Force sync 2FA status from Clerk
-router.post('/sync', requireAuth, async (req: AuthRequest, res: Response) => {
+router.post('/sync', syncRateLimit, requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId!;
 

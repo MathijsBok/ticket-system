@@ -157,10 +157,21 @@ export const requireTwoFactor = async (req: AuthRequest, res: Response, next: Ne
             twoFactorLastSyncedAt: true
           }
         });
-      } catch (clerkError) {
-        console.error('Error syncing 2FA status from Clerk:', clerkError);
-        // Fail open - allow access if Clerk API is down
-        return next();
+      } catch (clerkError: any) {
+        // Fail open only for transient errors (network/timeout)
+        const isTransient = clerkError?.code === 'ECONNREFUSED' ||
+          clerkError?.code === 'ETIMEDOUT' ||
+          clerkError?.code === 'ENOTFOUND' ||
+          clerkError?.status === 503 ||
+          clerkError?.status === 429;
+
+        if (isTransient) {
+          console.warn('[2FA Middleware] Transient Clerk API error, allowing access:', clerkError.message);
+          return next();
+        }
+
+        console.error('[2FA Middleware] Unexpected Clerk API error, blocking access:', clerkError);
+        return res.status(500).json({ error: 'Authentication service unavailable' });
       }
     }
 
@@ -217,9 +228,8 @@ export const requireTwoFactor = async (req: AuthRequest, res: Response, next: Ne
       gracePeriodEnd: user.twoFactorGracePeriodEnd
     });
   } catch (error) {
-    console.error('Error in requireTwoFactor middleware:', error);
-    // Fail open on errors to prevent lockouts
-    return next();
+    console.error('[2FA Middleware] Unexpected error, blocking access:', error);
+    return res.status(500).json({ error: 'Authentication service unavailable' });
   }
 };
 

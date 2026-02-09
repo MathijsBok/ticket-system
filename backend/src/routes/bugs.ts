@@ -10,12 +10,12 @@ const router = Router();
 
 // Allowed file types (images and videos only)
 const ALLOWED_MIME_TYPES = [
-  'image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp', 'image/bmp', 'image/svg+xml',
+  'image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp', 'image/bmp',
   'video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo'
 ];
 
 const ALLOWED_EXTENSIONS = [
-  '.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg',
+  '.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp',
   '.mp4', '.webm', '.mov', '.avi'
 ];
 

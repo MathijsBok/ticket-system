@@ -2,12 +2,28 @@
 
 # Sync database from production server to local MacBook
 # Usage: ./scripts/sync-db-from-server.sh
+#
+# Required environment variables (set in .env.deploy or export before running):
+#   DEPLOY_SERVER - SSH connection string (e.g., user@hostname)
+#   REMOTE_DB     - Remote database name
+#   LOCAL_DB      - Local database name (default: ticket_system)
 
 set -e
 
-SERVER="root@151.106.34.63"
-REMOTE_DB="ticket_system_dev"
-LOCAL_DB="ticket_system"
+# Load deploy config if available
+if [ -f "$(dirname "$0")/../.env.deploy" ]; then
+  source "$(dirname "$0")/../.env.deploy"
+fi
+
+# Validate required variables
+if [ -z "$DEPLOY_SERVER" ]; then
+  echo "Error: DEPLOY_SERVER is not set. Set it in .env.deploy or export it."
+  echo "Example: export DEPLOY_SERVER=user@hostname"
+  exit 1
+fi
+
+REMOTE_DB="${REMOTE_DB:-ticket_system_dev}"
+LOCAL_DB="${LOCAL_DB:-ticket_system}"
 DUMP_FILE="/tmp/ticket_db_backup.dump"
 
 echo "=== Database Sync: Server -> Local ==="
@@ -15,12 +31,12 @@ echo ""
 
 # Step 1: Create dump on server
 echo "1. Creating database dump on server..."
-ssh $SERVER "pg_dump -U postgres -d $REMOTE_DB -F c -f $DUMP_FILE"
+ssh $DEPLOY_SERVER "pg_dump -U postgres -d $REMOTE_DB -F c -f $DUMP_FILE"
 echo "   Done."
 
 # Step 2: Download dump file
 echo "2. Downloading dump file..."
-scp $SERVER:$DUMP_FILE $DUMP_FILE
+scp $DEPLOY_SERVER:$DUMP_FILE $DUMP_FILE
 echo "   Done."
 
 # Step 3: Drop and recreate local database
@@ -42,7 +58,7 @@ echo "   Done."
 
 # Cleanup
 rm -f $DUMP_FILE
-ssh $SERVER "rm -f $DUMP_FILE"
+ssh $DEPLOY_SERVER "rm -f $DUMP_FILE"
 
 echo ""
 echo "=== Database sync complete! ==="

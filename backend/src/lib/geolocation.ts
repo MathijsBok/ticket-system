@@ -44,7 +44,7 @@ export async function getCountryFromIP(
 
   try {
     // Use ip-api.com (free, 45 requests/minute for non-commercial use)
-    const response = await axios.get(`http://ip-api.com/json/${ip}?fields=status,country,countryCode,city`, {
+    const response = await axios.get(`https://ip-api.com/json/${ip}?fields=status,country,countryCode,city`, {
       timeout: 3000 // 3 second timeout
     });
 

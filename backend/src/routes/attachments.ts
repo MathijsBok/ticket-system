@@ -17,7 +17,6 @@ const ALLOWED_MIME_TYPES = [
   'image/gif',
   'image/webp',
   'image/bmp',
-  'image/svg+xml',
   // Videos
   'video/mp4',
   'video/webm',
@@ -26,7 +25,7 @@ const ALLOWED_MIME_TYPES = [
 ];
 
 const ALLOWED_EXTENSIONS = [
-  '.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg',
+  '.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp',
   '.mp4', '.webm', '.mov', '.avi'
 ];
 
