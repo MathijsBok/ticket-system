@@ -1,0 +1,709 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  AGENT
+  ADMIN
+}
+
+enum TicketStatus {
+  NEW
+  OPEN
+  PENDING
+  ON_HOLD
+  SOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum TicketChannel {
+  EMAIL
+  WEB
+  API
+  SLACK
+  INTERNAL
+}
+
+enum CommentChannel {
+  WEB
+  EMAIL
+  SLACK
+  API
+  SYSTEM
+}
+
+enum TicketType {
+  NORMAL
+  PROBLEM
+  INCIDENT
+}
+
+model User {
+  id             String    @id @default(uuid()) @db.Uuid
+  clerkId        String    @unique
+  email          String    @unique
+  firstName      String?
+  lastName       String?
+  role           UserRole  @default(USER)
+  organizationId String?   @db.Uuid
+  timezone       String?   // IANA timezone (e.g., "Europe/Amsterdam")
+  timezoneOffset String?   // UTC offset (e.g., "GMT+1")
+  country        String?   @db.VarChar(100) // Country from IP geolocation
+  lastSeenAt     DateTime?
+  isBlocked      Boolean   @default(false)
+  blockedAt      DateTime?
+  blockedReason  String?
+  has2FAEnabled              Boolean   @default(false)   // Cached from Clerk
+  has2FAEnrolledAt           DateTime?                   // First 2FA enrollment
+  twoFactorGracePeriodEnd    DateTime?                   // Grace period deadline
+  twoFactorLastSyncedAt      DateTime?                   // Last Clerk sync
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization    Organization?     @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  ticketsCreated  Ticket[]          @relation("TicketRequester")
+  ticketsAssigned Ticket[]          @relation("TicketAssignee")
+  comments        Comment[]
+  attachments     Attachment[]
+  agentSessions   AgentSession[]
+  timeEntries     TicketTimeEntry[]
+  activities      TicketActivity[]  @relation("UserActivities")
+  mentions        Mention[]
+  notifications   Notification[]
+  bugsReported    Bug[]             @relation("BugReporter")
+  bugsSolved      Bug[]             @relation("BugSolver")
+  bugAttachments  BugAttachment[]   @relation("BugAttachmentUploader")
+  apiKeys         ApiKey[]          @relation("ApiKeyCreator")
+  chatSessions    ChatSession[]
+
+  @@index([clerkId])
+  @@index([email])
+  @@index([role])
+  @@index([organizationId])
+}
+
+model Organization {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users   User[]
+  tickets Ticket[]
+}
+
+model Ticket {
+  id              String         @id @default(uuid()) @db.Uuid
+  ticketNumber    Int            @unique @default(autoincrement())
+  subject         String         @db.VarChar(500)
+  status          TicketStatus   @default(NEW)
+  priority        TicketPriority @default(NORMAL)
+  channel         TicketChannel
+  type            TicketType     @default(NORMAL)
+  problemId       String?        @db.Uuid  // For incident tickets, links to the problem ticket
+  requesterId     String         @db.Uuid
+  assigneeId      String?        @db.Uuid
+  organizationId  String?        @db.Uuid
+  formId          String?        @db.Uuid
+  categoryId      String?        @db.Uuid
+  relatedTicketId String?        @db.Uuid
+  mergedIntoId    String?        @db.Uuid // If this ticket was merged into another
+  mergedAt        DateTime?               // When the merge happened
+  country         String?        @db.VarChar(100)
+  ipAddress       String?        @db.VarChar(50)
+  userAgent       String?        @db.VarChar(500)
+  dueAt           DateTime?
+  firstResponseAt DateTime?
+  solvedAt        DateTime?
+  closedAt        DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  aiSummary             String?   @db.Text
+  aiSummaryGeneratedAt  DateTime?
+  shownAiSuggestion     String?   @db.Text  // AI suggestion shown during ticket creation
+
+  requester       User              @relation("TicketRequester", fields: [requesterId], references: [id])
+  assignee        User?             @relation("TicketAssignee", fields: [assigneeId], references: [id])
+  organization    Organization?     @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  form            Form?             @relation(fields: [formId], references: [id])
+  category        Category?         @relation(fields: [categoryId], references: [id])
+  relatedTicket   Ticket?           @relation("RelatedTickets", fields: [relatedTicketId], references: [id])
+  followUpTickets Ticket[]          @relation("RelatedTickets")
+  mergedInto      Ticket?           @relation("MergedTickets", fields: [mergedIntoId], references: [id])
+  mergedTickets   Ticket[]          @relation("MergedTickets")
+  problem         Ticket?           @relation("ProblemIncidents", fields: [problemId], references: [id])
+  incidents       Ticket[]          @relation("ProblemIncidents")
+  comments        Comment[]
+  attachments     Attachment[]
+  activities      TicketActivity[]
+  timeEntries     TicketTimeEntry[]
+  formResponses   FormResponse[]
+  emailThread     EmailThread?
+  chatSession     ChatSession?
+  feedback        Feedback?
+
+  @@index([ticketNumber], name: "idx_tickets_number")
+  @@index([status], name: "idx_tickets_status")
+  @@index([requesterId], name: "idx_tickets_requester")
+  @@index([assigneeId], name: "idx_tickets_assignee")
+  @@index([createdAt], name: "idx_tickets_created")
+  @@index([status, assigneeId], name: "idx_tickets_status_assignee")
+  @@index([relatedTicketId], name: "idx_tickets_related")
+  @@index([type], name: "idx_tickets_type")
+  @@index([problemId], name: "idx_tickets_problem")
+  @@index([mergedIntoId], name: "idx_tickets_merged")
+  @@index([organizationId], name: "idx_tickets_organization")
+  @@index([categoryId], name: "idx_tickets_category")
+}
+
+model Comment {
+  id             String         @id @default(uuid()) @db.Uuid
+  ticketId       String         @db.Uuid
+  authorId       String         @db.Uuid
+  body           String         @db.Text
+  bodyPlain      String         @db.Text
+  isInternal     Boolean        @default(false)
+  isSystem       Boolean        @default(false)
+  channel        CommentChannel
+  emailMessageId String?        @db.VarChar(255) // Message-ID of incoming email
+  emailFrom      String?        @db.VarChar(255) // Original sender email
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  ticket      Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author      User         @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  attachments Attachment[]
+  mentions    Mention[]
+
+  @@index([ticketId], name: "idx_comments_ticket")
+  @@index([authorId], name: "idx_comments_author")
+  @@index([createdAt], name: "idx_comments_created")
+}
+
+model Attachment {
+  id         String   @id @default(uuid()) @db.Uuid
+  ticketId   String   @db.Uuid
+  commentId  String?  @db.Uuid
+  uploaderId String   @db.Uuid
+  filename   String   @db.VarChar(255)
+  filePath   String   @db.VarChar(500)
+  fileSize   BigInt
+  mimeType   String   @db.VarChar(100)
+  createdAt  DateTime @default(now())
+
+  ticket   Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  comment  Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  uploader User     @relation(fields: [uploaderId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId], name: "idx_attachments_ticket")
+  @@index([commentId], name: "idx_attachments_comment")
+  @@index([uploaderId], name: "idx_attachments_uploader")
+}
+
+model Category {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tickets Ticket[]
+}
+
+model Form {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  order       Int      @default(0)
+  fields      Json? // JSON array of form field definitions (kept for migration)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tickets    Ticket[]
+  formFields FormField[]
+  apiKeys    ApiKey[]
+}
+
+model TicketActivity {
+  id        String   @id @default(uuid()) @db.Uuid
+  ticketId  String   @db.Uuid
+  userId    String?  @db.Uuid
+  action    String // e.g., "status_changed", "assigned", "comment_added"
+  details   Json // Additional activity details
+  createdAt DateTime @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user   User?  @relation("UserActivities", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([ticketId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model AgentSession {
+  id         String    @id @default(uuid()) @db.Uuid
+  agentId    String    @db.Uuid
+  loginAt    DateTime  @default(now())
+  logoutAt   DateTime?
+  duration   Int? // Duration in seconds
+  replyCount Int       @default(0)
+  ipAddress  String?
+  userAgent  String?
+
+  agent User @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([agentId])
+  @@index([loginAt])
+}
+
+model TicketTimeEntry {
+  id          String    @id @default(uuid()) @db.Uuid
+  ticketId    String    @db.Uuid
+  agentId     String    @db.Uuid
+  startedAt   DateTime  @default(now())
+  endedAt     DateTime?
+  duration    Int? // Duration in seconds
+  description String? // Optional note about what was done
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  agent  User   @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+  @@index([agentId])
+  @@index([startedAt])
+}
+
+model FormFieldLibrary {
+  id             String   @id @default(uuid()) @db.Uuid
+  label          String   @db.VarChar(255)
+  fieldType      String   @db.VarChar(50)
+  required       Boolean  @default(false)
+  options        Json?
+  placeholder    String?  @db.VarChar(255)
+  defaultValue   String?  @db.Text
+  zendeskFieldId BigInt?  @unique
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  formFields    FormField[]
+  formResponses FormResponse[]
+
+  @@index([fieldType])
+  @@index([zendeskFieldId])
+}
+
+model FormField {
+  id       String  @id @default(uuid()) @db.Uuid
+  formId   String  @db.Uuid
+  fieldId  String  @db.Uuid
+  order    Int
+  required Boolean @default(false)
+
+  form  Form             @relation(fields: [formId], references: [id], onDelete: Cascade)
+  field FormFieldLibrary @relation(fields: [fieldId], references: [id])
+
+  @@unique([formId, fieldId])
+  @@index([formId])
+  @@index([fieldId])
+}
+
+model FormResponse {
+  id        String   @id @default(uuid()) @db.Uuid
+  ticketId  String   @db.Uuid
+  fieldId   String   @db.Uuid
+  value     String   @db.Text
+  createdAt DateTime @default(now())
+
+  ticket Ticket           @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  field  FormFieldLibrary @relation(fields: [fieldId], references: [id])
+
+  @@index([ticketId])
+  @@index([fieldId])
+}
+
+model Settings {
+  id                          String   @id @default(uuid()) @db.Uuid
+  // Email Settings
+  sendTicketCreatedEmail      Boolean  @default(true)
+  sendTicketAssignedEmail     Boolean  @default(true)
+  sendTicketResolvedEmail     Boolean  @default(true)
+  sendPendingTicketReminder   Boolean  @default(false)
+  pendingTicketReminderHours  Int      @default(24) // Hours after agent reply to remind user
+
+  // Auto-close Settings
+  autoCloseEnabled            Boolean  @default(false)
+  autoCloseHours              Int      @default(48) // Hours after solved to auto-close
+
+  // Auto-solve Settings
+  autoSolveEnabled            Boolean  @default(false)
+  autoSolveHours              Int      @default(48) // Hours of no user reply to auto-solve
+
+  // General Settings
+  defaultTicketPriority       String   @default("NORMAL")
+  allowCustomerReopenClosed   Boolean  @default(false)
+
+  // Attachment Cleanup Settings
+  autoDeleteAttachmentsEnabled Boolean @default(false)
+  autoDeleteAttachmentsDays    Int     @default(90) // Days after upload to delete attachments
+
+  // AI Settings
+  aiSummaryEnabled            Boolean  @default(false)
+  anthropicApiKey             String?  @db.VarChar(255)
+  ticketSuggestionsEnabled    Boolean  @default(false)
+  ticketSuggestionsApiKey     String?  @db.VarChar(255)
+  aiKnowledgeUrls             String?  @db.Text  // URLs (one per line) to fetch content for AI education
+  aiKnowledgeCache            String?  @db.Text  // Cached content from URLs
+  aiKnowledgeCacheUpdatedAt   DateTime?          // When the cache was last updated
+  aiKnowledgeRefreshDays      Int      @default(7) // Days between cache refreshes
+
+  // Chat Widget Settings
+  chatWidgetEnabled              Boolean  @default(false)
+  chatWidgetWelcomeMessage       String?  @db.Text
+  chatWidgetVisibleToUsers       Boolean  @default(true)
+  chatWidgetVisibleToAgents      Boolean  @default(false)
+  chatWidgetEscalationThreshold  Int      @default(3)  // Number of AI responses before showing ticket escalation prompt
+  chatWidgetSystemInstructions   String?  @db.Text     // Custom instructions for the chat agent
+  chatWidgetCompanyName          String?  @db.VarChar(255) // Company name for personalization
+  chatWidgetTone                 String?  @db.VarChar(50)  // Agent tone: professional, friendly, casual
+  chatWidgetFaqItems             Json?                  // JSON array of FAQ items [{question, answer}]
+
+  // SendGrid Email Settings
+  sendgridEnabled             Boolean  @default(false)
+  sendgridApiKey              String?  @db.VarChar(255)
+  sendgridFromEmail           String?  @db.VarChar(255)
+  sendgridFromName            String?  @db.VarChar(100)
+  sendgridInboundDomain       String?  @db.VarChar(255) // Domain for reply-to addresses (e.g., reply.yourdomain.com)
+  frontendUrl                 String?  @db.VarChar(500) // Public URL of the frontend app (used in email links)
+
+  // Agent Page Permissions (which pages agents can access)
+  // NOTE: When adding new admin pages, add a permission here with @default(false)
+  // so new pages are disabled for agents by default until admin enables them
+  agentCanAccessAnalytics       Boolean  @default(true)
+  agentCanAccessForms           Boolean  @default(true)
+  agentCanAccessFieldLibrary    Boolean  @default(true)
+  agentCanAccessMacros          Boolean  @default(true)
+  agentCanAccessBugReports      Boolean  @default(true)
+  agentCanAccessEmailTemplates  Boolean  @default(false)  // New pages default to false
+  agentCanAccessUsers           Boolean  @default(false)  // New pages default to false
+  agentCanCreateTickets         Boolean  @default(true)
+
+  // 2FA/Passkey Settings
+  require2FAForAgents          Boolean  @default(true)
+  require2FAForAdmins          Boolean  @default(true)
+  allow2FAForUsers             Boolean  @default(true)
+  twoFactorGracePeriodDays     Int      @default(7)
+  twoFactorEnforcementEnabled  Boolean  @default(false)  // Global kill switch
+
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+}
+
+// Email Template Types
+enum EmailTemplateType {
+  TICKET_CREATED
+  NEW_REPLY
+  TICKET_RESOLVED
+  PENDING_REMINDER_24H
+  PENDING_REMINDER_48H
+  FEEDBACK_REQUEST
+}
+
+// Feedback Rating Types (emoticons)
+enum FeedbackRating {
+  VERY_DISSATISFIED
+  DISSATISFIED
+  NEUTRAL
+  SATISFIED
+  VERY_SATISFIED
+}
+
+// Email Templates for notifications
+model EmailTemplate {
+  id        String            @id @default(uuid()) @db.Uuid
+  type      EmailTemplateType @unique
+  name      String            @db.VarChar(255)
+  subject   String            @db.VarChar(500)
+  bodyHtml  String            @db.Text
+  bodyPlain String            @db.Text
+  isActive  Boolean           @default(true)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  @@index([type])
+}
+
+// Feedback - Customer satisfaction tracking
+model Feedback {
+  id          String          @id @default(uuid()) @db.Uuid
+  ticketId    String          @db.Uuid
+  token       String          @unique @db.VarChar(64) // Unique token for anonymous submission
+  rating      FeedbackRating?
+  userComment String?         @db.Text // Optional text feedback from user
+  submittedAt DateTime?       // When feedback was actually submitted
+  createdAt   DateTime        @default(now()) // When feedback request was created
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@unique([ticketId]) // One feedback per ticket
+  @@index([ticketId])
+  @@index([token])
+  @@index([rating])
+  @@index([submittedAt])
+}
+
+// Macros - Pre-built reply templates for agents
+model Macro {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @db.VarChar(255)
+  content   String   @db.Text
+  category  String?  @db.VarChar(100)
+  isActive  Boolean  @default(true)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category])
+  @@index([order])
+}
+
+// Mention - tracks @mentions of agents in comments
+model Mention {
+  id              String   @id @default(uuid()) @db.Uuid
+  commentId       String   @db.Uuid
+  mentionedUserId String   @db.Uuid
+  createdAt       DateTime @default(now())
+
+  comment       Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  mentionedUser User    @relation(fields: [mentionedUserId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, mentionedUserId])
+  @@index([commentId])
+  @@index([mentionedUserId])
+}
+
+// Bug status
+enum BugStatus {
+  OPEN
+  SOLVED
+}
+
+// Bug type
+enum BugType {
+  TECHNICAL
+  VISUAL
+}
+
+// Notification types
+enum NotificationType {
+  MENTION
+  TICKET_ASSIGNED
+  TICKET_UPDATED
+  NEW_REPLY
+  BUG_REPORTED
+  BUG_SOLVED
+}
+
+// Notification - alerts for users
+model Notification {
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @db.Uuid
+  type      NotificationType
+  title     String           @db.VarChar(255)
+  message   String           @db.Text
+  ticketId  String?          @db.Uuid
+  commentId String?          @db.Uuid
+  bugId     String?          @db.Uuid
+  isRead    Boolean          @default(false)
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, isRead])
+  @@index([createdAt])
+}
+
+// Bug reports from agents/admins
+model Bug {
+  id          String    @id @default(uuid()) @db.Uuid
+  title       String    @db.VarChar(255)
+  description String    @db.Text
+  status      BugStatus @default(OPEN)
+  type        BugType   @default(TECHNICAL)
+  reportedById String   @db.Uuid
+  solvedById  String?   @db.Uuid
+  createdAt   DateTime  @default(now())
+  solvedAt    DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  reportedBy  User            @relation("BugReporter", fields: [reportedById], references: [id], onDelete: Cascade)
+  solvedBy    User?           @relation("BugSolver", fields: [solvedById], references: [id], onDelete: SetNull)
+  attachments BugAttachment[]
+
+  @@index([status])
+  @@index([type])
+  @@index([reportedById])
+  @@index([createdAt])
+}
+
+// Bug attachments
+model BugAttachment {
+  id         String   @id @default(uuid()) @db.Uuid
+  bugId      String   @db.Uuid
+  uploaderId String   @db.Uuid
+  filename   String   @db.VarChar(255)
+  filePath   String   @db.VarChar(500)
+  fileSize   BigInt
+  mimeType   String   @db.VarChar(100)
+  createdAt  DateTime @default(now())
+
+  bug      Bug  @relation(fields: [bugId], references: [id], onDelete: Cascade)
+  uploader User @relation("BugAttachmentUploader", fields: [uploaderId], references: [id], onDelete: Cascade)
+
+  @@index([bugId])
+}
+
+// API Keys for external integrations
+model ApiKey {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String    @db.VarChar(255)
+  key         String    @unique @db.VarChar(100)
+  keyPrefix   String    @db.VarChar(16) // "klv_" + first 8 chars for display
+  description String?   @db.Text
+  formId      String?   @db.Uuid // Optional: restrict to specific form
+  isActive    Boolean   @default(true)
+  lastUsedAt  DateTime?
+  usageCount  Int       @default(0)
+  createdById String    @db.Uuid
+  createdAt   DateTime  @default(now())
+  revokedAt   DateTime?
+
+  form      Form? @relation(fields: [formId], references: [id])
+  createdBy User  @relation("ApiKeyCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([key])
+  @@index([isActive])
+  @@index([createdById])
+}
+
+// Daily snapshot of ticket backlog by status
+model BacklogSnapshot {
+  id          String   @id @default(uuid()) @db.Uuid
+  date        DateTime @db.Date
+  newCount    Int      @default(0)
+  openCount   Int      @default(0)
+  pendingCount Int     @default(0)
+  holdCount   Int      @default(0)
+  totalCount  Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@unique([date])
+  @@index([date])
+}
+
+// Email thread tracking for reply routing
+model EmailThread {
+  id         String   @id @default(uuid()) @db.Uuid
+  ticketId   String   @unique @db.Uuid
+  replyToken String   @unique @db.VarChar(64) // Unique token for reply-to address
+  messageId  String?  @db.VarChar(255)        // Last outbound Message-ID
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([replyToken])
+}
+
+// AI Analytics event types
+enum AiEventType {
+  // AI Summary events (Ticket Detail page)
+  SUMMARY_GENERATED
+  SUMMARY_REGENERATED
+  // AI Suggestion events (Create Ticket page)
+  SUGGESTION_SHOWN
+  SUGGESTION_HELPFUL        // "This solved my issue" clicked
+  SUGGESTION_NOT_HELPFUL    // "This did not solve my issue" clicked
+  // Chat Widget events
+  CHAT_RESPONSE_GENERATED   // AI response generated in chat widget
+  CHAT_FEEDBACK_HELPFUL     // User marked chat response as helpful
+  CHAT_FEEDBACK_NOT_HELPFUL // User marked chat response as not helpful
+}
+
+// AI Analytics events for tracking
+model AiAnalyticsEvent {
+  id        String      @id @default(uuid()) @db.Uuid
+  ticketId  String?     @db.Uuid  // Optional - not set for SUGGESTION_HELPFUL (no ticket created)
+  userId    String      @db.Uuid
+  eventType AiEventType
+  formId    String?     @db.Uuid  // Track which form the suggestion was for
+  createdAt DateTime    @default(now())
+
+  @@index([eventType])
+  @@index([createdAt])
+  @@index([ticketId])
+  @@index([userId])
+  @@index([formId])
+}
+
+// Chat Widget enums
+enum ChatStatus {
+  ACTIVE
+  RESOLVED
+  CONVERTED_TO_TICKET
+}
+
+enum ChatRole {
+  USER
+  ASSISTANT
+}
+
+// Chat sessions for the support widget
+model ChatSession {
+  id        String      @id @default(uuid()) @db.Uuid
+  userId    String      @db.Uuid
+  status    ChatStatus  @default(ACTIVE)
+  ticketId  String?     @unique @db.Uuid  // If converted to a ticket
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ticket   Ticket?       @relation(fields: [ticketId], references: [id])
+  messages ChatMessage[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// Individual messages in a chat session
+model ChatMessage {
+  id         String    @id @default(uuid()) @db.Uuid
+  sessionId  String    @db.Uuid
+  role       ChatRole
+  content    String    @db.Text
+  wasHelpful Boolean?  // User feedback on assistant messages
+  createdAt  DateTime  @default(now())
+
+  session ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([createdAt])
+}

@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Form" ADD COLUMN "order" INTEGER NOT NULL DEFAULT 0;

@@ -1,0 +1,478 @@
+import { Router, Response } from 'express';
+import { body, validationResult } from 'express-validator';
+import { clerkClient } from '@clerk/express';
+import { prisma } from '../lib/prisma';
+import { requireAuth, requireAdmin, requireAgent, AuthRequest } from '../middleware/auth';
+
+const router = Router();
+
+// Get current user profile
+router.get('/me', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId!;
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        clerkId: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        createdAt: true
+      }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    return res.json(user);
+  } catch (error) {
+    console.error('Error fetching user profile:', error);
+    return res.status(500).json({ error: 'Failed to fetch user profile' });
+  }
+});
+
+// Get all agents (for assignment dropdown)
+router.get('/agents', requireAuth, async (_req: AuthRequest, res: Response) => {
+  try {
+    const agents = await prisma.user.findMany({
+      where: {
+        role: { in: ['AGENT', 'ADMIN'] }
+      },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true
+      },
+      orderBy: { email: 'asc' }
+    });
+
+    return res.json(agents);
+  } catch (error) {
+    console.error('Error fetching agents:', error);
+    return res.status(500).json({ error: 'Failed to fetch agents' });
+  }
+});
+
+// Search agents for @mention autocomplete
+router.get('/agents/search', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { q } = req.query;
+    const searchQuery = (q as string || '').toLowerCase();
+
+    const agents = await prisma.user.findMany({
+      where: {
+        role: { in: ['AGENT', 'ADMIN'] },
+        OR: searchQuery ? [
+          { firstName: { contains: searchQuery, mode: 'insensitive' } },
+          { lastName: { contains: searchQuery, mode: 'insensitive' } },
+          { email: { contains: searchQuery, mode: 'insensitive' } }
+        ] : undefined
+      },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true
+      },
+      orderBy: { email: 'asc' },
+      take: 10 // Limit results for autocomplete
+    });
+
+    return res.json(agents);
+  } catch (error) {
+    console.error('Error searching agents:', error);
+    return res.status(500).json({ error: 'Failed to search agents' });
+  }
+});
+
+// Search all users (for agents creating tickets on behalf of users)
+router.get('/search', requireAuth, requireAgent, async (req: AuthRequest, res: Response) => {
+  try {
+    const { q } = req.query;
+    const searchQuery = (q as string || '').toLowerCase().trim();
+
+    if (searchQuery.length < 2) {
+      return res.json([]);
+    }
+
+    const users = await prisma.user.findMany({
+      where: {
+        OR: [
+          { firstName: { contains: searchQuery, mode: 'insensitive' } },
+          { lastName: { contains: searchQuery, mode: 'insensitive' } },
+          { email: { contains: searchQuery, mode: 'insensitive' } }
+        ]
+      },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true
+      },
+      orderBy: { email: 'asc' },
+      take: 10
+    });
+
+    return res.json(users);
+  } catch (error) {
+    console.error('Error searching users:', error);
+    return res.status(500).json({ error: 'Failed to search users' });
+  }
+});
+
+// Get all users (admin only)
+router.get('/', requireAuth, requireAdmin, async (_req: AuthRequest, res: Response) => {
+  try {
+    const users = await prisma.user.findMany({
+      select: {
+        id: true,
+        clerkId: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        timezone: true,
+        timezoneOffset: true,
+        country: true,
+        lastSeenAt: true,
+        isBlocked: true,
+        blockedAt: true,
+        blockedReason: true,
+        createdAt: true,
+        _count: {
+          select: {
+            ticketsCreated: true
+          }
+        }
+      },
+      orderBy: [
+        { role: 'asc' }, // ADMIN, AGENT, USER alphabetically
+        { email: 'asc' }
+      ]
+    });
+
+    // Sort by role priority: ADMIN first, then AGENT, then USER
+    const roleOrder = { ADMIN: 0, AGENT: 1, USER: 2 };
+    const sortedUsers = users.sort((a, b) => {
+      const roleCompare = (roleOrder[a.role as keyof typeof roleOrder] || 2) - (roleOrder[b.role as keyof typeof roleOrder] || 2);
+      if (roleCompare !== 0) return roleCompare;
+      return a.email.localeCompare(b.email);
+    });
+
+    return res.json(sortedUsers);
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    return res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
+// Update user details (admin only)
+router.patch(
+  '/:id',
+  requireAuth,
+  requireAdmin,
+  [
+    body('email').optional().isEmail().withMessage('Invalid email'),
+    body('firstName').optional().isString(),
+    body('lastName').optional().isString(),
+    body('role').optional().isIn(['USER', 'AGENT', 'ADMIN']).withMessage('Invalid role')
+  ],
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const { id } = req.params;
+      const { email, firstName, lastName, role } = req.body;
+
+      // Find the user
+      const user = await prisma.user.findUnique({
+        where: { id },
+        select: { id: true, clerkId: true, role: true, email: true }
+      });
+
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      // Prevent admin from demoting themselves
+      if (user.id === req.userId && role && role !== 'ADMIN') {
+        return res.status(400).json({ error: 'You cannot change your own role' });
+      }
+
+      // Check if email is already taken by another user
+      if (email && email !== user.email) {
+        const existingUser = await prisma.user.findUnique({
+          where: { email }
+        });
+        if (existingUser) {
+          return res.status(400).json({ error: 'Email is already in use' });
+        }
+      }
+
+      // Build update data
+      const updateData: any = {};
+      if (email !== undefined) updateData.email = email;
+      if (firstName !== undefined) updateData.firstName = firstName;
+      if (lastName !== undefined) updateData.lastName = lastName;
+      if (role !== undefined) updateData.role = role;
+
+      // Update user in database
+      const updatedUser = await prisma.user.update({
+        where: { id },
+        data: updateData,
+        select: {
+          id: true,
+          clerkId: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+          createdAt: true,
+          _count: {
+            select: {
+              ticketsCreated: true
+            }
+          }
+        }
+      });
+
+      // Also update in Clerk
+      try {
+        const clerkUpdateData: any = {};
+        if (firstName !== undefined) clerkUpdateData.firstName = firstName;
+        if (lastName !== undefined) clerkUpdateData.lastName = lastName;
+        if (role !== undefined) clerkUpdateData.publicMetadata = { role };
+
+        if (Object.keys(clerkUpdateData).length > 0) {
+          await clerkClient.users.updateUser(user.clerkId, clerkUpdateData);
+        }
+      } catch (clerkError) {
+        console.error('Failed to update Clerk user:', clerkError);
+        // Don't fail the request, the database is updated
+      }
+
+      return res.json(updatedUser);
+    } catch (error) {
+      console.error('Error updating user:', error);
+      return res.status(500).json({ error: 'Failed to update user' });
+    }
+  }
+);
+
+// Update user role (admin only) - kept for backwards compatibility
+router.patch(
+  '/:id/role',
+  requireAuth,
+  requireAdmin,
+  [body('role').isIn(['USER', 'AGENT', 'ADMIN']).withMessage('Invalid role')],
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const { id } = req.params;
+      const { role } = req.body;
+
+      // Find the user
+      const user = await prisma.user.findUnique({
+        where: { id },
+        select: { id: true, clerkId: true, role: true }
+      });
+
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      // Prevent admin from demoting themselves
+      if (user.id === req.userId && role !== 'ADMIN') {
+        return res.status(400).json({ error: 'You cannot change your own role' });
+      }
+
+      // Update user role in database
+      const updatedUser = await prisma.user.update({
+        where: { id },
+        data: { role },
+        select: {
+          id: true,
+          clerkId: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+          createdAt: true,
+          _count: {
+            select: {
+              ticketsCreated: true
+            }
+          }
+        }
+      });
+
+      // Also update role in Clerk metadata
+      try {
+        await clerkClient.users.updateUser(user.clerkId, {
+          publicMetadata: { role }
+        });
+      } catch (clerkError) {
+        console.error('Failed to update Clerk metadata:', clerkError);
+        // Don't fail the request, the database is updated
+      }
+
+      return res.json(updatedUser);
+    } catch (error) {
+      console.error('Error updating user role:', error);
+      return res.status(500).json({ error: 'Failed to update user role' });
+    }
+  }
+);
+
+// Block/Unblock user (agents and admins)
+router.patch(
+  '/:id/block',
+  requireAuth,
+  requireAgent,
+  [
+    body('isBlocked').isBoolean().withMessage('isBlocked must be a boolean'),
+    body('reason').optional().isString()
+  ],
+  async (req: AuthRequest, res: Response) => {
+    try {
+      console.log('Block user request:', { id: req.params.id, body: req.body, userId: req.userId, userRole: req.userRole });
+
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        console.log('Validation errors:', errors.array());
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const { id } = req.params;
+      const { isBlocked, reason } = req.body;
+
+      // Find the user
+      const user = await prisma.user.findUnique({
+        where: { id },
+        select: { id: true, role: true }
+      });
+
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      // Prevent blocking admins
+      if (user.role === 'ADMIN') {
+        return res.status(400).json({ error: 'Cannot block admin users' });
+      }
+
+      // Prevent admin from blocking themselves
+      if (user.id === req.userId) {
+        return res.status(400).json({ error: 'You cannot block yourself' });
+      }
+
+      // Update user blocked status
+      const updatedUser = await prisma.user.update({
+        where: { id },
+        data: {
+          isBlocked,
+          blockedAt: isBlocked ? new Date() : null,
+          blockedReason: isBlocked ? (reason || 'Blocked by admin') : null
+        },
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+          isBlocked: true,
+          blockedAt: true,
+          blockedReason: true
+        }
+      });
+
+      return res.json(updatedUser);
+    } catch (error) {
+      console.error('Error blocking/unblocking user:', error);
+      return res.status(500).json({ error: 'Failed to update user blocked status' });
+    }
+  }
+);
+
+// Delete user (admin only)
+router.delete(
+  '/:id',
+  requireAuth,
+  requireAdmin,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+
+      // Find the user
+      const user = await prisma.user.findUnique({
+        where: { id },
+        select: { id: true, clerkId: true, role: true }
+      });
+
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      // Prevent admin from deleting themselves
+      if (user.id === req.userId) {
+        return res.status(400).json({ error: 'You cannot delete yourself' });
+      }
+
+      // Check for cascading effects before deletion
+      const [ticketCount, assignedCount] = await Promise.all([
+        prisma.ticket.count({ where: { requesterId: id } }),
+        prisma.ticket.count({ where: { assigneeId: id } })
+      ]);
+
+      if (ticketCount > 0) {
+        return res.status(400).json({
+          error: `Cannot delete user: they have ${ticketCount} ticket(s) as requester. Reassign or close them first.`
+        });
+      }
+
+      if (assignedCount > 0) {
+        // Unassign tickets before deletion
+        await prisma.ticket.updateMany({
+          where: { assigneeId: id },
+          data: { assigneeId: null }
+        });
+      }
+
+      // Delete the user from the database
+      // Related records will be handled by cascade delete or set null based on schema
+      await prisma.user.delete({
+        where: { id }
+      });
+
+      // Also delete from Clerk
+      try {
+        await clerkClient.users.deleteUser(user.clerkId);
+      } catch (clerkError) {
+        console.error('Failed to delete Clerk user:', clerkError);
+        // Don't fail the request, the database record is deleted
+      }
+
+      return res.json({ message: 'User deleted successfully' });
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      return res.status(500).json({ error: 'Failed to delete user' });
+    }
+  }
+);
+
+export default router;
